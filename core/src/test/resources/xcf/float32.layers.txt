@@ -1,0 +1,5 @@
+Gruppe|mode=28|opacity=100.0|visible=1|offset=20,40|size=110x60|group=1|mask=0
+  Grün|mode=31|opacity=100.0|visible=1|offset=70,40|size=60x60|group=0|mask=1
+  Blau unsichtbar|mode=28|opacity=100.0|visible=0|offset=20,60|size=40x40|group=0|mask=0
+Rot Multiplizieren|mode=30|opacity=60.0|visible=1|offset=-15,10|size=70x50|group=0|mask=0
+Hintergrund|mode=28|opacity=100.0|visible=1|offset=0,0|size=160x120|group=0|mask=0

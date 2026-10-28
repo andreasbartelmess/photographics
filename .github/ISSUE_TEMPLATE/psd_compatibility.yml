@@ -1,0 +1,38 @@
+name: PSD compatibility
+description: A PSD/PSB file opens incorrectly, looks different than in Photoshop, or loses something when saved
+labels: [psd]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The fastest way to help: run `./gradlew :core:psdCheck -PpsdDir=<folder>` and attach the
+        preview images from `core/build/psd-check/bilder`. **Only attach PSD files you are allowed
+        to share** – a small file that shows the problem is ideal.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What is wrong?
+      options:
+        - The file does not open (error)
+        - It looks different than in Photoshop
+        - Something is lost after saving in Photographics and opening in Photoshop
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Which layers/features are affected (layer effects, adjustment layers, text, smart objects, blend modes, 16 bit, CMYK …)?
+    validations:
+      required: true
+  - type: input
+    id: photoshop
+    attributes:
+      label: Photoshop version that created the file
+      placeholder: "Photoshop 2025 (26.x)"
+  - type: input
+    id: version
+    attributes:
+      label: Photographics version
+      placeholder: "0.2.0"

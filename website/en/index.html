@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>photographics</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Free photo editor with layers for Android tablets. Opens and saves PSD, TIFF and GIMP files with all their layers.">
+<link rel="icon" href="../img/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../fonts/roboto.css">
+<link rel="alternate" hreflang="de" href="../">
+<link rel="alternate" hreflang="en" href="./">
+<style>
+/* Layout: großes Foto als Auftakt, danach helle Seite mit echten Screenshots der App; Text und Bild
+   wechseln die Seite. Schrift wie in der App (Roboto). Bewusst nur hell. */
+:root {
+  --paper: #ffffff;
+  --band: #f3f3f4;
+  --ink: #18181b;
+  --text: #3a3b40;
+  --mute: #6a6b71;
+  --line: #e1e1e5;
+  --device: #1b1b1d;
+  --font: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font); font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+img { max-width: 100%; display: block; }
+a { color: inherit; }
+h1, h2, h3 { font-weight: 400; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.wrap { max-width: 1200px; margin: 0 auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+.btn { display: inline-flex; align-items: center; padding: 11px 22px; border-radius: 999px; font-weight: 500; font-size: 15px;
+  text-decoration: none; border: 1px solid currentColor; transition: background .2s, color .2s, border-color .2s; }
+.btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+.btn.primary:hover { background: #000; }
+.btn.light { background: #fff; color: var(--ink); border-color: #fff; }
+.btn.light:hover { background: #ffffffd9; }
+.btn.outline { color: var(--ink); border-color: var(--line); }
+.btn.outline:hover { border-color: var(--ink); }
+.btn.on-photo { color: #fff; border-color: #ffffff80; }
+.btn.on-photo:hover { border-color: #fff; }
+.btn[aria-disabled="true"] { opacity: .45; pointer-events: none; }
+a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+figure { margin: 0; display: grid; gap: 10px; min-width: 0; }
+figcaption { font-size: 13px; color: var(--mute); }
+.shot { border-radius: 10px; box-shadow: 0 0 0 1px #0000000f, 0 18px 40px #00000024; width: 100%; }
+
+/* Navigation: über dem Foto durchsichtig, beim Scrollen weiß */
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--ink); }
+nav { position: fixed; top: env(safe-area-inset-top, 0px); left: 0; right: 0; z-index: 20; color: #fff; transition: background .25s, color .25s, border-color .25s; border-bottom: 1px solid transparent; }
+nav.solid { background: #fffffff0; color: var(--ink); border-bottom-color: var(--line); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+nav .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-size: 20px; font-weight: 400; }
+.brand img { width: 28px; height: 28px; border-radius: 7px; }
+nav ul { display: flex; gap: 24px; list-style: none; margin: 0 0 0 auto; padding: 0; font-size: 15px; }
+nav ul a { text-decoration: none; opacity: .85; }
+nav ul a:hover { opacity: 1; }
+nav .btn { padding: 7px 16px; font-size: 14px; }
+@media (max-width: 860px) { nav ul { display: none; } nav .btn { margin-left: auto; } }
+
+/* Auftakt */
+.hero { position: relative; min-height: min(92svh, 860px); display: grid; align-items: end; overflow: hidden; color: #fff; background: #111; }
+.hero > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 40%; }
+.hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, #00000080 0%, #00000000 28%, #00000000 45%, #000000c4 100%); }
+.hero .wrap { position: relative; z-index: 1; padding-block: 130px 64px; display: grid; gap: 20px; width: 100%; }
+.hero .status { font-size: 14px; opacity: .85; }
+.hero h1 { font-size: clamp(38px, 6vw, 76px); line-height: 1.06; font-weight: 300; max-width: 19ch; }
+.hero .lead { font-size: clamp(17px, 1.8vw, 20px); max-width: 52ch; opacity: .92; }
+.hero .ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
+.credit { position: absolute; right: max(20px, env(safe-area-inset-right, 0px)); bottom: 16px; z-index: 1; font-size: 12px; color: #ffffffa6; }
+@media (max-width: 560px) { .credit { position: static; } .hero .wrap { padding-bottom: 28px; } }
+
+/* Kapitel: fertiges Bild, darüber das Tablet mit dem Bearbeitungsstand */
+.chapter { padding-block: clamp(72px, 9vw, 128px) 0; }
+.chapter h2, .files h2, .about h2, .download h2, .join h2 { font-size: clamp(28px, 3.4vw, 42px); line-height: 1.18; }
+.chapter .wrap { display: grid; grid-template-columns: 1.45fr 1fr; gap: clamp(40px, 6vw, 88px); align-items: center; }
+.chapter.flip .wrap { grid-template-columns: 1fr 1.45fr; }
+.chapter.flip .stage { order: 2; }
+.stage { position: relative; padding-bottom: 17%; min-width: 0; margin: 0; }
+.stage .photo { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 6px; }
+.tablet { position: absolute; bottom: 0; left: -5%; width: 64%; background: var(--device); border-radius: clamp(12px, 1.6vw, 22px);
+  padding: clamp(6px, .8vw, 11px); box-shadow: 0 28px 60px #00000040, 0 4px 12px #00000026; }
+.tablet img { border-radius: clamp(5px, .7vw, 10px); width: 100%; }
+.chapter.flip .tablet { left: auto; right: -5%; }
+.stage figcaption { position: absolute; right: 0; bottom: 0; width: 32%; text-align: right; }
+.chapter.flip .stage figcaption { right: auto; left: 0; text-align: left; }
+.copy { display: grid; gap: 16px; min-width: 0; }
+.copy > p { color: var(--text); max-width: 50ch; }
+.copy ul { margin: 0; padding-left: 1.1em; color: var(--text); display: grid; gap: 6px; font-size: 16px; }
+@media (max-width: 860px) {
+  .chapter .wrap, .chapter.flip .wrap { grid-template-columns: 1fr; }
+  .chapter.flip .stage { order: 0; }
+  .tablet, .chapter.flip .tablet { left: 4%; right: auto; width: 70%; }
+  .stage figcaption, .chapter.flip .stage figcaption { position: static; width: auto; text-align: left; margin-top: 12px; }
+  .stage { padding-bottom: 0; } .stage .tablet { position: relative; margin-top: -22%; }
+}
+
+/* Dateien */
+.files { margin-top: clamp(72px, 9vw, 128px); background: var(--band); padding-block: clamp(64px, 8vw, 112px); }
+.files .wrap { display: grid; gap: 36px; }
+.files figure img { width: 100%; aspect-ratio: 21 / 9; object-fit: cover; object-position: 60% 50%; border-radius: 8px; }
+.files .cols { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(28px, 5vw, 72px); }
+.files .copy p { color: var(--text); }
+.files dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 20px; color: var(--text); font-size: 16px; }
+.files dt { font-weight: 500; color: var(--ink); }
+.files dd { margin: 0; }
+@media (max-width: 860px) { .files .cols { grid-template-columns: 1fr; } .files figure img { aspect-ratio: 4 / 3; } }
+
+/* Außerdem */
+.more { padding-block: clamp(64px, 8vw, 112px) clamp(56px, 7vw, 88px); }
+.more .wrap { display: grid; gap: 28px; }
+.more h2 { font-size: clamp(24px, 2.6vw, 32px); }
+.more-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px 40px; }
+.more-grid h3 { font-size: 18px; font-weight: 500; margin-bottom: 4px; }
+.more-grid p { color: var(--text); font-size: 15px; }
+@media (max-width: 900px) { .more-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .more-grid { grid-template-columns: 1fr; } }
+
+/* Roadmap */
+.roadmap { padding-block: 0 clamp(64px, 8vw, 104px); }
+.roadmap .wrap { display: grid; gap: 28px; border-top: 1px solid var(--line); padding-top: clamp(48px, 6vw, 72px); }
+.roadmap header { display: grid; gap: 8px; max-width: 64ch; }
+.roadmap header h2 { font-size: clamp(24px, 2.6vw, 32px); }
+.roadmap header p { color: var(--text); }
+.stages { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px 40px; }
+.stages h3 { font-size: 18px; font-weight: 500; margin-bottom: 8px; }
+.stages ul { margin: 0; padding-left: 1.1em; display: grid; gap: 6px; color: var(--text); font-size: 15px; }
+@media (max-width: 860px) { .stages { grid-template-columns: 1fr; } }
+
+/* Download */
+.download { padding-block: clamp(64px, 8vw, 104px); }
+.download .wrap { display: grid; gap: 16px; justify-items: start; border-top: 1px solid var(--line); padding-top: clamp(48px, 6vw, 72px); }
+.download p { color: var(--text); max-width: 60ch; }
+.download .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; }
+.download .req { font-size: 14px; color: var(--mute); }
+
+/* Mitmachen */
+.join { background: var(--band); padding-block: clamp(56px, 7vw, 88px); }
+.join .wrap { display: grid; grid-template-columns: 1fr 1.6fr; gap: clamp(28px, 5vw, 72px); align-items: start; }
+.join .text { display: grid; gap: 14px; color: var(--text); max-width: 62ch; }
+.join .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
+.join .mail { color: var(--mute); font-size: 15px; user-select: all; }
+@media (max-width: 760px) { .join .wrap { grid-template-columns: 1fr; } }
+
+/* Fuß */
+footer { padding-block: 28px calc(28px + env(safe-area-inset-bottom, 0px)); font-size: 13px; color: var(--mute); }
+footer .wrap { display: grid; gap: 6px; }
+footer .row { display: flex; flex-wrap: wrap; gap: 6px 24px; justify-content: space-between; }
+footer a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--line); }
+footer a:hover { color: var(--ink); }
+</style>
+</head>
+<body>
+
+<nav id="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="../img/logo.svg" alt="">photographics</a>
+    <ul>
+      <li><a href="#layers">Layers</a></li>
+      <li><a href="#retouching">Retouching</a></li>
+      <li><a href="#colour">Colour</a></li>
+      <li><a href="#files">Files</a></li>
+      <li><a href="#roadmap">Roadmap</a></li>
+      <li><a href="../" lang="de" hreflang="de">Deutsch</a></li>
+    </ul>
+    <a class="btn on-photo" id="nav-cta" href="#download">Download</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <img src="../img/alpen-abend.jpg" alt="Snow-covered peaks in the last evening light under dark clouds" fetchpriority="high">
+  <div class="wrap">
+    <span class="status">Preview · version 0.2 · Android 8.1 and newer</span>
+    <h1>A photo editor with layers for Android tablets</h1>
+    <p class="lead">photographics opens PSD, TIFF and GIMP files with all their layers and saves them the same way. You retouch with the pen, and colour profiles are kept. Free, open source and no account needed.</p>
+    <div class="ctas">
+      <a class="btn light" href="#download">Download</a>
+      <a class="btn on-photo" href="#layers">See more</a>
+    </div>
+  </div>
+  <span class="credit">Photo: Benjamin Voros / Unsplash</span>
+</header>
+
+<section class="chapter" id="layers">
+  <div class="wrap">
+    <figure class="stage">
+      <img class="photo" src="../img/dolomiten-fertig.jpg" alt="Finished landscape photo of the Dolomites with a darkened sky and warmer colours" loading="lazy">
+      <div class="tablet"><img src="../img/editor-ebenen.jpg" alt="The same image in photographics with the layers panel: film look, hue/saturation, curves with a mask and a retouching group" loading="lazy"></div>
+      <figcaption>The finished image and its layer stack. Photo: Janine Joles / Unsplash</figcaption>
+    </figure>
+    <div class="copy">
+      <h2>Layers and masks</h2>
+      <p>Tools on the left, layers on the right, the image in the middle. Adjustments sit on their own layers above the photo and stay editable until the end; masks limit them to parts of the image.</p>
+      <ul>
+        <li>Pixel, text and smart object layers, groups</li>
+        <li>12 adjustment layers, including curves, levels, colour balance and black &amp; white</li>
+        <li>All 27 Photoshop blend modes</li>
+        <li>Layer masks and clipping masks</li>
+        <li>Transform with skew, distort and perspective, lossless as a smart object</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="chapter flip" id="retouching">
+  <div class="wrap">
+    <figure class="stage">
+      <img class="photo" src="../img/studio-fertig.jpg" alt="Finished studio photo of a woman in a white dress in front of a grey backdrop" loading="lazy">
+      <div class="tablet"><img src="../img/editor-retusche.jpg" alt="The same photo in photographics with the retouching tools and a dodge and burn layer" loading="lazy"></div>
+      <figcaption>Retouching tools and dodge &amp; burn in soft light mode. Photo: Vitaly Gariev / Unsplash</figcaption>
+    </figure>
+    <div class="copy">
+      <h2>Retouching with the pen</h2>
+      <p>Pen pressure controls size, opacity and flow. Your hand can rest on the display without painting. Two fingers zoom, and a short two-finger tap undoes the last step.</p>
+      <ul>
+        <li>Spot healing, healing brush, patch and clone stamp</li>
+        <li>Dodge, burn, sponge and smudge</li>
+        <li>Brushes with custom tips, scattering and smoothing</li>
+        <li>Retouch on an empty layer and leave the original untouched</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="chapter" id="colour">
+  <div class="wrap">
+    <figure class="stage">
+      <img class="photo" src="../img/osaka-fertig.jpg" alt="Finished night photo of a wet street in Osaka with neon signs" loading="lazy">
+      <div class="tablet"><img src="../img/editor-looks.jpg" alt="The same photo in photographics with the colour lookup selection open" loading="lazy"></div>
+      <figcaption>The look “Kinokopie” (print film) as a colour lookup layer. Photo: Masahiro Miyagi / Unsplash</figcaption>
+    </figure>
+    <div class="copy">
+      <h2>Colour management and looks</h2>
+      <p>Every document keeps its colour profile. Before printing, the soft proof shows how the image will look with your print shop's profile and marks colours that are out of gamut.</p>
+      <ul>
+        <li>sRGB, Display P3, Adobe RGB, ProPhoto and your own ICC profiles</li>
+        <li>Assign or convert profiles with all four rendering intents</li>
+        <li>Colour lookup tables in .cube and .3dl format, export your own adjustments as .cube</li>
+        <li>15 film looks, from slide film to black-and-white infrared</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="files" id="files" style="margin-top: clamp(72px, 9vw, 128px)">
+  <div class="wrap">
+    <figure>
+      <img src="../img/grossformat.jpg" alt="A photographer carries a large format camera on a tripod across a rocky plateau" loading="lazy">
+      <figcaption>Photo: Nick Bolton / Unsplash</figcaption>
+    </figure>
+    <div class="cols">
+      <div class="copy">
+        <h2>The same file, on the road and at the desk</h2>
+        <p>A PSD from the studio opens on the tablet with its layers, masks, groups and adjustment layers. Whatever photographics cannot display yet, layer effects for example, stays in the file and is written back unchanged when you save.</p>
+      </div>
+      <dl>
+        <dt>Open</dt><dd>PSD and PSB, TIFF, GIMP (XCF), PNG, JPEG, WebP and HEIF</dd>
+        <dt>Save</dt><dd>PSD, TIFF and XCF with all layers</dd>
+        <dt>Export</dt><dd>PNG and JPEG, with colour profile or converted to sRGB</dd>
+        <dt>Bit depth</dt><dd>Reads 8, 16 and 32 bit, edits internally with 8 bit</dd>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<section class="more" id="features">
+  <div class="wrap">
+    <h2>Also included</h2>
+    <div class="more-grid">
+      <div><h3>On-device AI</h3><p>Remove objects and upscale images up to 4×. The models are downloaded only when you ask for them and run offline.</p></div>
+      <div><h3>Cropping</h3><p>Aspect ratios, target size in cm or inches, straighten and perspective crop.</p></div>
+      <div><h3>Guides</h3><p>Rulers, guide layouts and smart guides, kept in PSD and XCF files.</p></div>
+      <div><h3>Swatches</h3><p>Load and save swatches from Photoshop, Illustrator and GIMP (.aco, .ase, .gpl).</p></div>
+      <div><h3>Keyboard and mouse</h3><p>With a keyboard cover, a Chromebook or Samsung DeX, the familiar Photoshop shortcuts work.</p></div>
+      <div><h3>Large files</h3><p>Image data lives outside the app memory limit, and filters run on all cores.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="roadmap" id="roadmap">
+  <div class="wrap">
+    <header>
+      <h2>Roadmap</h2>
+      <p>What is planned next. The order may change and there are no fixed dates. Suggestions are welcome.</p>
+    </header>
+    <div class="stages">
+      <div>
+        <h3>Next</h3>
+        <ul>
+          <li>Moving and transforming on the GPU, so large files feel smoother</li>
+          <li>Rendering layer effects: drop shadow, stroke, glow</li>
+          <li>English user interface</li>
+        </ul>
+      </div>
+      <div>
+        <h3>After that</h3>
+        <ul>
+          <li>Liquify</li>
+          <li>Gradient tool, magic wand and object selection</li>
+          <li>Per-channel curves with histogram</li>
+          <li>Custom fonts (TTF, OTF)</li>
+          <li>Autosave and recovery after crashes</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Later</h3>
+        <ul>
+          <li>16-bit editing</li>
+          <li>CMYK documents and CMYK export</li>
+          <li>Display colour management</li>
+          <li>Versions for Linux (GNOME) and iPad</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="download" id="download">
+  <div class="wrap">
+    <h2>Download photographics</h2>
+    <p>The app is available as an APK on GitHub. For almost all current tablets and phones, the arm64 version is the right one.</p>
+    <div class="actions">
+      <a class="btn primary" data-repo="/releases/latest" href="#download">APK on GitHub</a>
+      <a class="btn outline" data-repo="" href="#download">Source code</a>
+    </div>
+    <p class="req">Android 8.1 or newer. A tablet with a pen is recommended. The interface is currently in German; an English version is in progress.</p>
+  </div>
+</section>
+
+<section class="join" id="contribute">
+  <div class="wrap">
+    <h2>An early preview</h2>
+    <div class="text">
+      <p>photographics is at an early stage. A lot already works, some things are missing or will still change. Please keep a backup of important files.</p>
+      <p>Feedback and bug reports help a lot. Anyone who wants to help develop, translate or support the project in another way is very welcome.</p>
+      <div class="actions">
+        <a class="btn primary" data-repo="/issues" href="#contribute">Open an issue</a>
+        <a class="btn outline" href="mailto:info@andreasbartelmess.de">Send feedback by email</a>
+      </div>
+      <span class="mail">info@andreasbartelmess.de</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="row">
+      <span>photographics · free software under the GPL-3.0 · © 2026 Andreas Bartelmess</span>
+      <span><a href="../impressum.html" hreflang="de">Legal notice and privacy (German)</a></span>
+    </div>
+    <div>Adobe and Photoshop are trademarks of Adobe Inc.; photographics is not affiliated with Adobe.</div>
+    <div>Photos by <a href="https://unsplash.com/photos/landscape-photography-of-mountains-and-sky-9vZAW6Dp50s" rel="noopener" target="_blank">Benjamin Voros</a>, <a href="https://unsplash.com/photos/landscape-photo-of-mountains-CJIzia8PdV4" rel="noopener" target="_blank">Janine Joles</a>, <a href="https://unsplash.com/photos/model-posing-for-photographer-in-studio-setting-MfNVQxUAZB0" rel="noopener" target="_blank">Vitaly Gariev</a>, <a href="https://unsplash.com/photos/a-wet-city-street-at-night-with-neon-signs-uZA3P4sA3tM" rel="noopener" target="_blank">Masahiro Miyagi</a> and <a href="https://unsplash.com/photos/person-holding-camera-on-mountain-during-daytime-RqQWevl2aqs" rel="noopener" target="_blank">Nick Bolton</a> on Unsplash (<a href="https://unsplash.com/license" rel="noopener" target="_blank">Unsplash License</a>).</div>
+  </div>
+</footer>
+
+<script>
+(() => {
+  // GitHub repository address: set it here once the repository is public
+  const REPO = "https://github.com/andreasbartelmess/photographics";
+  document.querySelectorAll("[data-repo]").forEach((a) => {
+    if (REPO) { a.href = REPO + a.dataset.repo; a.rel = "noopener"; }
+    else { a.setAttribute("aria-disabled", "true"); a.title = "The repository will be published soon"; }
+  });
+  const nav = document.getElementById("nav"), cta = document.getElementById("nav-cta");
+  const hero = document.getElementById("top");
+  const onScroll = () => {
+    const solid = window.scrollY > hero.offsetHeight - 80;
+    nav.classList.toggle("solid", solid);
+    cta.className = "btn " + (solid ? "primary" : "on-photo");
+  };
+  window.addEventListener("scroll", onScroll, { passive: true }); onScroll();
+})();
+</script>
+</body>
+</html>

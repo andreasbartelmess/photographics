@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- photographics-Logo „Ebenen“: drei überlagerte Kreise; wo sie sich decken, wird es dunkler wie beim Zusammensetzen von Ebenen.
+     Vorlage für andere Plattformen: design/logo.svg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FF000000"
+        android:fillAlpha="0.30"
+        android:pathData="M29,61a16,16 0,1 0,32 0a16,16 0,1 0,-32 0Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:fillAlpha="0.30"
+        android:pathData="M47,61a16,16 0,1 0,32 0a16,16 0,1 0,-32 0Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:fillAlpha="0.62"
+        android:pathData="M38,45.5a16,16 0,1 0,32 0a16,16 0,1 0,-32 0Z" />
+</vector>

@@ -1,0 +1,279 @@
+<title>Photographics Logo-Entwürfe</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+/* Layout: ruhige Galerie wie ein Kontaktbogen – vier gleich gebaute Karten, Icons stehen im Mittelpunkt */
+:root {
+  --bg: #eef0f3; --surface: #ffffff; --fg: #1b1d21; --muted: #5d636d; --line: #d9dde3; --accent: #b8771f;
+  --wall-light: #c9d3df; --wall-dark: #1d2026;
+  --display: "Sora", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121316; --surface: #1b1d22; --fg: #e8eaee; --muted: #9aa1ab; --line: #2c2f36; --accent: #e9a43a;
+  --wall-light: #8e9bab; --wall-dark: #0b0c0e; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #121316; --surface: #1b1d22; --fg: #e8eaee; --muted: #9aa1ab; --line: #2c2f36; --accent: #e9a43a;
+  --wall-light: #8e9bab; --wall-dark: #0b0c0e; color-scheme: dark; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+main { max-width: 1180px; margin: 0 auto; padding-block: 40px 56px; display: grid; gap: 32px; }
+.intro h1 { font-family: var(--display); font-weight: 600; font-size: clamp(26px, 3.2vw, 36px); margin: 0 0 8px; text-wrap: balance; letter-spacing: -0.01em; }
+.intro p { margin: 0; color: var(--muted); max-width: 65ch; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 22px; display: grid; gap: 16px; align-content: start; min-width: 0; }
+.card header { display: grid; gap: 2px; }
+.tag { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 500; }
+.card h2 { font-family: var(--display); font-weight: 600; font-size: 21px; margin: 0; }
+.hero { display: grid; place-items: center; padding: 20px 0; background: radial-gradient(circle at 50% 40%, var(--line), transparent 70%); border-radius: 14px; }
+.idea { margin: 0; color: var(--muted); font-size: 14px; min-height: 6.2em; }
+.variants { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+figure { margin: 0; display: grid; justify-items: center; align-content: center; gap: 6px; padding: 12px 4px 8px; border-radius: 12px; min-height: 104px; }
+figcaption { font-size: 11px; letter-spacing: .02em; color: #fff; opacity: .85; text-align: center; }
+.wall.light { background: linear-gradient(160deg, var(--wall-light), #7f8fa3); }
+.wall.dark { background: linear-gradient(160deg, #2a2e36, var(--wall-dark)); }
+.wall.themed { background: linear-gradient(160deg, #3b4a6b, #1d2436); }
+.icon { display: block; max-width: 100%; height: auto; box-shadow: 0 6px 16px rgba(0,0,0,.28); }
+.icon.circle { border-radius: 50%; }
+.icon.squircle { border-radius: 28%; }
+.wordmark { display: flex; align-items: center; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.wordmark .icon { box-shadow: none; }
+.wordmark span { font-family: var(--display); font-weight: 500; font-size: 17px; letter-spacing: -0.005em; }
+.note { color: var(--muted); font-size: 13px; margin: 0; max-width: 70ch; }
+@media (max-width: 420px) { .variants { grid-template-columns: repeat(2, 1fr); } }
+</style>
+<main>
+  <section class="intro">
+    <h1>Photographics – Logo-Entwürfe</h1>
+    <p>Vier eigenständige Richtungen im Geist reduzierter Profi-Fotosoftware: Grafit, gebürstetes Silber und ein einziger warmer Akzent. Jede Karte zeigt das Icon so, wie Android es darstellt – rund oder als Squircle, auf hellem und dunklem Hintergrund, in Launcher-Größe und als einfarbiges Themed Icon (Android 13+).</p>
+  </section>
+  <section class="grid">
+    <article class="card" id="blende">
+      <header><span class="tag">Entwurf A</span><h2>Blende</h2></header>
+      <div class="hero"><svg class="icon squircle" width="168" height="168" viewBox="18 18 72 72" role="img" aria-label="Blende"><defs>
+      <linearGradient id="bg-blende1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#33363c"/><stop offset="1" stop-color="#121316"/></linearGradient>
+      <linearGradient id="silver-blende1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-blende1" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-blende1)"/>
+          <circle cx="54" cy="54" r="25.0" fill="url(#silver-blende1)"/>
+          <g stroke="#15161a" stroke-width="2.2" stroke-linecap="round"><line x1="63.18" y1="56.46" x2="43.12" y2="76.51"/><line x1="56.46" y1="63.18" x2="29.07" y2="55.84"/><line x1="47.28" y1="60.72" x2="39.94" y2="33.33"/><line x1="44.82" y1="51.54" x2="64.88" y2="31.49"/><line x1="51.54" y1="44.82" x2="78.93" y2="52.16"/><line x1="60.72" y1="47.28" x2="68.06" y2="74.67"/></g>
+          <path d="M63.18,56.46 L56.46,63.18 L47.28,60.72 L44.82,51.54 L51.54,44.82 L60.72,47.28 Z" fill="#0d0e11" stroke="#15161a" stroke-width="1.2" stroke-linejoin="round"/>
+          <circle cx="54" cy="54" r="2.6" fill="#e9a43a"/></svg></div>
+      <p class="idea">Sechs Lamellen um eine sechseckige Öffnung – das Werkzeug jeder Kamera, in Silber auf Grafit. Ruhig, technisch, sofort als Fotografie lesbar.</p>
+      <div class="variants">
+        <figure class="wall light"><svg class="icon circle" width="64" height="64" viewBox="18 18 72 72" role="img" aria-label="Blende"><defs>
+      <linearGradient id="bg-blende2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#33363c"/><stop offset="1" stop-color="#121316"/></linearGradient>
+      <linearGradient id="silver-blende2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-blende2" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-blende2)"/>
+          <circle cx="54" cy="54" r="25.0" fill="url(#silver-blende2)"/>
+          <g stroke="#15161a" stroke-width="2.2" stroke-linecap="round"><line x1="63.18" y1="56.46" x2="43.12" y2="76.51"/><line x1="56.46" y1="63.18" x2="29.07" y2="55.84"/><line x1="47.28" y1="60.72" x2="39.94" y2="33.33"/><line x1="44.82" y1="51.54" x2="64.88" y2="31.49"/><line x1="51.54" y1="44.82" x2="78.93" y2="52.16"/><line x1="60.72" y1="47.28" x2="68.06" y2="74.67"/></g>
+          <path d="M63.18,56.46 L56.46,63.18 L47.28,60.72 L44.82,51.54 L51.54,44.82 L60.72,47.28 Z" fill="#0d0e11" stroke="#15161a" stroke-width="1.2" stroke-linejoin="round"/>
+          <circle cx="54" cy="54" r="2.6" fill="#e9a43a"/></svg><figcaption>Rund · hell</figcaption></figure>
+        <figure class="wall dark"><svg class="icon squircle" width="64" height="64" viewBox="18 18 72 72" role="img" aria-label="Blende"><defs>
+      <linearGradient id="bg-blende3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#33363c"/><stop offset="1" stop-color="#121316"/></linearGradient>
+      <linearGradient id="silver-blende3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-blende3" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-blende3)"/>
+          <circle cx="54" cy="54" r="25.0" fill="url(#silver-blende3)"/>
+          <g stroke="#15161a" stroke-width="2.2" stroke-linecap="round"><line x1="63.18" y1="56.46" x2="43.12" y2="76.51"/><line x1="56.46" y1="63.18" x2="29.07" y2="55.84"/><line x1="47.28" y1="60.72" x2="39.94" y2="33.33"/><line x1="44.82" y1="51.54" x2="64.88" y2="31.49"/><line x1="51.54" y1="44.82" x2="78.93" y2="52.16"/><line x1="60.72" y1="47.28" x2="68.06" y2="74.67"/></g>
+          <path d="M63.18,56.46 L56.46,63.18 L47.28,60.72 L44.82,51.54 L51.54,44.82 L60.72,47.28 Z" fill="#0d0e11" stroke="#15161a" stroke-width="1.2" stroke-linejoin="round"/>
+          <circle cx="54" cy="54" r="2.6" fill="#e9a43a"/></svg><figcaption>Squircle · dunkel</figcaption></figure>
+        <figure class="wall light"><svg class="icon circle" width="40" height="40" viewBox="18 18 72 72" role="img" aria-label="Blende"><defs>
+      <linearGradient id="bg-blende4" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#33363c"/><stop offset="1" stop-color="#121316"/></linearGradient>
+      <linearGradient id="silver-blende4" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-blende4" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-blende4)"/>
+          <circle cx="54" cy="54" r="25.0" fill="url(#silver-blende4)"/>
+          <g stroke="#15161a" stroke-width="2.2" stroke-linecap="round"><line x1="63.18" y1="56.46" x2="43.12" y2="76.51"/><line x1="56.46" y1="63.18" x2="29.07" y2="55.84"/><line x1="47.28" y1="60.72" x2="39.94" y2="33.33"/><line x1="44.82" y1="51.54" x2="64.88" y2="31.49"/><line x1="51.54" y1="44.82" x2="78.93" y2="52.16"/><line x1="60.72" y1="47.28" x2="68.06" y2="74.67"/></g>
+          <path d="M63.18,56.46 L56.46,63.18 L47.28,60.72 L44.82,51.54 L51.54,44.82 L60.72,47.28 Z" fill="#0d0e11" stroke="#15161a" stroke-width="1.2" stroke-linejoin="round"/>
+          <circle cx="54" cy="54" r="2.6" fill="#e9a43a"/></svg><figcaption>Klein</figcaption></figure>
+        <figure class="wall themed"><svg class="icon circle" width="64" height="64" viewBox="18 18 72 72" role="img" aria-label="Blende"><defs>
+      <linearGradient id="bg-blende5" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#33363c"/><stop offset="1" stop-color="#121316"/></linearGradient>
+      <linearGradient id="silver-blende5" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-blende5" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="#d9e2ff"/><g style="color:#2c4278">
+          <circle cx="54" cy="54" r="25.0" fill="currentColor"/>
+          <g stroke="#d9e2ff" stroke-width="2.2" stroke-linecap="round"><line x1="63.18" y1="56.46" x2="43.12" y2="76.51"/><line x1="56.46" y1="63.18" x2="29.07" y2="55.84"/><line x1="47.28" y1="60.72" x2="39.94" y2="33.33"/><line x1="44.82" y1="51.54" x2="64.88" y2="31.49"/><line x1="51.54" y1="44.82" x2="78.93" y2="52.16"/><line x1="60.72" y1="47.28" x2="68.06" y2="74.67"/></g>
+          <path d="M63.18,56.46 L56.46,63.18 L47.28,60.72 L44.82,51.54 L51.54,44.82 L60.72,47.28 Z" fill="#d9e2ff"/></g></svg><figcaption>Themed Icon</figcaption></figure>
+      </div>
+      <div class="wordmark"><svg class="icon squircle" width="36" height="36" viewBox="18 18 72 72" role="img" aria-label="Blende"><defs>
+      <linearGradient id="bg-blende6" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#33363c"/><stop offset="1" stop-color="#121316"/></linearGradient>
+      <linearGradient id="silver-blende6" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-blende6" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-blende6)"/>
+          <circle cx="54" cy="54" r="25.0" fill="url(#silver-blende6)"/>
+          <g stroke="#15161a" stroke-width="2.2" stroke-linecap="round"><line x1="63.18" y1="56.46" x2="43.12" y2="76.51"/><line x1="56.46" y1="63.18" x2="29.07" y2="55.84"/><line x1="47.28" y1="60.72" x2="39.94" y2="33.33"/><line x1="44.82" y1="51.54" x2="64.88" y2="31.49"/><line x1="51.54" y1="44.82" x2="78.93" y2="52.16"/><line x1="60.72" y1="47.28" x2="68.06" y2="74.67"/></g>
+          <path d="M63.18,56.46 L56.46,63.18 L47.28,60.72 L44.82,51.54 L51.54,44.82 L60.72,47.28 Z" fill="#0d0e11" stroke="#15161a" stroke-width="1.2" stroke-linejoin="round"/>
+          <circle cx="54" cy="54" r="2.6" fill="#e9a43a"/></svg><span>Photographics</span></div>
+    </article>
+    <article class="card" id="monogramm">
+      <header><span class="tag">Entwurf B</span><h2>Linsen-P</h2></header>
+      <div class="hero"><svg class="icon squircle" width="168" height="168" viewBox="18 18 72 72" role="img" aria-label="Linsen-P"><defs>
+      <linearGradient id="bg-monogramm7" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c2f35"/><stop offset="1" stop-color="#0f1013"/></linearGradient>
+      <linearGradient id="silver-monogramm7" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-monogramm7" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-monogramm7)"/>
+          <circle cx="57" cy="47" r="14.5" fill="none" stroke="url(#silver-monogramm7)" stroke-width="7"/>
+          <rect x="39" y="32.5" width="7" height="46" rx="3.5" fill="url(#silver-monogramm7)"/>
+          <circle cx="57" cy="47" r="4" fill="#e9a43a"/></svg></div>
+      <p class="idea">Ein Ring als Objektiv, ein Strich als Stamm – zusammen das P von Photographics. Der warme Punkt markiert den Fokus. Wirkt als Monogramm auch ganz klein.</p>
+      <div class="variants">
+        <figure class="wall light"><svg class="icon circle" width="64" height="64" viewBox="18 18 72 72" role="img" aria-label="Linsen-P"><defs>
+      <linearGradient id="bg-monogramm8" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c2f35"/><stop offset="1" stop-color="#0f1013"/></linearGradient>
+      <linearGradient id="silver-monogramm8" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-monogramm8" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-monogramm8)"/>
+          <circle cx="57" cy="47" r="14.5" fill="none" stroke="url(#silver-monogramm8)" stroke-width="7"/>
+          <rect x="39" y="32.5" width="7" height="46" rx="3.5" fill="url(#silver-monogramm8)"/>
+          <circle cx="57" cy="47" r="4" fill="#e9a43a"/></svg><figcaption>Rund · hell</figcaption></figure>
+        <figure class="wall dark"><svg class="icon squircle" width="64" height="64" viewBox="18 18 72 72" role="img" aria-label="Linsen-P"><defs>
+      <linearGradient id="bg-monogramm9" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c2f35"/><stop offset="1" stop-color="#0f1013"/></linearGradient>
+      <linearGradient id="silver-monogramm9" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-monogramm9" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-monogramm9)"/>
+          <circle cx="57" cy="47" r="14.5" fill="none" stroke="url(#silver-monogramm9)" stroke-width="7"/>
+          <rect x="39" y="32.5" width="7" height="46" rx="3.5" fill="url(#silver-monogramm9)"/>
+          <circle cx="57" cy="47" r="4" fill="#e9a43a"/></svg><figcaption>Squircle · dunkel</figcaption></figure>
+        <figure class="wall light"><svg class="icon circle" width="40" height="40" viewBox="18 18 72 72" role="img" aria-label="Linsen-P"><defs>
+      <linearGradient id="bg-monogramm10" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c2f35"/><stop offset="1" stop-color="#0f1013"/></linearGradient>
+      <linearGradient id="silver-monogramm10" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-monogramm10" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-monogramm10)"/>
+          <circle cx="57" cy="47" r="14.5" fill="none" stroke="url(#silver-monogramm10)" stroke-width="7"/>
+          <rect x="39" y="32.5" width="7" height="46" rx="3.5" fill="url(#silver-monogramm10)"/>
+          <circle cx="57" cy="47" r="4" fill="#e9a43a"/></svg><figcaption>Klein</figcaption></figure>
+        <figure class="wall themed"><svg class="icon circle" width="64" height="64" viewBox="18 18 72 72" role="img" aria-label="Linsen-P"><defs>
+      <linearGradient id="bg-monogramm11" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c2f35"/><stop offset="1" stop-color="#0f1013"/></linearGradient>
+      <linearGradient id="silver-monogramm11" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-monogramm11" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="#d9e2ff"/><g style="color:#2c4278">
+          <circle cx="57" cy="47" r="14.5" fill="none" stroke="currentColor" stroke-width="7"/>
+          <rect x="39" y="32.5" width="7" height="46" rx="3.5" fill="currentColor"/>
+          <circle cx="57" cy="47" r="4" fill="currentColor"/></g></svg><figcaption>Themed Icon</figcaption></figure>
+      </div>
+      <div class="wordmark"><svg class="icon squircle" width="36" height="36" viewBox="18 18 72 72" role="img" aria-label="Linsen-P"><defs>
+      <linearGradient id="bg-monogramm12" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c2f35"/><stop offset="1" stop-color="#0f1013"/></linearGradient>
+      <linearGradient id="silver-monogramm12" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-monogramm12" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-monogramm12)"/>
+          <circle cx="57" cy="47" r="14.5" fill="none" stroke="url(#silver-monogramm12)" stroke-width="7"/>
+          <rect x="39" y="32.5" width="7" height="46" rx="3.5" fill="url(#silver-monogramm12)"/>
+          <circle cx="57" cy="47" r="4" fill="#e9a43a"/></svg><span>Photographics</span></div>
+    </article>
+    <article class="card" id="fokus">
+      <header><span class="tag">Entwurf C</span><h2>Fokusrahmen</h2></header>
+      <div class="hero"><svg class="icon squircle" width="168" height="168" viewBox="18 18 72 72" role="img" aria-label="Fokusrahmen"><defs>
+      <linearGradient id="bg-fokus13" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#30333a"/><stop offset="1" stop-color="#131418"/></linearGradient>
+      <linearGradient id="silver-fokus13" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-fokus13" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-fokus13)"/>
+          <g fill="none" stroke="url(#silver-fokus13)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M31,43 V31 H43"/><path d="M65,31 H77 V43"/><path d="M77,65 V77 H65"/><path d="M43,77 H31 V65"/></g>
+          <circle cx="54" cy="54" r="12" fill="url(#glow-fokus13)"/></svg></div>
+      <p class="idea">Vier Ecken wie das Messfeld im Sucher oder der Rahmen beim Freistellen, darin eine leuchtende Kugel. Steht für Bildausschnitt und präzise Retusche.</p>
+      <div class="variants">
+        <figure class="wall light"><svg class="icon circle" width="64" height="64" viewBox="18 18 72 72" role="img" aria-label="Fokusrahmen"><defs>
+      <linearGradient id="bg-fokus14" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#30333a"/><stop offset="1" stop-color="#131418"/></linearGradient>
+      <linearGradient id="silver-fokus14" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-fokus14" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-fokus14)"/>
+          <g fill="none" stroke="url(#silver-fokus14)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M31,43 V31 H43"/><path d="M65,31 H77 V43"/><path d="M77,65 V77 H65"/><path d="M43,77 H31 V65"/></g>
+          <circle cx="54" cy="54" r="12" fill="url(#glow-fokus14)"/></svg><figcaption>Rund · hell</figcaption></figure>
+        <figure class="wall dark"><svg class="icon squircle" width="64" height="64" viewBox="18 18 72 72" role="img" aria-label="Fokusrahmen"><defs>
+      <linearGradient id="bg-fokus15" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#30333a"/><stop offset="1" stop-color="#131418"/></linearGradient>
+      <linearGradient id="silver-fokus15" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-fokus15" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-fokus15)"/>
+          <g fill="none" stroke="url(#silver-fokus15)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M31,43 V31 H43"/><path d="M65,31 H77 V43"/><path d="M77,65 V77 H65"/><path d="M43,77 H31 V65"/></g>
+          <circle cx="54" cy="54" r="12" fill="url(#glow-fokus15)"/></svg><figcaption>Squircle · dunkel</figcaption></figure>
+        <figure class="wall light"><svg class="icon circle" width="40" height="40" viewBox="18 18 72 72" role="img" aria-label="Fokusrahmen"><defs>
+      <linearGradient id="bg-fokus16" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#30333a"/><stop offset="1" stop-color="#131418"/></linearGradient>
+      <linearGradient id="silver-fokus16" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-fokus16" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-fokus16)"/>
+          <g fill="none" stroke="url(#silver-fokus16)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M31,43 V31 H43"/><path d="M65,31 H77 V43"/><path d="M77,65 V77 H65"/><path d="M43,77 H31 V65"/></g>
+          <circle cx="54" cy="54" r="12" fill="url(#glow-fokus16)"/></svg><figcaption>Klein</figcaption></figure>
+        <figure class="wall themed"><svg class="icon circle" width="64" height="64" viewBox="18 18 72 72" role="img" aria-label="Fokusrahmen"><defs>
+      <linearGradient id="bg-fokus17" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#30333a"/><stop offset="1" stop-color="#131418"/></linearGradient>
+      <linearGradient id="silver-fokus17" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-fokus17" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="#d9e2ff"/><g style="color:#2c4278">
+          <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M31,43 V31 H43"/><path d="M65,31 H77 V43"/><path d="M77,65 V77 H65"/><path d="M43,77 H31 V65"/></g>
+          <circle cx="54" cy="54" r="12" fill="currentColor"/></g></svg><figcaption>Themed Icon</figcaption></figure>
+      </div>
+      <div class="wordmark"><svg class="icon squircle" width="36" height="36" viewBox="18 18 72 72" role="img" aria-label="Fokusrahmen"><defs>
+      <linearGradient id="bg-fokus18" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#30333a"/><stop offset="1" stop-color="#131418"/></linearGradient>
+      <linearGradient id="silver-fokus18" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-fokus18" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-fokus18)"/>
+          <g fill="none" stroke="url(#silver-fokus18)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M31,43 V31 H43"/><path d="M65,31 H77 V43"/><path d="M77,65 V77 H65"/><path d="M43,77 H31 V65"/></g>
+          <circle cx="54" cy="54" r="12" fill="url(#glow-fokus18)"/></svg><span>Photographics</span></div>
+    </article>
+    <article class="card" id="ebenen">
+      <header><span class="tag">Entwurf D</span><h2>Ebenen</h2></header>
+      <div class="hero"><svg class="icon squircle" width="168" height="168" viewBox="18 18 72 72" role="img" aria-label="Ebenen"><defs>
+      <linearGradient id="bg-ebenen19" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f3238"/><stop offset="1" stop-color="#111215"/></linearGradient>
+      <linearGradient id="silver-ebenen19" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-ebenen19" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-ebenen19)"/>
+          <g style="mix-blend-mode:screen">
+            <circle cx="46" cy="61" r="15" fill="#5d6673"/>
+            <circle cx="62" cy="61" r="15" fill="#8a929c"/>
+            <circle cx="54" cy="46" r="15" fill="#e9a43a" fill-opacity=".85"/></g></svg></div>
+      <p class="idea">Drei überlagerte Kreise in Stahltönen; wo sie sich decken, entstehen neue Töne – wie Ebenen und Mischmodi. Das Herz des Editors als Bild.</p>
+      <div class="variants">
+        <figure class="wall light"><svg class="icon circle" width="64" height="64" viewBox="18 18 72 72" role="img" aria-label="Ebenen"><defs>
+      <linearGradient id="bg-ebenen20" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f3238"/><stop offset="1" stop-color="#111215"/></linearGradient>
+      <linearGradient id="silver-ebenen20" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-ebenen20" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-ebenen20)"/>
+          <g style="mix-blend-mode:screen">
+            <circle cx="46" cy="61" r="15" fill="#5d6673"/>
+            <circle cx="62" cy="61" r="15" fill="#8a929c"/>
+            <circle cx="54" cy="46" r="15" fill="#e9a43a" fill-opacity=".85"/></g></svg><figcaption>Rund · hell</figcaption></figure>
+        <figure class="wall dark"><svg class="icon squircle" width="64" height="64" viewBox="18 18 72 72" role="img" aria-label="Ebenen"><defs>
+      <linearGradient id="bg-ebenen21" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f3238"/><stop offset="1" stop-color="#111215"/></linearGradient>
+      <linearGradient id="silver-ebenen21" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-ebenen21" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-ebenen21)"/>
+          <g style="mix-blend-mode:screen">
+            <circle cx="46" cy="61" r="15" fill="#5d6673"/>
+            <circle cx="62" cy="61" r="15" fill="#8a929c"/>
+            <circle cx="54" cy="46" r="15" fill="#e9a43a" fill-opacity=".85"/></g></svg><figcaption>Squircle · dunkel</figcaption></figure>
+        <figure class="wall light"><svg class="icon circle" width="40" height="40" viewBox="18 18 72 72" role="img" aria-label="Ebenen"><defs>
+      <linearGradient id="bg-ebenen22" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f3238"/><stop offset="1" stop-color="#111215"/></linearGradient>
+      <linearGradient id="silver-ebenen22" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-ebenen22" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-ebenen22)"/>
+          <g style="mix-blend-mode:screen">
+            <circle cx="46" cy="61" r="15" fill="#5d6673"/>
+            <circle cx="62" cy="61" r="15" fill="#8a929c"/>
+            <circle cx="54" cy="46" r="15" fill="#e9a43a" fill-opacity=".85"/></g></svg><figcaption>Klein</figcaption></figure>
+        <figure class="wall themed"><svg class="icon circle" width="64" height="64" viewBox="18 18 72 72" role="img" aria-label="Ebenen"><defs>
+      <linearGradient id="bg-ebenen23" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f3238"/><stop offset="1" stop-color="#111215"/></linearGradient>
+      <linearGradient id="silver-ebenen23" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-ebenen23" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="#d9e2ff"/><g style="color:#2c4278">
+          <circle cx="46" cy="61" r="15" fill="currentColor" fill-opacity=".45"/>
+          <circle cx="62" cy="61" r="15" fill="currentColor" fill-opacity=".45"/>
+          <circle cx="54" cy="46" r="15" fill="currentColor" fill-opacity=".75"/></g></svg><figcaption>Themed Icon</figcaption></figure>
+      </div>
+      <div class="wordmark"><svg class="icon squircle" width="36" height="36" viewBox="18 18 72 72" role="img" aria-label="Ebenen"><defs>
+      <linearGradient id="bg-ebenen24" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f3238"/><stop offset="1" stop-color="#111215"/></linearGradient>
+      <linearGradient id="silver-ebenen24" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".55" stop-color="#b9bec6"/><stop offset="1" stop-color="#7d838d"/></linearGradient>
+      <radialGradient id="glow-ebenen24" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffd38a"/><stop offset=".6" stop-color="#e9a43a"/><stop offset="1" stop-color="#9c5f12"/></radialGradient>
+    </defs><rect width="108" height="108" fill="url(#bg-ebenen24)"/>
+          <g style="mix-blend-mode:screen">
+            <circle cx="46" cy="61" r="15" fill="#5d6673"/>
+            <circle cx="62" cy="61" r="15" fill="#8a929c"/>
+            <circle cx="54" cy="46" r="15" fill="#e9a43a" fill-opacity=".85"/></g></svg><span>Photographics</span></div>
+    </article></section>
+  <p class="note">Die Entwürfe sind eigene Gestaltungen und bilden keine fremden Marken nach. Farben, Strichstärken und der Akzent lassen sich bei jeder Variante anpassen.</p>
+</main>

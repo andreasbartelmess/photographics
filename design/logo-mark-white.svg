@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="1024" height="1024">
+  <!-- photographics-Logo „Ebenen“ – nur Zeichen, weiß, transparenter Grund (dunkle Flächen). Raster wie Android Adaptive Icons: 108 Einheiten, sichtbar 18..90. -->
+  <circle cx="45" cy="61" r="16" fill="#FFFFFF" fill-opacity="0.30"/>
+  <circle cx="63" cy="61" r="16" fill="#FFFFFF" fill-opacity="0.30"/>
+  <circle cx="54" cy="45.5" r="16" fill="#FFFFFF" fill-opacity="0.62"/>
+</svg>

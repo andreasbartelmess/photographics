@@ -1,0 +1,21 @@
+# Build-Ausgaben
+.gradle/
+.kotlin/
+build/
+dist/
+*.apk
+*.aab
+
+# Lokale Einstellungen der Entwicklungsumgebung
+local.properties
+.idea/
+*.iml
+.DS_Store
+
+# Signierschlüssel – niemals ins Repository
+keystore.properties
+*.jks
+*.keystore
+
+# Eigene Testdateien (z. B. PSD-Sammlung für den Kompatibilitätstest)
+/testdata/

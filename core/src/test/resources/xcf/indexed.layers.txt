@@ -1,0 +1,1 @@
+Hintergrund|mode=28|opacity=100.0|visible=1|offset=-15,0|size=175x120|group=0|mask=0

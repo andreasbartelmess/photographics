@@ -1,0 +1,43 @@
+name: Bug report
+description: Something does not work as expected (crash, wrong result, slow)
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Thanks for reporting! English or German is fine – Deutsch ist willkommen."
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a 4000×3000 JPEG
+        2. Apply Filter → Gaussian Blur
+        3. …
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Settings → Über
+      placeholder: "0.2.0"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and Android version
+      placeholder: "POCO Pad M1, Android 16"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log output (optional)
+      description: "With a computer: `adb logcat -d | grep -i photographics`"
+      render: text
