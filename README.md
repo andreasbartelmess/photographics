@@ -131,7 +131,7 @@ No fixed dates, and the order may change. Suggestions are welcome.
   curves with histogram; better content-aware fill
 - **Next:** autosave and crash recovery; custom fonts (TTF/OTF); history panel with snapshots; select
   subject and sky with an on-device model; refine edge for hair
-- **After that:** RAW development (DNG first); frequency separation helper; editing and creating layer
+- **After that:** frequency separation helper; editing and creating layer
   effects; batch export (several sizes and formats at once); pen tool and paths
 - **Later:** 16-bit editing; CMYK documents and export; display colour management; full GPU
   compositing; Linux (GNOME) and iPad

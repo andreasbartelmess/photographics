@@ -402,7 +402,7 @@ Ohne feste Termine, die Reihenfolge kann sich ändern. Vorschläge sind willkomm
 - **Als Nächstes:** automatisches Sichern und Wiederherstellen nach Abstürzen; eigene Schriften
   (TTF/OTF); Protokoll-Panel mit Schnappschüssen; Motiv und Himmel per KI auswählen (Modell auf dem Gerät),
   Auswahlkante für Haare verbessern
-- **Danach:** RAW-Entwicklung (zuerst DNG); Frequenztrennung als Retusche-Hilfe; Ebeneneffekte
+- **Danach:** Frequenztrennung als Retusche-Hilfe; Ebeneneffekte
   bearbeiten und neu anlegen; Stapelexport (mehrere Größen/Formate auf einmal); Zeichenstift und Pfade
 - **Später:** Bearbeitung mit 16 Bit pro Kanal; CMYK-Dokumente und -Export; Anzeige über das Farbprofil
   des Bildschirms; vollständiges Zusammensetzen auf der GPU; Versionen für Linux (GNOME) und iPad
