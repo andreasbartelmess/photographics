@@ -1,5 +1,6 @@
 package de.photographics.core.filters
 
+import de.photographics.core.tr
 import de.photographics.core.image.Blur
 import de.photographics.core.image.Colors
 import de.photographics.core.image.IntRect
@@ -42,7 +43,7 @@ private fun lumaPlane(px: IntArray) = FloatArray(px.size) { lumOf(px[it]) }
 
 /** Bewegungsunschärfe: Mittelung entlang einer Linie mit Winkel und Distanz (Pixel). */
 class MotionBlur(private val angle: Float, private val distance: Int) : ImageFilter {
-    override val label = "Bewegungsunschärfe"
+    override val label = tr("Bewegungsunschärfe")
     override val margin get() = distance + 1
     override fun process(px: IntArray, w: Int, h: Int): IntArray {
         val rad = Math.toRadians(angle.toDouble())
@@ -64,7 +65,7 @@ class MotionBlur(private val angle: Float, private val distance: Int) : ImageFil
 
 /** Radialer Weichzeichner: Kreisförmig (Drehen) oder Strahlenförmig (Zoom) um die Bildmitte. */
 class RadialBlur(private val amount: Float, private val zoom: Boolean, private val cxRel: Float = 0.5f, private val cyRel: Float = 0.5f) : RandomAccessFilter {
-    override val label = "Radialer Weichzeichner"
+    override val label = tr("Radialer Weichzeichner")
     override fun processBand(src: PixelSource, band: IntRect, docW: Int, docH: Int): IntArray {
         val cx = docW * cxRel; val cy = docH * cyRel
         val samples = 24
@@ -89,7 +90,7 @@ class RadialBlur(private val amount: Float, private val zoom: Boolean, private v
 
 /** Matter machen: kantenerhaltender Weichzeichner (Radius, Schwellenwert in Tonwertstufen). */
 class SurfaceBlur(private val radius: Int, private val threshold: Int) : ImageFilter {
-    override val label = "Matter machen"
+    override val label = tr("Matter machen")
     override val margin get() = radius + 1
     override fun process(px: IntArray, w: Int, h: Int): IntArray {
         // Höchstens 7×7 Stichproben pro Pixel – bei großen Radien gleichmäßig verteilt
@@ -119,7 +120,7 @@ class SurfaceBlur(private val radius: Int, private val threshold: Int) : ImageFi
 
 /** Tilt-Shift (Miniatur-Effekt): scharfer Streifen, nach oben und unten zunehmend unscharf. */
 class TiltShift(private val blur: Float, private val focusRel: Float = 0.5f, private val bandRel: Float = 0.15f) : GeometryFilter {
-    override val label = "Tilt-Shift"
+    override val label = tr("Tilt-Shift")
     override val margin get() = (blur * 3).toInt() + 1
     override fun process(px: IntArray, w: Int, h: Int, offX: Int, offY: Int, docW: Int, docH: Int): IntArray {
         val blurred = Blur.gaussArgb(px, w, h, blur)
@@ -136,7 +137,7 @@ class TiltShift(private val blur: Float, private val focusRel: Float = 0.5f, pri
 
 /** Median (Rauschen entfernen, Werte je Kanal) mit Radius. */
 class Median(private val radius: Int) : ImageFilter {
-    override val label = "Median"
+    override val label = tr("Median")
     override val margin get() = radius + 1
     override fun process(px: IntArray, w: Int, h: Int) = median(px, w, h, radius)
 
@@ -169,7 +170,7 @@ class Median(private val radius: Int) : ImageFilter {
 
 /** Staub & Kratzer: Median, aber nur dort, wo sich das Pixel deutlich unterscheidet. */
 class DustAndScratches(private val radius: Int, private val threshold: Int) : ImageFilter {
-    override val label = "Staub & Kratzer"
+    override val label = tr("Staub & Kratzer")
     override val margin get() = radius + 1
     override fun process(px: IntArray, w: Int, h: Int): IntArray {
         val med = Median.median(px, w, h, radius)
@@ -183,7 +184,7 @@ class DustAndScratches(private val radius: Int, private val threshold: Int) : Im
 
 /** Rauschen hinzufügen: Stärke in %, gaußverteilt oder gleichmäßig, optional einfarbig. */
 class AddNoise(private val amount: Float, private val gaussian: Boolean, private val monochrome: Boolean) : ImageFilter {
-    override val label = "Rauschen hinzufügen"
+    override val label = tr("Rauschen hinzufügen")
     override fun process(px: IntArray, w: Int, h: Int): IntArray {
         val k = amount / 100f * 255f
         fun n(i: Int, salt: Int): Float = if (gaussian) (hashNoise(i, salt) + hashNoise(i, salt + 7) + hashNoise(i, salt + 13)) / 1.7f else hashNoise(i, salt)
@@ -201,7 +202,7 @@ class AddNoise(private val amount: Float, private val gaussian: Boolean, private
 
 /** Hochpass: nur feine Details bleiben (Basis für Scharfzeichnen per „Ineinanderkopieren“). */
 class HighPass(private val radius: Float) : ImageFilter {
-    override val label = "Hochpass"
+    override val label = tr("Hochpass")
     override val margin get() = (radius * 3).toInt() + 1
     override fun process(px: IntArray, w: Int, h: Int): IntArray {
         val bl = Blur.gaussArgb(px, w, h, radius)
@@ -214,7 +215,7 @@ class HighPass(private val radius: Float) : ImageFilter {
 
 /** Relief: Prägung aus der Helligkeit in Lichtrichtung. */
 class Emboss(private val angle: Float, private val height: Int, private val amount: Float) : ImageFilter {
-    override val label = "Relief"
+    override val label = tr("Relief")
     override val margin get() = height + 1
     override fun process(px: IntArray, w: Int, h: Int): IntArray {
         val rad = Math.toRadians(angle.toDouble())
@@ -232,7 +233,7 @@ class Emboss(private val angle: Float, private val height: Int, private val amou
 
 /** Konturen finden (Sobel), als dunkle Linien auf Weiß wie in Photoshop. */
 class FindEdges : ImageFilter {
-    override val label = "Konturen finden"
+    override val label = tr("Konturen finden")
     override val margin get() = 2
     override fun process(px: IntArray, w: Int, h: Int): IntArray = IntArray(px.size) { i ->
         val x = i % w; val y = i / w
@@ -248,7 +249,7 @@ class FindEdges : ImageFilter {
 
 /** Mosaik: Zellen gleicher Farbe (Durchschnitt), ausgerichtet am Dokumentursprung. */
 class Mosaic(private val cell: Int) : GeometryFilter {
-    override val label = "Mosaik"
+    override val label = tr("Mosaik")
     override val margin get() = cell + 1
     override fun process(px: IntArray, w: Int, h: Int, offX: Int, offY: Int, docW: Int, docH: Int): IntArray {
         val c = max(2, cell)
@@ -274,7 +275,7 @@ class Mosaic(private val cell: Int) : GeometryFilter {
 
 /** Ölfarbe: Kuwahara-Filter – flächige, malerische Pinselstruktur bei erhaltenen Kanten. */
 class OilPaint(private val radius: Int) : ImageFilter {
-    override val label = "Ölfarbe"
+    override val label = tr("Ölfarbe")
     override val margin get() = radius + 1
     override fun process(px: IntArray, w: Int, h: Int): IntArray {
         val r = max(1, radius)
@@ -300,7 +301,7 @@ class OilPaint(private val radius: Int) : ImageFilter {
 
 /** Strudel: Drehung, die zur Mitte hin zunimmt. */
 class Twirl(private val angle: Float) : RandomAccessFilter {
-    override val label = "Strudel"
+    override val label = tr("Strudel")
     override fun processBand(src: PixelSource, band: IntRect, docW: Int, docH: Int): IntArray {
         val cx = docW / 2f; val cy = docH / 2f
         val rMax = min(docW, docH) / 2f
@@ -324,7 +325,7 @@ class Twirl(private val angle: Float) : RandomAccessFilter {
 
 /** Vignette: Rand abdunkeln (negativ) oder aufhellen (positiv); Mittelpunkt 0..100 %. */
 class Vignette(private val amount: Float, private val midpoint: Float) : GeometryFilter {
-    override val label = "Vignette"
+    override val label = tr("Vignette")
     override fun process(px: IntArray, w: Int, h: Int, offX: Int, offY: Int, docW: Int, docH: Int): IntArray {
         val cx = docW / 2f; val cy = docH / 2f
         val norm = hypot(cx, cy)
@@ -344,7 +345,7 @@ class Vignette(private val amount: Float, private val midpoint: Float) : Geometr
 
 /** Objektivkorrektur: tonnen- (negativ) bzw. kissenförmige (positiv) Verzeichnung entfernen. */
 class LensDistortion(private val amount: Float) : RandomAccessFilter {
-    override val label = "Objektivkorrektur"
+    override val label = tr("Objektivkorrektur")
     override fun processBand(src: PixelSource, band: IntRect, docW: Int, docH: Int): IntArray {
         val cx = docW / 2.0; val cy = docH / 2.0
         val norm = hypot(docW / 2.0, docH / 2.0)
@@ -361,7 +362,7 @@ class LensDistortion(private val amount: Float) : RandomAccessFilter {
 
 /** Klarheit: lokaler Kontrast in den Mitteltönen (Unscharf maskieren mit großem Radius). */
 class Clarity(private val amount: Float) : ImageFilter {
-    override val label = "Klarheit"
+    override val label = tr("Klarheit")
     override val margin get() = 60
     override fun process(px: IntArray, w: Int, h: Int): IntArray {
         val l = lumaPlane(px)
@@ -379,7 +380,7 @@ class Clarity(private val amount: Float) : ImageFilter {
 
 /** Dunst entfernen (Dark Channel Prior, vereinfacht). */
 class Dehaze(private val amount: Float) : PreparedFilter {
-    override val label = "Dunst entfernen"
+    override val label = tr("Dunst entfernen")
     override val margin get() = 20
     /** Farbe des atmosphärischen Lichts; vorab über Stichproben aus dem ganzen Bild bestimmt. */
     private var air: FloatArray? = null
@@ -426,7 +427,7 @@ class Dehaze(private val amount: Float) : PreparedFilter {
  * feine Struktur (Poren) bleibt mit [detail] % erhalten.
  */
 class SkinSmooth(private val strength: Float, private val detail: Float) : ImageFilter {
-    override val label = "Haut glätten"
+    override val label = tr("Haut glätten")
     override val margin get() = 40
     override fun process(px: IntArray, w: Int, h: Int): IntArray {
         val sigma = 2f + strength / 100f * 10f
@@ -450,7 +451,7 @@ class SkinSmooth(private val strength: Float, private val detail: Float) : Image
 
 /** Schärfe abhängig vom Rauschen: Unscharf maskieren nur oberhalb eines Kantenschwellwerts (schonend). */
 class SmartSharpen(private val amount: Float, private val radius: Float, private val noiseReduction: Float) : ImageFilter {
-    override val label = "Selektiver Scharfzeichner"
+    override val label = tr("Selektiver Scharfzeichner")
     override val margin get() = (radius * 3).toInt() + 2
     override fun process(px: IntArray, w: Int, h: Int): IntArray {
         val bl = Blur.gaussArgb(px, w, h, radius)

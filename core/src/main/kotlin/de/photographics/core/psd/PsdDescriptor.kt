@@ -1,5 +1,7 @@
 package de.photographics.core.psd
 
+import de.photographics.core.tr
+
 /**
  * Photoshop „Action Descriptor“ – das schlüssel-/wertbasierte Format, in dem Photoshop
  * u. a. Text-, Dynamik-, Schwarzweiß- und Helligkeit/Kontrast-Daten speichert.
@@ -58,8 +60,8 @@ class PsdDescriptor(
             "alis" -> RawData(r.bytes(r.i32()))
             "tdta" -> RawData(r.bytes(r.i32()))
             "obj " -> { readReference(r); null }
-            "ObAr" -> throw PsdFormatException("Objekt-Arrays werden nicht unterstützt")
-            else -> throw PsdFormatException("Unbekannter Descriptor-Typ $type")
+            "ObAr" -> throw PsdFormatException(tr("Objekt-Arrays werden nicht unterstützt"))
+            else -> throw PsdFormatException(tr("Unbekannter Descriptor-Typ {0}", type))
         }
 
         private fun readReference(r: BinaryReader) {
@@ -103,7 +105,7 @@ class PsdDescriptor(
                 is Boolean -> { w.ascii("bool"); w.u8(if (v) 1 else 0) }
                 is ClassRef -> { w.ascii("type"); w.unicodeNoTerm(v.name); writeKey(w, v.classId) }
                 is RawData -> { w.ascii("tdta"); w.i32(v.bytes.size); w.bytes(v.bytes) }
-                else -> throw IllegalArgumentException("Wert kann nicht geschrieben werden: $v")
+                else -> throw IllegalArgumentException(tr("Wert kann nicht geschrieben werden: {0}", v))
             }
         }
 

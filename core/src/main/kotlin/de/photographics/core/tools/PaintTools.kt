@@ -1,5 +1,6 @@
 package de.photographics.core.tools
 
+import de.photographics.core.tr
 import de.photographics.core.image.Blur
 import de.photographics.core.image.Colors
 import de.photographics.core.image.IntRect
@@ -12,7 +13,7 @@ import kotlin.math.roundToInt
  * [background] dient der Farbdynamik (Vorder-/Hintergrund-Zufall).
  */
 class BrushTool(private val color: Int, private val background: Int = color) : PaintTool() {
-    override val label = "Pinsel"
+    override val label = tr("Pinsel")
     override val supportsMask = true
     private val gray = (Colors.luma(Colors.r(color) / 255f, Colors.g(color) / 255f, Colors.b(color) / 255f) * 255f).roundToInt()
 
@@ -27,7 +28,7 @@ class BrushTool(private val color: Int, private val background: Int = color) : P
 
 /** Radiergummi: verringert die Deckkraft; auf Masken wird weiß (sichtbar) gemalt. */
 class EraserTool : PaintTool() {
-    override val label = "Radiergummi"
+    override val label = tr("Radiergummi")
     override val supportsMask = true
 
     override fun apply(ctx: StrokeContext, x: Int, y: Int, orig: Int, amount: Float): Int =
@@ -73,7 +74,7 @@ class SourceSampler(private val ctx: StrokeContext, private val sampleAll: Boole
 
 /** Kopierstempel: überträgt Pixel aus dem Quellbereich (Versatz dx/dy). */
 class CloneTool(private val dx: Int, private val dy: Int, private val sampleAll: Boolean) : PaintTool() {
-    override val label = "Kopierstempel"
+    override val label = tr("Kopierstempel")
     private lateinit var source: SourceSampler
 
     override fun begin(ctx: StrokeContext) { source = SourceSampler(ctx, sampleAll) }
@@ -112,14 +113,14 @@ abstract class BlurredSourceTool(private val sigma: Float) : PaintTool() {
 }
 
 class BlurTool(sigma: Float = 3f, private val strength: Float = 1f) : BlurredSourceTool(sigma) {
-    override val label = "Weichzeichner"
+    override val label = tr("Weichzeichner")
     override fun apply(ctx: StrokeContext, x: Int, y: Int, orig: Int, amount: Float): Int =
         Colors.lerp(orig, blurred(ctx, x, y), amount * strength)
 }
 
 /** Scharfzeichner per Unscharf-Maskieren. */
 class SharpenTool(sigma: Float = 1.5f, private val strength: Float = 1f) : BlurredSourceTool(sigma) {
-    override val label = "Scharfzeichner"
+    override val label = tr("Scharfzeichner")
     override fun apply(ctx: StrokeContext, x: Int, y: Int, orig: Int, amount: Float): Int {
         val b = blurred(ctx, x, y)
         val k = amount * strength * 1.5f
@@ -128,11 +129,11 @@ class SharpenTool(sigma: Float = 1.5f, private val strength: Float = 1f) : Blurr
     }
 }
 
-enum class ToneRange(val label: String) { SHADOWS("Tiefen"), MIDTONES("Mitteltöne"), HIGHLIGHTS("Lichter") }
+enum class ToneRange(val label: String) { SHADOWS(tr("Tiefen")), MIDTONES(tr("Mitteltöne")), HIGHLIGHTS(tr("Lichter")) }
 
 /** Abwedler (aufhellen) bzw. Nachbelichter (abdunkeln), wirkt gewichtet auf einen Tonwertbereich. */
 class DodgeBurnTool(private val dodge: Boolean, private val range: ToneRange, private val exposure: Float = 0.5f) : PaintTool() {
-    override val label = if (dodge) "Abwedler" else "Nachbelichter"
+    override val label = if (dodge) tr("Abwedler") else tr("Nachbelichter")
 
     override fun apply(ctx: StrokeContext, x: Int, y: Int, orig: Int, amount: Float): Int {
         val r = Colors.r(orig) / 255f; val g = Colors.g(orig) / 255f; val b = Colors.b(orig) / 255f
@@ -150,7 +151,7 @@ class DodgeBurnTool(private val dodge: Boolean, private val range: ToneRange, pr
 
 /** Schwamm: Sättigung erhöhen oder verringern. */
 class SpongeTool(private val saturate: Boolean, private val strength: Float = 0.5f) : PaintTool() {
-    override val label = if (saturate) "Schwamm (sättigen)" else "Schwamm (entsättigen)"
+    override val label = if (saturate) tr("Schwamm (sättigen)") else tr("Schwamm (entsättigen)")
     private val hsl = FloatArray(3)
     private val rgb = FloatArray(3)
 

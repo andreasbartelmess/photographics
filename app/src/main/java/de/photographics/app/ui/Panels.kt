@@ -1,5 +1,6 @@
 package de.photographics.app.ui
 
+import de.photographics.core.tr
 import androidx.compose.material3.FilterChip
 import androidx.compose.material.icons.filled.SubdirectoryArrowRight
 import androidx.compose.foundation.Canvas
@@ -42,6 +43,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -78,6 +82,8 @@ fun AdjustmentPanel(
     onChange: (Adjustment) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Tonwerte unter der Ebene für den Kurveneditor (siehe Histogram). */
+    histogram: IntArray? = null,
     lutLibrary: List<de.photographics.core.adjust.ColorLookupAdj> = emptyList(),
     onLoadLut: () -> Unit = {},
     /** Schnittmaske der Einstellungsebene (null = keine Ebene, z. B. direkte Korrektur). */
@@ -90,7 +96,7 @@ fun AdjustmentPanel(
             // Photoshop: „Diese Einstellung wirkt sich nur auf die darunterliegende Ebene aus“
             FilterChip(
                 selected = clipped, onClick = onToggleClip,
-                label = { Text("Nur auf Ebene darunter") },
+                label = { Text(tr("Nur auf Ebene darunter")) },
                 leadingIcon = { Icon(Icons.Filled.SubdirectoryArrowRight, null, Modifier.size(18.dp)) },
                 modifier = Modifier.padding(bottom = 4.dp),
             )
@@ -98,16 +104,33 @@ fun AdjustmentPanel(
         if (adjustment is de.photographics.core.adjust.ColorLookupAdj) {
             LutChooser(adjustment, lutLibrary, onPick = onChange, onLoad = onLoadLut)
         } else if (adjustment is CurvesAdj) {
-            CurveEditor(adjustment.master, onChange = { pts -> onChange((current as CurvesAdj).copy(master = pts)) })
-            Text("Punkt antippen/ziehen; neue Punkte durch Tippen auf die Kurve, entfernen durch Ziehen aus dem Feld.",
+            // Kanal: 0 = RGB (Gesamtkurve), 1–3 = Rot/Grün/Blau
+            var channel by remember { mutableStateOf(0) }
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                val labels = listOf(tr("RGB"), tr("Rot"), tr("Grün"), tr("Blau"))
+                labels.forEachIndexed { i, label ->
+                    val edited = i > 0 && curveOf(adjustment, i)?.let { it != IDENTITY } == true
+                    SegmentedButton(
+                        selected = channel == i, onClick = { channel = i },
+                        shape = SegmentedButtonDefaults.itemShape(i, labels.size), icon = {},
+                    ) { Text(if (edited) "$label •" else label, maxLines = 1) }
+                }
+            }
+            val ch = channel
+            CurveEditor(
+                curveOf(adjustment, ch) ?: IDENTITY,
+                onChange = { pts -> onChange(withCurve(current as CurvesAdj, ch, pts)) },
+                histogram = histogram, channel = ch,
+            )
+            Text(tr("Punkt antippen/ziehen; neue Punkte durch Tippen auf die Kurve, entfernen durch Ziehen aus dem Feld."),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             val params = adjustment.params()
             val values = remember(adjustment.type) { mutableStateListOf(*params.map { it.value }.toTypedArray()) }
             ParamControls(params.map { it.toFilterParam() }, values) { onChange(current.withValues(values.toFloatArray())) }
-            if (params.isEmpty()) Text("Diese Einstellung hat keine Regler.", style = MaterialTheme.typography.bodyMedium)
+            if (params.isEmpty()) Text(tr("Diese Einstellung hat keine Regler."), style = MaterialTheme.typography.bodyMedium)
         }
-        PanelActions(onReset = { onChange(adjustment.type.createDefault()) }, onCancel = null, onApply = onClose, applyLabel = "Fertig")
+        PanelActions(onReset = { onChange(adjustment.type.createDefault()) }, onCancel = null, onApply = onClose, applyLabel = tr("Fertig"))
     }
 }
 
@@ -122,24 +145,24 @@ private fun LutChooser(
     val cs = MaterialTheme.colorScheme
     Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
         for ((category, looks) in de.photographics.core.color.Looks.all.groupBy { it.category }) {
-            Text(category, style = MaterialTheme.typography.labelLarge, color = cs.primary, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+            Text(tr(category), style = MaterialTheme.typography.labelLarge, color = cs.primary, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
             for (look in looks) {
-                LutRow(look.name, look.description, selected = current.fileData == null && current.lutName == look.name) {
+                LutRow(tr(look.name), look.description, selected = current.fileData == null && current.lutName == look.name) {
                     onPick(de.photographics.core.adjust.ColorLookupAdj(look.name))
                 }
             }
         }
         if (library.isNotEmpty()) {
-            Text("Eigene LUTs", style = MaterialTheme.typography.labelLarge, color = cs.primary, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+            Text(tr("Eigene LUTs"), style = MaterialTheme.typography.labelLarge, color = cs.primary, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
             for (l in library) {
                 LutRow(l.lutName, "${l.fileFormat.lowercase()} · ${l.lut?.size ?: 0}³", selected = current.fileData != null && current.lutName == l.lutName) { onPick(l) }
             }
         }
     }
     androidx.compose.material3.OutlinedButton(onClick = onLoad, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-        Text("LUT-Datei laden (.cube, .3dl) …")
+        Text(tr("LUT-Datei laden (.cube, .3dl) …"))
     }
-    Text("Die Stärke regelst du über die Deckkraft der Einstellungsebene.",
+    Text(tr("Die Stärke regelst du über die Deckkraft der Einstellungsebene."),
         style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
 }
 
@@ -163,9 +186,23 @@ private fun AdjParam.toFilterParam() = FilterParam(
     when (kind) { AdjParam.Kind.SWITCH -> ParamKind.SWITCH; AdjParam.Kind.HUE -> ParamKind.HUE; else -> ParamKind.SLIDER },
 )
 
-/** Gradationskurve mit verschiebbaren Stützpunkten (wie Photoshop „Kurven“). */
+private val IDENTITY = listOf(0 to 0, 255 to 255)
+
+private fun curveOf(a: CurvesAdj, channel: Int) = when (channel) { 1 -> a.red; 2 -> a.green; 3 -> a.blue; else -> a.master }
+
+/** Kanalkurve setzen; eine gerade Kanalkurve wird wieder entfernt (null = unverändert). */
+private fun withCurve(a: CurvesAdj, channel: Int, pts: List<Pair<Int, Int>>): CurvesAdj {
+    val v = pts.takeIf { channel == 0 || it != IDENTITY }
+    return when (channel) { 1 -> a.copy(red = v); 2 -> a.copy(green = v); 3 -> a.copy(blue = v); else -> a.copy(master = pts) }
+}
+
+/**
+ * Gradationskurve mit verschiebbaren Stützpunkten (wie Photoshop „Kurven“). [channel] 0 = RGB,
+ * 1–3 = Rot/Grün/Blau (Farbe von Kurve und Histogramm); [histogram] im Hintergrund (optional).
+ */
 @Composable
-fun CurveEditor(points: List<Pair<Int, Int>>, onChange: (List<Pair<Int, Int>>) -> Unit) {
+fun CurveEditor(points: List<Pair<Int, Int>>, onChange: (List<Pair<Int, Int>>) -> Unit, histogram: IntArray? = null, channel: Int = 0) {
+    val bars = remember(histogram, channel) { histogram?.let { de.photographics.core.adjust.Histogram.display(it, channel) } }
     val pts by rememberUpdatedState(points.sortedBy { it.first })
     var dragging by remember { mutableStateOf(-1) }
     val cs = MaterialTheme.colorScheme
@@ -217,6 +254,15 @@ fun CurveEditor(points: List<Pair<Int, Int>>, onChange: (List<Pair<Int, Int>>) -
                 drawLine(cs.outlineVariant, Offset(w * k / 4, 0f), Offset(w * k / 4, h), 1f)
                 drawLine(cs.outlineVariant, Offset(0f, h * k / 4), Offset(w, h * k / 4), 1f)
             }
+            val tint = when (channel) { 1 -> Color(0xFFE53935); 2 -> Color(0xFF43A047); 3 -> Color(0xFF1E88E5); else -> cs.primary }
+            if (bars != null) {
+                val hist = Path().apply {
+                    moveTo(0f, h)
+                    for (x in 0..255) lineTo(x / 255f * w, h - bars[x] * h * 0.9f)
+                    lineTo(w, h); close()
+                }
+                drawPath(hist, (if (channel == 0) cs.onSurfaceVariant else tint).copy(alpha = 0.22f))
+            }
             drawLine(cs.outline.copy(alpha = 0.5f), Offset(0f, h), Offset(w, 0f), 1f)
             val table = CurvesAdj.table(pts)
             val path = Path()
@@ -224,11 +270,11 @@ fun CurveEditor(points: List<Pair<Int, Int>>, onChange: (List<Pair<Int, Int>>) -
                 val px = x / 255f * w; val py = h - table[x] / 255f * h
                 if (x == 0) path.moveTo(px, py) else path.lineTo(px, py)
             }
-            drawPath(path, cs.primary, style = Stroke(3f))
+            drawPath(path, tint, style = Stroke(3f))
             for (p in pts) {
                 val c = Offset(p.first / 255f * w, h - p.second / 255f * h)
                 drawCircle(cs.surface, 9f, c)
-                drawCircle(cs.primary, 9f, c, style = Stroke(3f))
+                drawCircle(tint, 9f, c, style = Stroke(3f))
             }
         }
     }
@@ -241,11 +287,11 @@ fun CurveEditor(points: List<Pair<Int, Int>>, onChange: (List<Pair<Int, Int>>) -
 @Composable
 fun TextPanel(style: TextStyle, onChange: (TextStyle) -> Unit, onDone: () -> Unit, onCancel: () -> Unit, onPickColor: () -> Unit, modifier: Modifier = Modifier) {
     var fontMenu by remember { mutableStateOf(false) }
-    PanelCard(Icons.Filled.TextFields, "Text", modifier) {
+    PanelCard(Icons.Filled.TextFields, tr("Text"), modifier) {
         OutlinedTextField(
             value = style.text,
             onValueChange = { onChange(style.copy(text = it)) },
-            label = { Text("Text") },
+            label = { Text(tr("Text")) },
             minLines = 2, maxLines = 6,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -253,7 +299,7 @@ fun TextPanel(style: TextStyle, onChange: (TextStyle) -> Unit, onDone: () -> Uni
         ExposedDropdownMenuBox(expanded = fontMenu, onExpandedChange = { fontMenu = it }) {
             OutlinedTextField(
                 value = AndroidTextRasterizer.families.firstOrNull { it.first == style.fontFamily }?.second ?: style.fontFamily,
-                onValueChange = {}, readOnly = true, singleLine = true, label = { Text("Schrift") },
+                onValueChange = {}, readOnly = true, singleLine = true, label = { Text(tr("Schrift")) },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(fontMenu) },
                 modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
             )
@@ -267,31 +313,31 @@ fun TextPanel(style: TextStyle, onChange: (TextStyle) -> Unit, onDone: () -> Uni
             }
         }
         Row(Modifier.padding(top = 8.dp)) {
-            Text("Größe", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-            Text("${style.sizePx.roundToInt()} px", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Text(tr("Größe"), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+            Text(tr("{0} px", style.sizePx.roundToInt()), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
         Slider(kotlin.math.sqrt(style.sizePx / 1000f), { onChange(style.copy(sizePx = (it * it * 1000f).coerceAtLeast(4f))) })
         Row(Modifier.padding(top = 4.dp)) {
-            Text("Zeilenabstand", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+            Text(tr("Zeilenabstand"), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
             Text("%.2f".format(style.lineHeight), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
         Slider(style.lineHeight, { onChange(style.copy(lineHeight = it)) }, valueRange = 0.7f..3f)
         Row(Modifier.padding(top = 4.dp)) {
-            Text("Laufweite", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+            Text(tr("Laufweite"), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
             Text("${(style.letterSpacing * 1000).roundToInt()}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
         Slider(style.letterSpacing, { onChange(style.copy(letterSpacing = it)) }, valueRange = -0.1f..0.5f)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Box(Modifier.size(36.dp).background(Color(style.color), CircleShape).border(2.dp, MaterialTheme.colorScheme.outline, CircleShape).clickable(onClick = onPickColor))
             Spacer(Modifier.width(8.dp))
-            IconToggleButton(style.bold, { onChange(style.copy(bold = it)) }) { Icon(Icons.Filled.FormatBold, "Fett") }
-            IconToggleButton(style.italic, { onChange(style.copy(italic = it)) }) { Icon(Icons.Filled.FormatItalic, "Kursiv") }
+            IconToggleButton(style.bold, { onChange(style.copy(bold = it)) }) { Icon(Icons.Filled.FormatBold, tr("Fett")) }
+            IconToggleButton(style.italic, { onChange(style.copy(italic = it)) }) { Icon(Icons.Filled.FormatItalic, tr("Kursiv")) }
             Spacer(Modifier.width(8.dp))
-            IconToggleButton(style.align == TextAlign.LEFT, { onChange(style.copy(align = TextAlign.LEFT)) }) { Icon(Icons.AutoMirrored.Filled.FormatAlignLeft, "Links") }
-            IconToggleButton(style.align == TextAlign.CENTER, { onChange(style.copy(align = TextAlign.CENTER)) }) { Icon(Icons.Filled.FormatAlignCenter, "Zentriert") }
-            IconToggleButton(style.align == TextAlign.RIGHT, { onChange(style.copy(align = TextAlign.RIGHT)) }) { Icon(Icons.AutoMirrored.Filled.FormatAlignRight, "Rechts") }
+            IconToggleButton(style.align == TextAlign.LEFT, { onChange(style.copy(align = TextAlign.LEFT)) }) { Icon(Icons.AutoMirrored.Filled.FormatAlignLeft, tr("Links")) }
+            IconToggleButton(style.align == TextAlign.CENTER, { onChange(style.copy(align = TextAlign.CENTER)) }) { Icon(Icons.Filled.FormatAlignCenter, tr("Zentriert")) }
+            IconToggleButton(style.align == TextAlign.RIGHT, { onChange(style.copy(align = TextAlign.RIGHT)) }) { Icon(Icons.AutoMirrored.Filled.FormatAlignRight, tr("Rechts")) }
         }
-        PanelActions(onReset = null, onCancel = onCancel, onApply = onDone, applyLabel = "Fertig")
+        PanelActions(onReset = null, onCancel = onCancel, onApply = onDone, applyLabel = tr("Fertig"))
     }
 }
 

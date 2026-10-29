@@ -1,13 +1,14 @@
 package de.photographics.core.doc
 
+import de.photographics.core.tr
 import de.photographics.core.image.Affine
 import de.photographics.core.image.TileGrid
 
-enum class TextAlign(val label: String) { LEFT("Links"), CENTER("Zentriert"), RIGHT("Rechts") }
+enum class TextAlign(val label: String) { LEFT(tr("Links")), CENTER(tr("Zentriert")), RIGHT(tr("Rechts")) }
 
 /** Formatierung einer Textebene. Größen in Dokumentpixeln vor der Transformation. */
 data class TextStyle(
-    val text: String = "Text",
+    val text: String = tr("Text"),
     val fontFamily: String = "sans-serif",
     val sizePx: Float = 96f,
     val color: Int = 0xFF000000.toInt(),

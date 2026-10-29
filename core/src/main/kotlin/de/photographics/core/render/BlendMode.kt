@@ -1,5 +1,6 @@
 package de.photographics.core.render
 
+import de.photographics.core.tr
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -10,34 +11,34 @@ import kotlin.math.sqrt
  * Die Formeln folgen der W3C-Compositing-Spezifikation bzw. dem dokumentierten Photoshop-Verhalten.
  */
 enum class BlendMode(val psdKey: String, val label: String, val separable: Boolean = true) {
-    PASS_THROUGH("pass", "Hindurchwirken"),
-    NORMAL("norm", "Normal"),
-    DISSOLVE("diss", "Sprenkeln"),
-    DARKEN("dark", "Abdunkeln"),
-    MULTIPLY("mul ", "Multiplizieren"),
-    COLOR_BURN("idiv", "Farbig nachbelichten"),
-    LINEAR_BURN("lbrn", "Linear nachbelichten"),
-    DARKER_COLOR("dkCl", "Dunklere Farbe", separable = false),
-    LIGHTEN("lite", "Aufhellen"),
-    SCREEN("scrn", "Negativ multiplizieren"),
-    COLOR_DODGE("div ", "Farbig abwedeln"),
-    LINEAR_DODGE("lddg", "Linear abwedeln (Addieren)"),
-    LIGHTER_COLOR("lgCl", "Hellere Farbe", separable = false),
-    OVERLAY("over", "Ineinanderkopieren"),
-    SOFT_LIGHT("sLit", "Weiches Licht"),
-    HARD_LIGHT("hLit", "Hartes Licht"),
-    VIVID_LIGHT("vLit", "Strahlendes Licht"),
-    LINEAR_LIGHT("lLit", "Lineares Licht"),
-    PIN_LIGHT("pLit", "Lichtpunkt"),
-    HARD_MIX("hMix", "Hart mischen"),
-    DIFFERENCE("diff", "Differenz"),
-    EXCLUSION("smud", "Ausschluss"),
-    SUBTRACT("fsub", "Subtrahieren"),
-    DIVIDE("fdiv", "Dividieren"),
-    HUE("hue ", "Farbton", separable = false),
-    SATURATION("sat ", "Sättigung", separable = false),
-    COLOR("colr", "Farbe", separable = false),
-    LUMINOSITY("lum ", "Luminanz", separable = false);
+    PASS_THROUGH("pass", tr("Hindurchwirken")),
+    NORMAL("norm", tr("Normal")),
+    DISSOLVE("diss", tr("Sprenkeln")),
+    DARKEN("dark", tr("Abdunkeln")),
+    MULTIPLY("mul ", tr("Multiplizieren")),
+    COLOR_BURN("idiv", tr("Farbig nachbelichten")),
+    LINEAR_BURN("lbrn", tr("Linear nachbelichten")),
+    DARKER_COLOR("dkCl", tr("Dunklere Farbe"), separable = false),
+    LIGHTEN("lite", tr("Aufhellen")),
+    SCREEN("scrn", tr("Negativ multiplizieren")),
+    COLOR_DODGE("div ", tr("Farbig abwedeln")),
+    LINEAR_DODGE("lddg", tr("Linear abwedeln (Addieren)")),
+    LIGHTER_COLOR("lgCl", tr("Hellere Farbe"), separable = false),
+    OVERLAY("over", tr("Ineinanderkopieren")),
+    SOFT_LIGHT("sLit", tr("Weiches Licht")),
+    HARD_LIGHT("hLit", tr("Hartes Licht")),
+    VIVID_LIGHT("vLit", tr("Strahlendes Licht")),
+    LINEAR_LIGHT("lLit", tr("Lineares Licht")),
+    PIN_LIGHT("pLit", tr("Lichtpunkt")),
+    HARD_MIX("hMix", tr("Hart mischen")),
+    DIFFERENCE("diff", tr("Differenz")),
+    EXCLUSION("smud", tr("Ausschluss")),
+    SUBTRACT("fsub", tr("Subtrahieren")),
+    DIVIDE("fdiv", tr("Dividieren")),
+    HUE("hue ", tr("Farbton"), separable = false),
+    SATURATION("sat ", tr("Sättigung"), separable = false),
+    COLOR("colr", tr("Farbe"), separable = false),
+    LUMINOSITY("lum ", tr("Luminanz"), separable = false);
 
     /** Separierbare Mischfunktion B(cb, cs) für einen Kanal (Werte 0..1). */
     fun blendChannel(cb: Float, cs: Float): Float = when (this) {

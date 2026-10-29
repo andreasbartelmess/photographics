@@ -1,5 +1,6 @@
 package de.photographics.app.ui
 
+import de.photographics.core.tr
 import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -156,7 +157,7 @@ private fun directAdjustmentSpec(t: AdjustmentType): FilterSpec {
         FilterParam(p.label, p.min, p.max, p.value, p.decimals,
             when (p.kind) { AdjParam.Kind.SWITCH -> ParamKind.SWITCH; AdjParam.Kind.HUE -> ParamKind.HUE; else -> ParamKind.SLIDER })
     }
-    return FilterSpec(t.label, "Korrekturen", t.icon, params) { v -> AdjustmentFilter(def.withValues(v)) }
+    return FilterSpec(t.label, tr("Korrekturen"), t.icon, params) { v -> AdjustmentFilter(def.withValues(v)) }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -248,7 +249,7 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
     fun print() {
         vm.renderForPrint { bmp ->
             PrintHelper(context).apply { scaleMode = PrintHelper.SCALE_MODE_FIT; colorMode = PrintHelper.COLOR_MODE_COLOR }
-                .printBitmap("photographics – $baseName", bmp)
+                .printBitmap(tr("photographics – {0}", baseName), bmp)
         }
     }
 
@@ -326,6 +327,7 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
             Key.O -> if (shift) Tool.BURN else Tool.DODGE
             Key.I -> Tool.EYEDROPPER
             Key.T -> Tool.TEXT
+            Key.G -> Tool.GRADIENT
             else -> null
         }
         if (tool != null) { vm.selectTool(tool); return true }
@@ -378,7 +380,7 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
     if (state.showStart) {
         StartScreen(
             recent = state.recent,
-            hasDocument = state.hasDocument && state.fileName != "Unbenannt" || state.canUndo,
+            hasDocument = state.hasDocument && state.fileName != tr("Unbenannt") || state.canUndo,
             loadThumb = vm::loadRecentThumb,
             onNew = { w, h, dpi -> vm.newDocument(w, h, transparent = false, dpi = dpi) },
             onCustomNew = { dialog = DialogKind.NEW },
@@ -413,29 +415,29 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                             Wordmark(MaterialTheme.typography.titleLarge, Modifier.padding(start = 14.dp))
                         }
                         Text(
-                            "${state.fileName} · ${state.docWidth} × ${state.docHeight} px",
+                            tr("{0} · {1} × {2} px", state.fileName, state.docWidth, state.docHeight),
                             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                         )
                         HorizontalDivider(Modifier.padding(vertical = 12.dp))
-                        DrawerItem(Icons.Filled.Home, "Startbildschirm") { closeDrawerThen { vm.showStartScreen(true) } }
-                        DrawerItem(Icons.Filled.Add, "Neues Dokument", "Strg+N") { closeDrawerThen { dialog = DialogKind.NEW } }
-                        DrawerItem(Icons.Filled.FolderOpen, "Öffnen", "Strg+O") { closeDrawerThen { openLauncher.launch(OPEN_TYPES) } }
-                        DrawerItem(Icons.Filled.AddPhotoAlternate, "Als Ebene platzieren") { closeDrawerThen { placeLauncher.launch(OPEN_TYPES) } }
+                        DrawerItem(Icons.Filled.Home, tr("Startbildschirm")) { closeDrawerThen { vm.showStartScreen(true) } }
+                        DrawerItem(Icons.Filled.Add, tr("Neues Dokument"), tr("Strg+N")) { closeDrawerThen { dialog = DialogKind.NEW } }
+                        DrawerItem(Icons.Filled.FolderOpen, tr("Öffnen"), tr("Strg+O")) { closeDrawerThen { openLauncher.launch(OPEN_TYPES) } }
+                        DrawerItem(Icons.Filled.AddPhotoAlternate, tr("Als Ebene platzieren")) { closeDrawerThen { placeLauncher.launch(OPEN_TYPES) } }
                         HorizontalDivider(Modifier.padding(vertical = 12.dp))
-                        Text("Speichern & Ausgeben", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(16.dp, 0.dp, 16.dp, 8.dp))
-                        DrawerItem(Icons.Filled.Save, "Als PSD speichern", "Strg+S") { closeDrawerThen { saveLauncher.launch("$baseName.psd") } }
-                        DrawerItem(Icons.Filled.Layers, "Als TIFF speichern …") { closeDrawerThen { dialog = DialogKind.TIFF_OPTIONS } }
-                        DrawerItem(Icons.Filled.Pets, "Als GIMP-Datei speichern (.xcf)") { closeDrawerThen { xcfLauncher.launch("$baseName.xcf") } }
-                        DrawerItem(Icons.Filled.Image, "Als PNG exportieren") { closeDrawerThen { pngLauncher.launch("$baseName.png") } }
-                        DrawerItem(Icons.Filled.Photo, "Als JPEG exportieren") { closeDrawerThen { jpgLauncher.launch("$baseName.jpg") } }
-                        DrawerItem(Icons.Filled.Gradient, "Farbtabelle exportieren (.cube)") { closeDrawerThen { lutExportLauncher.launch("$baseName.cube") } }
-                        DrawerItem(Icons.Filled.Print, "Drucken", "Strg+P") { closeDrawerThen { print() } }
+                        Text(tr("Speichern & Ausgeben"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(16.dp, 0.dp, 16.dp, 8.dp))
+                        DrawerItem(Icons.Filled.Save, tr("Als PSD speichern"), tr("Strg+S")) { closeDrawerThen { saveLauncher.launch("$baseName.psd") } }
+                        DrawerItem(Icons.Filled.Layers, tr("Als TIFF speichern …")) { closeDrawerThen { dialog = DialogKind.TIFF_OPTIONS } }
+                        DrawerItem(Icons.Filled.Pets, tr("Als GIMP-Datei speichern (.xcf)")) { closeDrawerThen { xcfLauncher.launch("$baseName.xcf") } }
+                        DrawerItem(Icons.Filled.Image, tr("Als PNG exportieren")) { closeDrawerThen { pngLauncher.launch("$baseName.png") } }
+                        DrawerItem(Icons.Filled.Photo, tr("Als JPEG exportieren")) { closeDrawerThen { jpgLauncher.launch("$baseName.jpg") } }
+                        DrawerItem(Icons.Filled.Gradient, tr("Farbtabelle exportieren (.cube)")) { closeDrawerThen { lutExportLauncher.launch("$baseName.cube") } }
+                        DrawerItem(Icons.Filled.Print, tr("Drucken"), tr("Strg+P")) { closeDrawerThen { print() } }
                         HorizontalDivider(Modifier.padding(vertical = 12.dp))
-                        DrawerItem(Icons.Filled.AutoAwesome, "KI-Modelle") { closeDrawerThen { dialog = DialogKind.AI_MODELS } }
-                        DrawerItem(Icons.Filled.Keyboard, "Gesten & Tastaturkürzel") { closeDrawerThen { dialog = DialogKind.SHORTCUTS } }
-                        DrawerItem(Icons.Filled.School, "Einführung") { closeDrawerThen { vm.updateSettings { it.copy(introSeen = false) } } }
-                        DrawerItem(Icons.Filled.Settings, "Einstellungen") { closeDrawerThen { settingsTab = SettingsTab.APPEARANCE; dialog = DialogKind.SETTINGS } }
+                        DrawerItem(Icons.Filled.AutoAwesome, tr("KI-Modelle")) { closeDrawerThen { dialog = DialogKind.AI_MODELS } }
+                        DrawerItem(Icons.Filled.Keyboard, tr("Gesten & Tastaturkürzel")) { closeDrawerThen { dialog = DialogKind.SHORTCUTS } }
+                        DrawerItem(Icons.Filled.School, tr("Einführung")) { closeDrawerThen { vm.updateSettings { it.copy(introSeen = false) } } }
+                        DrawerItem(Icons.Filled.Settings, tr("Einstellungen")) { closeDrawerThen { settingsTab = SettingsTab.APPEARANCE; dialog = DialogKind.SETTINGS } }
                     }
                 }
             },
@@ -444,76 +446,76 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                 topBar = {
                     if (!fullscreen) TopAppBar(
                         navigationIcon = {
-                            IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Filled.Menu, "Menü") }
+                            IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Filled.Menu, tr("Menü")) }
                         },
                         title = {
                             Column {
                                 Text(state.fileName, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 if (!compact) Text(
-                                    "${state.docWidth} × ${state.docHeight} px" +
+                                    tr("{0} × {1} px", state.docWidth, state.docHeight) +
                                         " · ${state.docProfileName}" +
-                                        (if (state.proofOn) " · Proof: ${state.proofLabel}" else "") +
-                                        (if (state.gamutWarning) " · Farbumfang-Warnung" else ""),
+                                        (if (state.proofOn) tr(" · Proof: {0}", state.proofLabel) else "") +
+                                        (if (state.gamutWarning) tr(" · Farbumfang-Warnung") else ""),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         },
                         actions = {
-                            IconButton(onClick = vm::undo, enabled = state.canUndo) { Icon(Icons.AutoMirrored.Filled.Undo, "Rückgängig") }
-                            IconButton(onClick = vm::redo, enabled = state.canRedo) { Icon(Icons.AutoMirrored.Filled.Redo, "Wiederholen") }
+                            IconButton(onClick = vm::undo, enabled = state.canUndo) { Icon(Icons.AutoMirrored.Filled.Undo, tr("Rückgängig")) }
+                            IconButton(onClick = vm::redo, enabled = state.canRedo) { Icon(Icons.AutoMirrored.Filled.Redo, tr("Wiederholen")) }
                             if (!compact) IconToggleButton(checked = state.stylusOnly, onCheckedChange = { vm.setStylusOnly(it) }) {
-                                Icon(if (state.stylusOnly) Icons.Filled.Draw else Icons.Filled.TouchApp, if (state.stylusOnly) "Nur Stift malt" else "Finger malen")
+                                Icon(if (state.stylusOnly) Icons.Filled.Draw else Icons.Filled.TouchApp, if (state.stylusOnly) tr("Nur Stift malt") else tr("Finger malen"))
                             }
-                            IconButton(onClick = { adjustSheet = true }) { Icon(Icons.Filled.Tune, "Korrekturen & Filter") }
+                            IconButton(onClick = { adjustSheet = true }) { Icon(Icons.Filled.Tune, tr("Korrekturen & Filter")) }
                             IconToggleButton(
                                 checked = layersVisible,
                                 onCheckedChange = { if (wide) layersDocked = it else layersOverlay = it },
-                            ) { Icon(Icons.Filled.Layers, "Ebenen") }
+                            ) { Icon(Icons.Filled.Layers, tr("Ebenen")) }
                             Box {
-                                IconButton(onClick = { overflow = true }) { Icon(Icons.Filled.MoreVert, "Weitere Optionen") }
+                                IconButton(onClick = { overflow = true }) { Icon(Icons.Filled.MoreVert, tr("Weitere Optionen")) }
                                 DropdownMenu(expanded = overflow, onDismissRequest = { overflow = false }) {
                                     fun go(action: () -> Unit) { overflow = false; action() }
-                                    MenuHeader("Bild")
-                                    Item("Bildgröße …", "Strg+Alt+I", Icons.Filled.PhotoSizeSelectLarge) { go { dialog = DialogKind.IMAGE_SIZE } }
-                                    Item("Arbeitsfläche …", "Strg+Alt+C", Icons.Filled.AspectRatio) { go { dialog = DialogKind.CANVAS_SIZE } }
-                                    Item("Profil zuweisen …", icon = Icons.Filled.Style) { go { dialog = DialogKind.ASSIGN_PROFILE } }
-                                    Item("In Profil umwandeln …", icon = Icons.Filled.Palette) { go { dialog = DialogKind.CONVERT_PROFILE } }
-                                    Item("Farbeinstellungen …", icon = Icons.Filled.Tune) { go { settingsTab = SettingsTab.COLOR; dialog = DialogKind.SETTINGS } }
-                                    Item("Freistellen", "C", Icons.Filled.Crop) { go { vm.selectTool(Tool.CROP) } }
-                                    Item("Nach rechts drehen", icon = Icons.Filled.Rotate90DegreesCw) { go { vm.rotate(true) } }
-                                    Item("Nach links drehen", icon = Icons.Filled.Rotate90DegreesCcw) { go { vm.rotate(false) } }
-                                    Item("Horizontal spiegeln", icon = Icons.Filled.Flip) { go { vm.flip(true) } }
-                                    Item("Vertikal spiegeln") { go { vm.flip(false) } }
-                                    Item("Drehen um Winkel …") { go { dialog = DialogKind.ROTATE } }
-                                    Item("Auf Hintergrund reduzieren", icon = Icons.Filled.Layers) { go { vm.flatten() } }
+                                    MenuHeader(tr("Bild"))
+                                    Item(tr("Bildgröße …"), tr("Strg+Alt+I"), Icons.Filled.PhotoSizeSelectLarge) { go { dialog = DialogKind.IMAGE_SIZE } }
+                                    Item(tr("Arbeitsfläche …"), tr("Strg+Alt+C"), Icons.Filled.AspectRatio) { go { dialog = DialogKind.CANVAS_SIZE } }
+                                    Item(tr("Profil zuweisen …"), icon = Icons.Filled.Style) { go { dialog = DialogKind.ASSIGN_PROFILE } }
+                                    Item(tr("In Profil umwandeln …"), icon = Icons.Filled.Palette) { go { dialog = DialogKind.CONVERT_PROFILE } }
+                                    Item(tr("Farbeinstellungen …"), icon = Icons.Filled.Tune) { go { settingsTab = SettingsTab.COLOR; dialog = DialogKind.SETTINGS } }
+                                    Item(tr("Freistellen"), "C", Icons.Filled.Crop) { go { vm.selectTool(Tool.CROP) } }
+                                    Item(tr("Nach rechts drehen"), icon = Icons.Filled.Rotate90DegreesCw) { go { vm.rotate(true) } }
+                                    Item(tr("Nach links drehen"), icon = Icons.Filled.Rotate90DegreesCcw) { go { vm.rotate(false) } }
+                                    Item(tr("Horizontal spiegeln"), icon = Icons.Filled.Flip) { go { vm.flip(true) } }
+                                    Item(tr("Vertikal spiegeln")) { go { vm.flip(false) } }
+                                    Item(tr("Drehen um Winkel …")) { go { dialog = DialogKind.ROTATE } }
+                                    Item(tr("Auf Hintergrund reduzieren"), icon = Icons.Filled.Layers) { go { vm.flatten() } }
                                     HorizontalDivider()
-                                    MenuHeader("Bearbeiten")
-                                    Item("Frei transformieren", "Strg+T", Icons.Filled.Transform) { go { vm.selectTool(Tool.TRANSFORM) } }
-                                    Item("Inhaltsbasiert füllen", "⇧F5", Icons.Filled.AutoFixHigh) { go { vm.contentAwareFill() } }
-                                    Item("KI-Füllen (Auswahl entfernen)", icon = Icons.Filled.AutoAwesome) { go { vm.aiFillSelection() } }
+                                    MenuHeader(tr("Bearbeiten"))
+                                    Item(tr("Frei transformieren"), tr("Strg+T"), Icons.Filled.Transform) { go { vm.selectTool(Tool.TRANSFORM) } }
+                                    Item(tr("Inhaltsbasiert füllen"), "⇧F5", Icons.Filled.AutoFixHigh) { go { vm.contentAwareFill() } }
+                                    Item(tr("KI-Füllen (Auswahl entfernen)"), icon = Icons.Filled.AutoAwesome) { go { vm.aiFillSelection() } }
                                     HorizontalDivider()
-                                    MenuHeader("Auswahl")
-                                    Item("Alles auswählen", "Strg+A", Icons.Filled.SelectAll) { go { vm.selectAll() } }
-                                    Item("Auswahl aufheben", "Strg+D", Icons.Filled.Deselect) { go { vm.deselect() } }
-                                    Item("Auswahl umkehren", "Strg+⇧+I") { go { vm.invertSelection() } }
-                                    Item("Weiche Auswahlkante …") { go { dialog = DialogKind.FEATHER } }
+                                    MenuHeader(tr("Auswahl"))
+                                    Item(tr("Alles auswählen"), tr("Strg+A"), Icons.Filled.SelectAll) { go { vm.selectAll() } }
+                                    Item(tr("Auswahl aufheben"), tr("Strg+D"), Icons.Filled.Deselect) { go { vm.deselect() } }
+                                    Item(tr("Auswahl umkehren"), tr("Strg+⇧+I")) { go { vm.invertSelection() } }
+                                    Item(tr("Weiche Auswahlkante …")) { go { dialog = DialogKind.FEATHER } }
                                     HorizontalDivider()
-                                    MenuHeader("Ansicht")
-                                    CheckItem("Farbproof", "Strg+Y", state.proofOn) { go { vm.toggleProof() } }
-                                    CheckItem("Farbumfang-Warnung", "Strg+⇧+Y", state.gamutWarning) { go { vm.toggleGamutWarning() } }
-                                    CheckItem("Lineale", "Strg+R", settings.showRulers) { go { vm.updateSettings { it.copy(showRulers = !it.showRulers) } } }
-                                    CheckItem("Hilfslinien", "Strg+;", settings.showGuides) { go { vm.updateSettings { it.copy(showGuides = !it.showGuides) } } }
-                                    CheckItem("Ausrichten", "Strg+⇧+;", settings.snap) { go { vm.updateSettings { it.copy(snap = !it.snap) } } }
-                                    CheckItem("Intelligente Hilfslinien", null, settings.smartGuides) { go { vm.updateSettings { it.copy(smartGuides = !it.smartGuides) } } }
-                                    Item("Neue Hilfslinie …") { go { dialog = DialogKind.NEW_GUIDE } }
-                                    Item("Hilfslinienlayout …") { go { dialog = DialogKind.GUIDE_LAYOUT } }
-                                    Item("Hilfslinien löschen") { go { vm.clearGuides() } }
-                                    Item("Proof einrichten …", icon = Icons.Filled.Palette) { go { settingsTab = SettingsTab.PROOF; dialog = DialogKind.SETTINGS } }
-                                    Item("Arbeitsbereich …", icon = Icons.Filled.Dashboard) { go { settingsTab = SettingsTab.WORKSPACE; dialog = DialogKind.SETTINGS } }
-                                    Item("Vollbild", "F", Icons.Filled.Fullscreen) { go { fullscreen = true } }
+                                    MenuHeader(tr("Ansicht"))
+                                    CheckItem(tr("Farbproof"), tr("Strg+Y"), state.proofOn) { go { vm.toggleProof() } }
+                                    CheckItem(tr("Farbumfang-Warnung"), tr("Strg+⇧+Y"), state.gamutWarning) { go { vm.toggleGamutWarning() } }
+                                    CheckItem(tr("Lineale"), tr("Strg+R"), settings.showRulers) { go { vm.updateSettings { it.copy(showRulers = !it.showRulers) } } }
+                                    CheckItem(tr("Hilfslinien"), tr("Strg+;"), settings.showGuides) { go { vm.updateSettings { it.copy(showGuides = !it.showGuides) } } }
+                                    CheckItem(tr("Ausrichten"), tr("Strg+⇧+;"), settings.snap) { go { vm.updateSettings { it.copy(snap = !it.snap) } } }
+                                    CheckItem(tr("Intelligente Hilfslinien"), null, settings.smartGuides) { go { vm.updateSettings { it.copy(smartGuides = !it.smartGuides) } } }
+                                    Item(tr("Neue Hilfslinie …")) { go { dialog = DialogKind.NEW_GUIDE } }
+                                    Item(tr("Hilfslinienlayout …")) { go { dialog = DialogKind.GUIDE_LAYOUT } }
+                                    Item(tr("Hilfslinien löschen")) { go { vm.clearGuides() } }
+                                    Item(tr("Proof einrichten …"), icon = Icons.Filled.Palette) { go { settingsTab = SettingsTab.PROOF; dialog = DialogKind.SETTINGS } }
+                                    Item(tr("Arbeitsbereich …"), icon = Icons.Filled.Dashboard) { go { settingsTab = SettingsTab.WORKSPACE; dialog = DialogKind.SETTINGS } }
+                                    Item(tr("Vollbild"), "F", Icons.Filled.Fullscreen) { go { fullscreen = true } }
                                     HorizontalDivider()
-                                    Item("Drucken …", "Strg+P", Icons.Filled.Print) { go { print() } }
+                                    Item(tr("Drucken …"), tr("Strg+P"), Icons.Filled.Print) { go { print() } }
                                 }
                             }
                         },
@@ -553,23 +555,23 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                             showRulers = settings.showRulers, showGuides = settings.showGuides,
                             contextMenu = { close ->
                                 fun go(action: () -> Unit) { close(); action() }
-                                Item("Rückgängig", "Strg+Z") { go { vm.undo() } }
-                                Item("Wiederholen", "Strg+⇧+Z") { go { vm.redo() } }
+                                Item(tr("Rückgängig"), tr("Strg+Z")) { go { vm.undo() } }
+                                Item(tr("Wiederholen"), tr("Strg+⇧+Z")) { go { vm.redo() } }
                                 HorizontalDivider()
                                 if (state.hasSelection) {
-                                    Item("Auswahl aufheben", "Strg+D") { go { vm.deselect() } }
-                                    Item("Auswahl umkehren", "Strg+⇧+I") { go { vm.invertSelection() } }
-                                    Item("Ebene durch Kopie", "Strg+J") { go { vm.layerViaCopy() } }
-                                    Item("Inhaltsbasiert füllen", "⇧F5") { go { vm.contentAwareFill() } }
-                                    Item("KI-Füllen") { go { vm.aiFillSelection() } }
-                                    Item("Löschen", "Entf") { go { vm.clearSelected() } }
+                                    Item(tr("Auswahl aufheben"), tr("Strg+D")) { go { vm.deselect() } }
+                                    Item(tr("Auswahl umkehren"), tr("Strg+⇧+I")) { go { vm.invertSelection() } }
+                                    Item(tr("Ebene durch Kopie"), tr("Strg+J")) { go { vm.layerViaCopy() } }
+                                    Item(tr("Inhaltsbasiert füllen"), "⇧F5") { go { vm.contentAwareFill() } }
+                                    Item(tr("KI-Füllen")) { go { vm.aiFillSelection() } }
+                                    Item(tr("Löschen"), tr("Entf")) { go { vm.clearSelected() } }
                                 } else {
-                                    Item("Alles auswählen", "Strg+A") { go { vm.selectAll() } }
+                                    Item(tr("Alles auswählen"), tr("Strg+A")) { go { vm.selectAll() } }
                                 }
                                 HorizontalDivider()
-                                Item("Frei transformieren", "Strg+T") { go { vm.selectTool(Tool.TRANSFORM) } }
-                                Item("Neue Ebene", "Strg+⇧+N") { go { vm.addLayer() } }
-                                Item("Einpassen", "Strg+0") { go { viewport.fit() } }
+                                Item(tr("Frei transformieren"), tr("Strg+T")) { go { vm.selectTool(Tool.TRANSFORM) } }
+                                Item(tr("Neue Ebene"), tr("Strg+⇧+N")) { go { vm.addLayer() } }
+                                Item(tr("Einpassen"), tr("Strg+0")) { go { viewport.fit() } }
                             },
                         )
 
@@ -597,7 +599,7 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                             SmallFloatingActionButton(
                                 onClick = { fullscreen = false },
                                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-                            ) { Icon(Icons.Filled.FullscreenExit, "Vollbild beenden") }
+                            ) { Icon(Icons.Filled.FullscreenExit, tr("Vollbild beenden")) }
                         }
 
                         val panelModifier = Modifier.align(if (!wide) Alignment.BottomCenter else if (layersLeft) Alignment.BottomStart else Alignment.BottomEnd)
@@ -615,6 +617,7 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                             )
                             adj != null -> AdjustmentPanel(
                                 adj.adjustment, onChange = vm::previewAdjustment, onClose = vm::closeAdjustment, modifier = panelModifier,
+                                histogram = adj.histogram,
                                 lutLibrary = state.lutLibrary,
                                 onLoadLut = { lutLauncher.launch(arrayOf("*/*")) },
                                 clipped = state.layers.firstOrNull { it.id == adj.layerId }?.clipped,
@@ -772,13 +775,13 @@ private fun AdjustmentsSheet(
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            Text("Korrekturen", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+            Text(tr("Korrekturen"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
             SingleChoiceSegmentedButtonRow(Modifier.padding(horizontal = 24.dp).fillMaxWidth()) {
-                SegmentedButton(asLayer, { onModeChange(true) }, SegmentedButtonDefaults.itemShape(0, 2)) { Text("Als Einstellungsebene") }
-                SegmentedButton(!asLayer, { onModeChange(false) }, SegmentedButtonDefaults.itemShape(1, 2)) { Text("Direkt anwenden") }
+                SegmentedButton(asLayer, { onModeChange(true) }, SegmentedButtonDefaults.itemShape(0, 2)) { Text(tr("Als Einstellungsebene")) }
+                SegmentedButton(!asLayer, { onModeChange(false) }, SegmentedButtonDefaults.itemShape(1, 2)) { Text(tr("Direkt anwenden")) }
             }
             Text(
-                if (asLayer) "Nicht-destruktiv: jederzeit änderbar, mit Maske, bleibt in der PSD erhalten." else "Verändert die Pixel der aktiven Ebene.",
+                if (asLayer) tr("Nicht-destruktiv: jederzeit änderbar, mit Maske, bleibt in der PSD erhalten.") else tr("Verändert die Pixel der aktiven Ebene."),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 6.dp),
             )
@@ -804,7 +807,7 @@ private fun SpecItem(spec: FilterSpec, onPick: (FilterSpec) -> Unit) {
     ListItem(
         headlineContent = { Text(spec.label) },
         supportingContent = {
-            Text(if (spec.params.isEmpty()) "Wird direkt angewendet" else spec.params.joinToString { it.label }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (spec.params.isEmpty()) tr("Wird direkt angewendet") else spec.params.joinToString { it.label }, maxLines = 1, overflow = TextOverflow.Ellipsis)
         },
         leadingContent = { Icon(spec.icon, null) },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -817,9 +820,9 @@ private fun FeatherDialog(onApply: (Float) -> Unit, onDismiss: () -> Unit) {
     var r by remember { mutableFloatStateOf(5f) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Weiche Auswahlkante") },
-        text = { LabeledSlider("Radius", r, 0.5f..100f, "${r.roundToInt()} px") { r = it } },
+        title = { Text(tr("Weiche Auswahlkante")) },
+        text = { LabeledSlider(tr("Radius"), r, 0.5f..100f, tr("{0} px", r.roundToInt())) { r = it } },
         confirmButton = { TextButton(onClick = { onApply(r) }) { Text("OK") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Abbrechen")) } },
     )
 }

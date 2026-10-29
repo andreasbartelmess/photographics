@@ -41,7 +41,7 @@ object Compositor {
      */
     fun renderBands(doc: Document, area: IntRect, consume: (IntRect, IntArray) -> Unit) {
         if (area.isEmpty) return
-        prepare(doc)
+        prepare(doc, 1, area)
         val band = 64
         val count = (area.height + band - 1) / band
         // Ausgabe (4 B) + Float-Puffer (16 B) + Ebenenpuffer aus dem Pool (≈ 20 B) je Pixel
@@ -56,7 +56,7 @@ object Compositor {
      * Vor parallelem Rendern: träge berechnete Raster (Text, Smartobjekte) und Korrekturtabellen
      * einmal auf dem aufrufenden Thread erzeugen, damit die Rechen-Threads nur noch lesen.
      */
-    fun prepare(doc: Document, step: Int = 1) {
+    fun prepare(doc: Document, step: Int = 1, area: IntRect? = null) {
         val level = MipMap.levelFor(step)
         for (l in doc.allLayers()) {
             when (l) {
@@ -68,6 +68,8 @@ object Compositor {
             }
             if (level > 0 && l.visible) l.mask?.grid?.mip(level, scalar = true)
         }
+        // Ebeneneffekte für den Bereich (Ausgabekoordinaten) vorab zwischenspeichern
+        if (area != null) prepareEffects(doc, step, area)
     }
 
     fun renderArgb(doc: Document, rect: IntRect, out: IntArray = IntArray(rect.width * rect.height)): IntArray {
@@ -103,7 +105,7 @@ object Compositor {
             val y1 = minOf(rect.bottom, y + band)
             val part = IntRect(rect.left, y, rect.right, y1)
             val buf = FloatArray(part.width * part.height * 4)
-            compositeChildren(doc.root.children, buf, Area(part, step))
+            compositeChildren(doc.root.children, buf, Area(part, step, lightAngle(doc)))
             val tmp = IntArray(part.width * part.height)
             toArgb(buf, tmp)
             System.arraycopy(tmp, 0, out, (y - rect.top) * rect.width, tmp.size)
@@ -161,7 +163,7 @@ object Compositor {
                     }
                 }
             }
-            compositeChildren(layers, buf, Area(part, maxOf(1, step)))
+            compositeChildren(layers, buf, Area(part, maxOf(1, step), lightAngle(doc)))
             val tmp = IntArray(part.width * part.height)
             toArgb(buf, tmp)
             System.arraycopy(tmp, 0, out, (y - rect.top) * rect.width, tmp.size)
@@ -170,10 +172,33 @@ object Compositor {
         return out
     }
 
+    /**
+     * Nur die Rasterebene [layer] für [rect] (Ausgabekoordinaten bei [step]), ohne Vorschau-Verschiebung,
+     * mit ihrer (verbundenen) Ebenenmaske; Deckkraft und Mischmodus bleiben außen vor. Für die
+     * GPU-Vorschau beim Verschieben: die Ebene wird dort als eigene Bitmap gezeichnet.
+     */
+    fun renderLayerSampled(layer: RasterLayer, rect: IntRect, step: Int): IntArray {
+        val area = Area(rect, maxOf(1, step))
+        val n = rect.width * rect.height
+        val px = IntArray(n)
+        area.read(layer.raster, 0, 0, px)
+        val m = layer.mask
+        if (m != null && m.enabled) {
+            val mv = IntArray(n)
+            area.read(m.grid, m.previewDx, m.previewDy, mv, scalar = true)
+            for (k in 0 until n) {
+                val c = px[k]; val a = c ushr 24
+                if (a == 0) continue
+                px[k] = (((a * mv[k] + 127) / 255) shl 24) or (c and 0xFFFFFF)
+            }
+        }
+        return px
+    }
+
     /** Vormultiplizierter RGBA-Float-Puffer (4 Werte pro Pixel). */
     fun render(doc: Document, rect: IntRect): FloatArray {
         val buf = FloatArray(rect.width * rect.height * 4)
-        if (!rect.isEmpty) compositeChildren(doc.root.children, buf, Area(rect, 1))
+        if (!rect.isEmpty) compositeChildren(doc.root.children, buf, Area(rect, 1, lightAngle(doc)))
         return buf
     }
 
@@ -181,7 +206,10 @@ object Compositor {
      * Zu rendernder Bereich: [rect] in Ausgabekoordinaten; Ausgabepixel (x, y) entspricht dem
      * Dokumentpixel (x·step + step/2, y·step + step/2).
      */
-    private class Area(val rect: IntRect, val step: Int) {
+    /** Globaler Lichtwinkel für Schatten der Ebeneneffekte. */
+    private fun lightAngle(doc: Document) = de.photographics.core.psd.PsdEffects.globalAngle(doc.preservedResources)
+
+    private class Area(val rect: IntRect, val step: Int, val lightAngle: Double = 120.0) {
         val width get() = rect.width
         val height get() = rect.height
         /** Abgedeckter Bereich in Dokumentkoordinaten. */
@@ -287,6 +315,8 @@ object Compositor {
         val maskBuf = maskValues(layer, rect)
         when (layer) {
             is RasterLayer -> {
+                val fx = layer.effects?.takeIf { it.visible }
+                if (fx != null) { drawWithEffects(layer, fx, dst, rect, atop, alpha, mode, forceNormalOpaque); return }
                 val srcRect = rect.docRect.offset(-layer.previewDx, -layer.previewDy)
                 val direct = layer is SmartLayer && layer.samplesDirectly
                 val raster = if (direct) null else layer.raster
@@ -351,6 +381,253 @@ object Compositor {
                 }
             }
         }
+    }
+
+    // ---------------------------------------------------------------- Ebeneneffekte
+
+    /** Ein Effekt in Zeichenreihenfolge; [exterior] = unter dem Inhalt (Schlagschatten, Schein außen). */
+    private class FxPart(val color: Int, val opacity: Float, val blend: BlendMode, val exterior: Boolean)
+
+    private fun fxParts(fx: de.photographics.core.doc.LayerEffects): List<FxPart> = buildList {
+        for (s in fx.dropShadows) add(FxPart(s.color, s.opacity, s.blend, true))
+        fx.outerGlow?.let { add(FxPart(it.color, it.opacity, it.blend, true)) }
+        fx.innerGlow?.let { add(FxPart(it.color, it.opacity, it.blend, false)) }
+        for (s in fx.innerShadows) add(FxPart(s.color, s.opacity, s.blend, false))
+        for (s in fx.strokes) add(FxPart(s.color, s.opacity, s.blend, false))
+    }
+
+    private fun fxMargin(fx: de.photographics.core.doc.LayerEffects, step: Int) = kotlin.math.ceil(fx.reach() / step).toInt() + 2
+
+    /** Deckungen aller [fxParts] über einer Fläche [w]×[h] mit Inhaltsdeckung [a] (Ausgabepixel bei [step]). */
+    private fun fxMaps(fx: de.photographics.core.doc.LayerEffects, a: FloatArray, w: Int, h: Int, step: Int, lightAngle: Double): List<FloatArray> {
+        val n = a.size
+        var any = false; var full = true
+        for (v in a) { if (v > 0f) any = true; if (v < 1f) full = false; if (any && !full) break }
+        val parts = fxParts(fx).size
+        if (!any) return List(parts) { FloatArray(n) }
+        fun ones() = FloatArray(n) { 1f }
+        if (full) return buildList {
+            // Ganz deckend: keine Kanten – außen verdeckt bzw. flächig, innen nichts außer Schein aus der Mitte
+            for (s in fx.dropShadows) add(if (s.knockOut) FloatArray(n) else ones())
+            fx.outerGlow?.let { add(ones()) }
+            fx.innerGlow?.let { add(if (it.fromEdge) FloatArray(n) else a.copyOf()) }
+            for (s in fx.innerShadows) add(FloatArray(n))
+            for (s in fx.strokes) add(FloatArray(n))
+        }
+        val scale = step.toDouble()
+        fun angleOf(s: de.photographics.core.doc.LayerEffects.Shadow) = if (s.useGlobalAngle) lightAngle else s.angle
+        val dist by lazy { Effects.distanceToInside(a, w, h) }
+        return buildList {
+            for (s in fx.dropShadows) add(Effects.dropShadow(a, w, h, s, angleOf(s), scale))
+            fx.outerGlow?.let { add(Effects.outerGlow(a, w, h, it, scale)) }
+            fx.innerGlow?.let { add(Effects.innerGlow(a, w, h, it, scale)) }
+            for (s in fx.innerShadows) add(Effects.innerShadow(a, w, h, s, angleOf(s), scale))
+            for (s in fx.strokes) add(Effects.stroke(a, w, h, s, scale, dist))
+        }
+    }
+
+    /** Inhaltsdeckung (Alpha × Maske) und Pixel der Ebene über [area]. */
+    private fun fxContent(layer: RasterLayer, area: Area): Pair<IntArray, FloatArray> {
+        val n = area.width * area.height
+        val px = IntArray(n)
+        if (layer is SmartLayer && layer.samplesDirectly) layer.samplePreview(area.rect, area.step, layer.previewDx, layer.previewDy, px)
+        else area.read(layer.raster, layer.previewDx, layer.previewDy, px)
+        val m = maskValues(layer, area)
+        return px to FloatArray(n) { i -> (px[i] ushr 24) / 255f * (if (m != null) m[i] else 1f) }
+    }
+
+    /**
+     * Zwischenspeicher der Effekt-Deckungen einer Ebene bei einem Abtastschritt: je vier Effekte als
+     * Bytes in einem Kachelraster (nativer Speicher). Jede Kachel merkt sich eine Signatur der
+     * Quellkacheln in Reichweite – nach einem Pinselstrich wird nur dessen Umgebung neu gerechnet.
+     */
+    private class FxCache(
+        val fx: de.photographics.core.doc.LayerEffects, val angle: Double, val dx: Int, val dy: Int,
+        val margin: Int, val parts: Int, w: Int, h: Int, area: IntRect,
+    ) {
+        val grids = Array((parts + 3) / 4) { de.photographics.core.image.TileGrid(w, h, area = area) }
+        val sig = java.util.concurrent.ConcurrentHashMap<Int, Long>()
+    }
+
+    /** Je Ebene die Zwischenspeicher der zuletzt benutzten Abtastschritte (Gesamtansicht, Ausschnitt, Vorschau). */
+    private val fxCaches = java.util.WeakHashMap<Layer, LinkedHashMap<Int, FxCache>>()
+
+    private fun fxCache(layer: Layer, step: Int): FxCache? = synchronized(fxCaches) { fxCaches[layer]?.get(step) }
+
+    /** Signatur der Quellkacheln (Raster und Maske), aus denen die Effekte im Ausgabebereich [out] entstehen. */
+    private fun fxSignature(layer: RasterLayer, out: IntRect, step: Int, margin: Int): Long {
+        val docR = IntRect((out.left - margin) * step, (out.top - margin) * step, (out.right + margin) * step, (out.bottom + margin) * step)
+        var h = 1125899906842597L
+        fun mix(g: de.photographics.core.image.TileGrid, r: IntRect) = g.forTilesIn(r) { tx, ty ->
+            val t = g.tile(tx, ty)
+            h = h * 31 + (tx * 73856093L xor ty * 19349663L) + (if (t == null) 0L else System.identityHashCode(t) * 1000003L + t.version)
+        }
+        mix(layer.raster, docR.offset(-layer.previewDx, -layer.previewDy))
+        layer.mask?.takeIf { it.enabled }?.let { m ->
+            val ldx = if (m.linked) layer.previewDx else 0; val ldy = if (m.linked) layer.previewDy else 0
+            mix(m.grid, docR.offset(-m.previewDx - ldx, -m.previewDy - ldy))
+        }
+        return h
+    }
+
+    /**
+     * Effekt-Deckungen für den Ausgabebereich [area] (bei [step]) vorab auf allen Kernen rechnen und
+     * zwischenspeichern – vor dem parallelen Rendern; fehlt etwas, rechnet [drawWithEffects] direkt.
+     */
+    fun prepareEffects(doc: Document, step: Int, area: IntRect) {
+        if (area.isEmpty) return
+        val angle = lightAngle(doc)
+        for (l in doc.allLayers()) {
+            if (l !is RasterLayer || !l.visible || (l is SmartLayer && l.samplesDirectly)) continue
+            val fx = l.effects?.takeIf { it.visible } ?: continue
+            val margin = fxMargin(fx, step)
+            val parts = fxParts(fx).size
+            if (parts == 0) continue
+            val ow = (doc.width + step - 1) / step; val oh = (doc.height + step - 1) / step
+            val ext = l.raster.extent
+            val lArea = IntRect(Math.floorDiv(ext.left, step) - margin, Math.floorDiv(ext.top, step) - margin, (ext.right + step - 1) / step + margin, (ext.bottom + step - 1) / step + margin)
+            val cache = synchronized(fxCaches) {
+                val byStep = fxCaches.getOrPut(l) { LinkedHashMap() }
+                (byStep.remove(step)?.takeIf { it.fx == fx && it.angle == angle && it.dx == l.previewDx && it.dy == l.previewDy && it.margin == margin }
+                    ?: FxCache(fx, angle, l.previewDx, l.previewDy, margin, parts, ow, oh, lArea)).also { c ->
+                    byStep[step] = c   // zuletzt benutzt ans Ende
+                    while (byStep.size > 3) byStep.remove(byStep.keys.first())
+                }
+            }
+            val g0 = cache.grids[0]
+            val todo = ArrayList<Triple<Int, IntRect, Long>>()
+            g0.forTilesIn(area.intersect(lArea)) { tx, ty ->
+                val r = IntRect(g0.extent.left + (tx shl 8), g0.extent.top + (ty shl 8), g0.extent.left + ((tx + 1) shl 8), g0.extent.top + ((ty + 1) shl 8))
+                val sig = fxSignature(l, r, step, margin)
+                val idx = ty * g0.tilesX + tx
+                if (cache.sig[idx] != sig) todo += Triple(idx, r, sig)
+            }
+            if (todo.isEmpty()) continue
+            val tileBytes = (256L + 2 * margin) * (256L + 2 * margin) * 4 * (parts + 6)
+            de.photographics.core.image.Parallel.bands(todo.size, tileBytes, compute = { i ->
+                val r = todo[i].second
+                val er = IntRect(r.left - margin, r.top - margin, r.right + margin, r.bottom + margin)
+                val (_, a) = fxContent(l, Area(er, step, angle))
+                val maps = fxMaps(fx, a, er.width, er.height, step, angle)
+                // auf die Kachel zuschneiden und je vier Deckungen in ein ARGB-Wort packen
+                val ew = er.width
+                Array(cache.grids.size) { gi ->
+                    var nonZero = false
+                    val packed = IntArray(r.width * r.height) { k ->
+                        val src = (k / r.width + margin) * ew + k % r.width + margin
+                        var v = 0
+                        for (c in 0 until 4) {
+                            val mi = gi * 4 + c
+                            if (mi < maps.size) v = v or ((maps[mi][src] * 255f + 0.5f).toInt().coerceIn(0, 255) shl (24 - 8 * c))
+                        }
+                        if (v != 0) nonZero = true
+                        v
+                    }
+                    if (nonZero) packed else null
+                }
+            }, consume = { i, packed ->
+                val (idx, r, sig) = todo[i]
+                for (gi in packed.indices) {
+                    val p = packed[gi]
+                    val g = cache.grids[gi]
+                    if (p != null) g.writeRect(r, p) else if (g.tile(idx % g0.tilesX, idx / g0.tilesX) != null) g.writeRect(r, IntArray(r.width * r.height))
+                }
+                cache.sig[idx] = sig
+            })
+        }
+    }
+
+    /** Deckungen für den Ausschnitt aus dem Zwischenspeicher, falls dort alles aktuell ist. */
+    private fun cachedFxMaps(layer: RasterLayer, fx: de.photographics.core.doc.LayerEffects, rect: Area): List<FloatArray>? {
+        if (layer is SmartLayer && layer.samplesDirectly) return null
+        val c = fxCache(layer, rect.step) ?: return null
+        if (c.fx != fx || c.angle != rect.lightAngle || c.dx != layer.previewDx || c.dy != layer.previewDy) return null
+        val g0 = c.grids[0]
+        var ok = true
+        g0.forTilesIn(rect.rect) { tx, ty ->
+            if (!ok) return@forTilesIn
+            val r = IntRect(g0.extent.left + (tx shl 8), g0.extent.top + (ty shl 8), g0.extent.left + ((tx + 1) shl 8), g0.extent.top + ((ty + 1) shl 8))
+            if (c.sig[ty * g0.tilesX + tx] != fxSignature(layer, r, rect.step, c.margin)) ok = false
+        }
+        // Teile des Ausschnitts außerhalb des gespeicherten Bereichs: dort gibt es keine Effekte
+        if (!ok) return null
+        val n = rect.width * rect.height
+        val maps = List(c.parts) { FloatArray(n) }
+        val buf = IntArray(n)
+        val inside = rect.rect.intersect(g0.extent)
+        for ((gi, g) in c.grids.withIndex()) {
+            if (inside.isEmpty) break
+            if (inside == rect.rect) g.readRect(rect.rect, buf) else { java.util.Arrays.fill(buf, 0); val tmp = IntArray(inside.width * inside.height); g.readRect(inside, tmp)
+                for (y in 0 until inside.height) System.arraycopy(tmp, y * inside.width, buf, (inside.top - rect.rect.top + y) * rect.width + inside.left - rect.rect.left, inside.width) }
+            for (ch in 0 until 4) {
+                val mi = gi * 4 + ch
+                if (mi >= c.parts) break
+                val m = maps[mi]; val sh = 24 - 8 * ch
+                for (k in 0 until n) m[k] = ((buf[k] shr sh) and 0xFF) / 255f
+            }
+        }
+        return maps
+    }
+
+    /**
+     * Rasterebene mit Ebeneneffekten, Reihenfolge wie in Photoshop (von unten): Schlagschatten,
+     * Schein nach außen, Inhalt (Deckkraft × Fläche, Mischmodus der Ebene), Farbüberlagerung, Schein
+     * nach innen, Schatten nach innen, Kontur. Jeder Effekt mischt mit eigenem Modus und eigener
+     * Deckkraft; die Deckkraft der Ebene wirkt auf alles, die Fläche nur auf den Inhalt.
+     */
+    private fun drawWithEffects(layer: RasterLayer, fx: de.photographics.core.doc.LayerEffects, dst: FloatArray, rect: Area,
+                                atop: Boolean, alpha: Float, mode: BlendMode, forceNormalOpaque: Boolean) {
+        val r = rect.rect
+        val w = r.width; val h = r.height
+        val (px, a) = fxContent(layer, rect)
+        val maps = cachedFxMaps(layer, fx, rect) ?: run {
+            // Nicht vorbereitet: direkt über einer um die Reichweite erweiterten Fläche rechnen
+            val margin = fxMargin(fx, rect.step)
+            val er = IntRect(r.left - margin, r.top - margin, r.right + margin, r.bottom + margin)
+            val (_, ea) = fxContent(layer, Area(er, rect.step, rect.lightAngle))
+            val ew = er.width
+            fxMaps(fx, ea, ew, er.height, rect.step, rect.lightAngle).map { e ->
+                FloatArray(w * h).also { o -> for (y in 0 until h) System.arraycopy(e, (y + margin) * ew + margin, o, y * w, w) }
+            }
+        }
+        val layerAlpha = if (forceNormalOpaque) 1f else layer.opacity
+        fun put(e: FloatArray, color: Int, opacity: Float, m: BlendMode) {
+            val src = FloatArray(w * h * 4)
+            val cr = ((color shr 16) and 0xFF) / 255f; val cg = ((color shr 8) and 0xFF) / 255f; val cb = (color and 0xFF) / 255f
+            var any = false
+            for (k in 0 until w * h) {
+                val ak = e[k] * opacity
+                if (ak <= 0f) continue
+                any = true
+                src[k * 4] = cr * ak; src[k * 4 + 1] = cg * ak; src[k * 4 + 2] = cb * ak; src[k * 4 + 3] = ak
+            }
+            if (!any) return
+            val bm = m.normalizedForBuffer()
+            if (atop) blendAtop(src, dst, bm, layerAlpha, null) else blendBuffer(src, dst, bm, layerAlpha, r, null)
+        }
+        val parts = fxParts(fx)
+        // Ganz deckender, normal gemischter Inhalt verdeckt Schatten und Schein darunter
+        var full = true
+        for (v in a) if (v < 1f) { full = false; break }
+        val covered = full && layer.fillOpacity >= 1f && mode == BlendMode.NORMAL
+        for ((k, p) in parts.withIndex()) if (p.exterior && !covered) put(maps[k], p.color, p.opacity, p.blend)
+        run {
+            val src = FloatArray(w * h * 4)
+            for (k in 0 until w * h) {
+                val c = px[k]
+                val ca = (c ushr 24) / 255f
+                if (ca == 0f) continue
+                src[k * 4] = ((c shr 16) and 0xFF) / 255f * ca
+                src[k * 4 + 1] = ((c shr 8) and 0xFF) / 255f * ca
+                src[k * 4 + 2] = (c and 0xFF) / 255f * ca
+                src[k * 4 + 3] = ca
+            }
+            val maskR = maskValues(layer, rect)
+            // [alpha] ist Deckkraft × Fläche (bzw. 1 als isolierte Basis einer Schnittmaske)
+            if (atop) blendAtop(src, dst, mode, alpha, maskR) else blendBuffer(src, dst, mode, alpha, r, maskR)
+        }
+        for (o in fx.colorOverlays) put(a, o.color, o.opacity, o.blend)
+        for ((k, p) in parts.withIndex()) if (!p.exterior) put(maps[k], p.color, p.opacity, p.blend)
     }
 
     private fun maskValues(layer: Layer, rect: Area): FloatArray? {

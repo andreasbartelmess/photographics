@@ -10,6 +10,7 @@ coroutines = "1.10.2"
 junit = "4.13.2"
 onnxruntime = "1.27.0"
 print = "1.0.0"
+okhttp = "5.4.0"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -27,6 +28,7 @@ kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutine
 junit = { module = "junit:junit", version.ref = "junit" }
 onnxruntime-android = { module = "com.microsoft.onnxruntime:onnxruntime-android", version.ref = "onnxruntime" }
 androidx-print = { module = "androidx.print:print", version.ref = "print" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

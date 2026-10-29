@@ -7,7 +7,7 @@ Retusche, Montage und Farbkorrektur mit dem Stift – mit Ebenen, Masken, Einste
 Farbmanagement; Dateien wandern als PSD, TIFF oder GIMP-Datei zwischen Schreibtisch und unterwegs.
 Kotlin + Jetpack Compose, minSdk 27 (Android 8.1).
 
-> **Vorschau (Version 0.2).** Vieles funktioniert, manches fehlt noch oder ändert sich. Bitte arbeite
+> **Vorschau (Version 0.3).** Vieles funktioniert, manches fehlt noch oder ändert sich. Bitte arbeite
 > nicht ohne Sicherungskopie an wichtigen Dateien. Ich freue mich über Rückmeldungen, Fehlerberichte,
 > Mitentwicklerinnen und Mitentwickler und alle, die das Projekt unterstützen möchten: über ein
 > [Issue](../../issues/new/choose) oder an info@andreasbartelmess.de. Wobei Hilfe gebraucht wird, steht
@@ -83,7 +83,8 @@ app/    Android-Oberfläche (Compose, Material 3)
 | Einstellungsebenen (Helligkeit/Kontrast, Tonwert, Kurven, Belichtung, Dynamik, Farbton/Sättigung, Farbbalance, Schwarzweiß, Fotofilter, Umkehren, Tontrennung, Schwellenwert) | ✅ editierbar, gerendert | ✅ im Photoshop-Format |
 | Textebenen | ✅ Text, Größe, Farbe, Ausrichtung, Lage (Originalpixel bis zur Änderung) | unverändert: Photoshop-Text bleibt editierbar; geändert/neu: als Pixel + eigene Textdaten |
 | Smartobjekte (eigene) | ✅ Original in voller Auflösung | ✅ |
-| Effekte, Photoshop-Smartobjekte, Füllebenen | erkannt, als Pixel angezeigt | Rohdaten werden **unverändert zurückgeschrieben** |
+| Ebeneneffekte (Schlagschatten, Schatten nach innen, Schein, Kontur, Farbüberlagerung) | ✅ werden angezeigt | Rohdaten werden **unverändert zurückgeschrieben** |
+| Photoshop-Smartobjekte, Füllebenen, übrige Effekte | erkannt, als Pixel angezeigt | Rohdaten werden **unverändert zurückgeschrieben** |
 | ICC-Profil | ✅ als Dokumentprofil | ✅ |
 | Color-Lookup-Ebenen (LUT) | ✅ | ✅ |
 | XMP, EXIF, IPTC, Hilfslinien | übernommen | ✅ |
@@ -142,7 +143,15 @@ Bericht (`report.html` mit Vergleichsbildern, `report.csv`) liegt in `core/build
   Quelle, Farbe/Helligkeit des Ziels), Kopierstempel, Rote Augen, Wischfinger, Weich-/Scharfzeichner,
   Abwedler/Nachbelichter, Schwamm, Filter „Haut glätten“. „Alle Ebenen aufnehmen“ erlaubt
   zerstörungsfreies Retuschieren auf einer leeren Ebene. *Bearbeiten → Inhaltsbasiert füllen*
-  (⇧F5) und *KI-Füllen* wirken auf die Auswahl.
+  (⇧F5) und *KI-Füllen* wirken auf die Auswahl. Das native Füllen sucht nach Struktur (Texturmerkmale,
+  Füllung von außen nach innen) und gleicht Farbe und Helligkeit an der Kante an.
+- **Auswahl:** Rechteck, Ellipse, Lasso, **Zauberstab** (Toleranz, benachbart, alle Ebenen) und
+  **Objektauswahl** (Rechteck um das Objekt ziehen, GrabCut); Neu/Hinzu/Weg, weiche Kante.
+- **Verlauf** (G): linear, radial, gespiegelt; Vorder- → Hintergrundfarbe oder → transparent; auf
+  Ebene oder Maske, innerhalb der Auswahl; Umschalt rastet auf 45° ein.
+- **Verflüssigen:** Vorwärts, Zusammenziehen, Aufblasen, Strudel rechts/links.
+- **Verschieben** mit **Automatisch auswählen**: Tippen wählt die oberste Ebene, die an der Stelle
+  etwas zeigt (Masken, Gruppen und Schnittmasken zählen mit); Strg kehrt das für einen Zug um.
 - **Malen:** Pinsel und Radiergummi mit Größe, Härte, Deckkraft, Fluss und **Glättung**;
   Stiftdruck; Malen in Ebenenmasken. Auch sehr große Pinsel (500 px+) bleiben flüssig.
 - **Pinseleinstellungen (F5, Symbol in der Optionsleiste):** Spitze mit Winkel und Rundheit;
@@ -173,7 +182,9 @@ Bericht (`report.html` mit Vergleichsbildern, `report.csv`) liegt in `core/build
   Pixelebenen werden dabei zum Smartobjekt – mehrfaches Transformieren ohne Qualitätsverlust.
 - **Text:** Systemschriften, Größe, Farbe, Fett/Kursiv, Ausrichtung, Zeilenabstand, Laufweite.
 - **Korrekturen:** 12 Typen als Einstellungsebene (nicht-destruktiv) oder direkt angewendet;
-  Gradationskurven mit Kurveneditor.
+  Gradationskurven mit Kurveneditor je Kanal (RGB, Rot, Grün, Blau) und Histogramm des Bildes darunter.
+- **Ebeneneffekte** aus Photoshop-Dateien werden angezeigt: Schlagschatten, Schatten nach innen,
+  Schein nach außen/innen, Kontur, Farbüberlagerung.
 - **Filter:** Gaußscher Weichzeichner, Bewegungsunschärfe, Radialer Weichzeichner, Matter machen,
   Tilt-Shift, Unscharf maskieren, Selektiver Scharfzeichner, Hochpass, Rauschen reduzieren, Median,
   Staub & Kratzer, Rauschen hinzufügen, Haut glätten, Klarheit, Dunst entfernen, Vignette,
@@ -199,8 +210,10 @@ Bericht (`report.html` mit Vergleichsbildern, `report.csv`) liegt in `core/build
   Schwarzweiß 400 klassisch / weich, Infrarot, Selen getont, Kinokopie, Sofortbild, Abgelaufener Film –
   eigene Filmmodelle (Schichtgradation, Kennlinie, Farbübersprechen, Tonung), keine fremden LUTs.
 - **Lokale KI (optional, auf Wunsch geladen, läuft komplett auf dem Gerät):**
-  MI-GAN (28 MB, MIT) und LaMa (208 MB, Apache 2.0) zum Entfernen von Objekten,
-  Real-ESRGAN General (4,5 MB) und x4plus (62 MB, BSD-3) zum Hochskalieren.
+  MI-GAN (28 MB, MIT) und LaMa (93 MB, Apache 2.0) zum Entfernen von Objekten,
+  Real-ESRGAN General (4,5 MB) und x4plus (62 MB, BSD-3) zum Hochskalieren. Downloads laufen in
+  Teilstücken, setzen nach einem Abbruch fort und kommen auch in Netzen mit gestörtem IPv6 sofort in Gang.
+- **Sprache:** Oberfläche auf Englisch und Deutsch (folgt der Systemsprache, umschaltbar in den Einstellungen).
 - **Startbildschirm:** Vorlagen, Öffnen, Galerie, zuletzt verwendete Dateien mit Vorschau.
 - **Tastatur & Maus:** Rechtsklick-Kontextmenü, werkzeugabhängiger Mauszeiger, Alt-Klick =
   Stempelquelle, Alt beim Pinsel = Pipette, Pfeiltasten verschieben (⇧ 10 px), Mausrad zoomt,
@@ -370,8 +383,9 @@ Druckerei. Der Proof betrifft nur die Anzeige – Export und gespeicherte Dateie
   CMYK-Export). Gesättigte Farben verlieren beim Umwandeln zwischen Farbräumen durch 8 Bit einige Stufen.
 - Die Bildschirmanzeige geht von einem sRGB-Display aus (kein Monitorprofil).
 - Smartobjekte werden beim Umwandeln in ein anderes Profil nicht umgerechnet (Hinweis in der Meldung).
-- Ebeneneffekte, Photoshop-Smartobjekte und Füllebenen werden nicht live gerendert (bleiben beim
-  Speichern erhalten). Vektormasken werden nicht dargestellt.
+- Ebeneneffekte werden angezeigt, aber noch nicht bearbeitet; Verlaufs-/Musterüberlagerung, Glanz und
+  Abgeflachte Kante fehlen. Photoshop-Smartobjekte und Füllebenen werden nicht live gerendert (bleiben
+  beim Speichern erhalten). Vektormasken werden nicht dargestellt.
 - Neue oder geänderte Texte erscheinen in Photoshop als Pixelebene (in photographics bleiben sie
   editierbar). Photoshop-Schriften werden auf Android-Systemschriften abgebildet.
 - Große Retuschen dauern auf dem Gerät einige Sekunden (Bereichsreparatur eines 1500-px-Strichs im
@@ -382,12 +396,16 @@ Druckerei. Der Proof betrifft nur die Anzeige – Export und gespeicherte Dateie
 
 Ohne feste Termine, die Reihenfolge kann sich ändern. Vorschläge sind willkommen.
 
-- **Als Nächstes:** Verschieben und Transformieren über die GPU (OpenGL ES/Vulkan), damit große Dateien
-  flüssiger laufen; Ebeneneffekte (Schlagschatten, Kontur, Schein) anzeigen; Oberfläche auf Englisch
-- **Danach:** Verflüssigen; Verlaufswerkzeug, Zauberstab und Objektauswahl; Kurven je Farbkanal mit
-  Histogramm; eigene Schriften (TTF/OTF); automatisches Sichern und Wiederherstellen nach Abstürzen
+- **Erledigt in 0.3:** Verschieben, Transformieren und Deckkraft live über die GPU; Ebeneneffekte
+  anzeigen; Oberfläche auf Englisch; Verflüssigen; Verlauf, Zauberstab, Objektauswahl und automatische
+  Ebenenauswahl; Kurven je Kanal mit Histogramm; besseres inhaltsbasiertes Füllen
+- **Als Nächstes:** automatisches Sichern und Wiederherstellen nach Abstürzen; eigene Schriften
+  (TTF/OTF); Protokoll-Panel mit Schnappschüssen; Motiv und Himmel per KI auswählen (Modell auf dem Gerät),
+  Auswahlkante für Haare verbessern
+- **Danach:** RAW-Entwicklung (zuerst DNG); Frequenztrennung als Retusche-Hilfe; Ebeneneffekte
+  bearbeiten und neu anlegen; Stapelexport (mehrere Größen/Formate auf einmal); Zeichenstift und Pfade
 - **Später:** Bearbeitung mit 16 Bit pro Kanal; CMYK-Dokumente und -Export; Anzeige über das Farbprofil
-  des Bildschirms; Versionen für Linux (GNOME) und iPad
+  des Bildschirms; vollständiges Zusammensetzen auf der GPU; Versionen für Linux (GNOME) und iPad
 
 ## Über mich
 

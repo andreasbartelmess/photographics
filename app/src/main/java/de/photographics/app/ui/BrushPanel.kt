@@ -1,5 +1,6 @@
 package de.photographics.app.ui
 
+import de.photographics.core.tr
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -84,8 +85,8 @@ fun BrushSettingsDialog(vm: EditorViewModel, onDismiss: () -> Unit) {
                 val wide = maxWidth > 640.dp
                 Column {
                     Row(Modifier.padding(start = 24.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Pinseleinstellungen", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-                        IconButton(onClick = close) { Icon(Icons.Filled.Close, "Schließen") }
+                        Text(tr("Pinseleinstellungen"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                        IconButton(onClick = close) { Icon(Icons.Filled.Close, tr("Schließen")) }
                     }
                     if (wide) Row(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
                         PresetList(vm, Modifier.width(230.dp).fillMaxHeight())
@@ -117,7 +118,7 @@ private fun BrushPreview(vm: EditorViewModel, b: BrushSettings) {
         Modifier.fillMaxWidth().aspectRatio(640f / 140f).clip(RoundedCornerShape(16.dp)).background(Color.White)
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp)),
     ) {
-        img?.let { Image(it, "Vorschau des Pinselstrichs", Modifier.fillMaxWidth()) }
+        img?.let { Image(it, tr("Vorschau des Pinselstrichs"), Modifier.fillMaxWidth()) }
     }
 }
 
@@ -127,79 +128,79 @@ private fun PresetList(vm: EditorViewModel, modifier: Modifier) {
     var naming by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     Column(modifier) {
-        Text("Vorgaben", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(4.dp, 4.dp, 4.dp, 8.dp))
+        Text(tr("Vorgaben"), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(4.dp, 4.dp, 4.dp, 8.dp))
         LazyColumn(Modifier.weight(1f, fill = false)) {
             items(state.brushPresets, key = { (if (it.builtin) "b:" else "u:") + it.name }) { p ->
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { vm.applyBrushPreset(p) }.padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(p.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    Text(if (p.builtin) tr(p.name) else p.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
                         fontWeight = if (p.builtin) FontWeight.Normal else FontWeight.Medium)
                     if (!p.builtin) IconButton(onClick = { vm.deleteBrushPreset(p.name) }, Modifier.size(28.dp)) {
-                        Icon(Icons.Filled.Delete, "Vorgabe löschen", Modifier.size(18.dp))
+                        Icon(Icons.Filled.Delete, tr("Vorgabe löschen"), Modifier.size(18.dp))
                     }
                 }
             }
         }
         if (naming) {
-            OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+            OutlinedTextField(name, { name = it }, label = { Text(tr("Name")) }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = { naming = false }) { Text("Abbrechen") }
-                TextButton(onClick = { vm.saveBrushPreset(name); naming = false; name = "" }, enabled = name.isNotBlank()) { Text("Speichern") }
+                TextButton(onClick = { naming = false }) { Text(tr("Abbrechen")) }
+                TextButton(onClick = { vm.saveBrushPreset(name); naming = false; name = "" }, enabled = name.isNotBlank()) { Text(tr("Speichern")) }
             }
         } else OutlinedButton(onClick = { naming = true }, Modifier.fillMaxWidth().padding(top = 8.dp)) {
-            Icon(Icons.Filled.Add, null, Modifier.size(18.dp)); Text("Als Vorgabe speichern", Modifier.padding(start = 6.dp))
+            Icon(Icons.Filled.Add, null, Modifier.size(18.dp)); Text(tr("Als Vorgabe speichern"), Modifier.padding(start = 6.dp))
         }
     }
 }
 
 @Composable
 private fun BrushSections(b: BrushSettings, set: ((BrushSettings) -> BrushSettings) -> Unit) {
-    Head("Pinselspitze")
-    Param("Größe", "${b.size.roundToInt()} px", b.size, 1f..500f) { v -> set { it.copy(size = v) } }
-    Param("Härte", pct(b.hardness), b.hardness, 0f..1f) { v -> set { it.copy(hardness = v) } }
-    Param("Winkel", "${b.angle.roundToInt()}°", b.angle, -180f..180f) { v -> set { it.copy(angle = v) } }
-    Param("Rundheit", pct(b.roundness), b.roundness, 0.05f..1f) { v -> set { it.copy(roundness = v) } }
-    Param("Abstand", pct(b.spacing), b.spacing, 0.01f..2f) { v -> set { it.copy(spacing = v) } }
-    Param("Glättung", pct(b.smoothing), b.smoothing, 0f..0.9f) { v -> set { it.copy(smoothing = v) } }
+    Head(tr("Pinselspitze"))
+    Param(tr("Größe"), tr("{0} px", b.size.roundToInt()), b.size, 1f..500f) { v -> set { it.copy(size = v) } }
+    Param(tr("Härte"), pct(b.hardness), b.hardness, 0f..1f) { v -> set { it.copy(hardness = v) } }
+    Param(tr("Winkel"), "${b.angle.roundToInt()}°", b.angle, -180f..180f) { v -> set { it.copy(angle = v) } }
+    Param(tr("Rundheit"), pct(b.roundness), b.roundness, 0.05f..1f) { v -> set { it.copy(roundness = v) } }
+    Param(tr("Abstand"), pct(b.spacing), b.spacing, 0.01f..2f) { v -> set { it.copy(spacing = v) } }
+    Param(tr("Glättung"), pct(b.smoothing), b.smoothing, 0f..0.9f) { v -> set { it.copy(smoothing = v) } }
 
-    Head("Formeigenschaften")
-    Param("Größen-Jitter", pct(b.sizeJitter), b.sizeJitter, 0f..1f) { v -> set { it.copy(sizeJitter = v) } }
-    Choice("Größe steuern", DynControl.entries, b.sizeControl, { it.label }) { v -> set { it.copy(sizeControl = v) } }
-    if (b.sizeControl != DynControl.OFF) Param("Mindestdurchmesser", pct(b.minSize), b.minSize, 0f..1f) { v -> set { it.copy(minSize = v) } }
-    Param("Winkel-Jitter", pct(b.angleJitter), b.angleJitter, 0f..1f) { v -> set { it.copy(angleJitter = v) } }
-    Choice("Winkel steuern", AngleControl.entries, b.angleControl, { it.label }) { v -> set { it.copy(angleControl = v) } }
-    Param("Rundheit-Jitter", pct(b.roundnessJitter), b.roundnessJitter, 0f..1f) { v -> set { it.copy(roundnessJitter = v) } }
-    if (b.roundnessJitter > 0f) Param("Mindestrundheit", pct(b.minRoundness), b.minRoundness, 0.05f..1f) { v -> set { it.copy(minRoundness = v) } }
+    Head(tr("Formeigenschaften"))
+    Param(tr("Größen-Jitter"), pct(b.sizeJitter), b.sizeJitter, 0f..1f) { v -> set { it.copy(sizeJitter = v) } }
+    Choice(tr("Größe steuern"), DynControl.entries, b.sizeControl, { it.label }) { v -> set { it.copy(sizeControl = v) } }
+    if (b.sizeControl != DynControl.OFF) Param(tr("Mindestdurchmesser"), pct(b.minSize), b.minSize, 0f..1f) { v -> set { it.copy(minSize = v) } }
+    Param(tr("Winkel-Jitter"), pct(b.angleJitter), b.angleJitter, 0f..1f) { v -> set { it.copy(angleJitter = v) } }
+    Choice(tr("Winkel steuern"), AngleControl.entries, b.angleControl, { it.label }) { v -> set { it.copy(angleControl = v) } }
+    Param(tr("Rundheit-Jitter"), pct(b.roundnessJitter), b.roundnessJitter, 0f..1f) { v -> set { it.copy(roundnessJitter = v) } }
+    if (b.roundnessJitter > 0f) Param(tr("Mindestrundheit"), pct(b.minRoundness), b.minRoundness, 0.05f..1f) { v -> set { it.copy(minRoundness = v) } }
 
-    Head("Streuung")
-    Param("Streuung", pct(b.scatter), b.scatter, 0f..10f) { v -> set { it.copy(scatter = v) } }
-    Toggle("Beide Achsen", "Auch entlang des Strichs streuen", b.scatterBothAxes) { v -> set { it.copy(scatterBothAxes = v) } }
-    Param("Anzahl", "${b.count}", b.count.toFloat(), 1f..16f, steps = 14) { v -> set { it.copy(count = v.roundToInt()) } }
-    Param("Anzahl-Jitter", pct(b.countJitter), b.countJitter, 0f..1f) { v -> set { it.copy(countJitter = v) } }
+    Head(tr("Streuung"))
+    Param(tr("Streuung"), pct(b.scatter), b.scatter, 0f..10f) { v -> set { it.copy(scatter = v) } }
+    Toggle(tr("Beide Achsen"), tr("Auch entlang des Strichs streuen"), b.scatterBothAxes) { v -> set { it.copy(scatterBothAxes = v) } }
+    Param(tr("Anzahl"), "${b.count}", b.count.toFloat(), 1f..16f, steps = 14) { v -> set { it.copy(count = v.roundToInt()) } }
+    Param(tr("Anzahl-Jitter"), pct(b.countJitter), b.countJitter, 0f..1f) { v -> set { it.copy(countJitter = v) } }
 
-    Head("Übertragung")
-    Param("Deckkraft", pct(b.opacity), b.opacity, 0.01f..1f) { v -> set { it.copy(opacity = v) } }
-    Param("Deckkraft-Jitter", pct(b.opacityJitter), b.opacityJitter, 0f..1f) { v -> set { it.copy(opacityJitter = v) } }
-    Choice("Deckkraft steuern", DynControl.entries, b.opacityControl, { it.label }) { v -> set { it.copy(opacityControl = v) } }
-    Param("Fluss", pct(b.flow), b.flow, 0.01f..1f) { v -> set { it.copy(flow = v) } }
-    Param("Fluss-Jitter", pct(b.flowJitter), b.flowJitter, 0f..1f) { v -> set { it.copy(flowJitter = v) } }
-    Choice("Fluss steuern", DynControl.entries, b.flowControl, { it.label }) { v -> set { it.copy(flowControl = v) } }
+    Head(tr("Übertragung"))
+    Param(tr("Deckkraft"), pct(b.opacity), b.opacity, 0.01f..1f) { v -> set { it.copy(opacity = v) } }
+    Param(tr("Deckkraft-Jitter"), pct(b.opacityJitter), b.opacityJitter, 0f..1f) { v -> set { it.copy(opacityJitter = v) } }
+    Choice(tr("Deckkraft steuern"), DynControl.entries, b.opacityControl, { it.label }) { v -> set { it.copy(opacityControl = v) } }
+    Param(tr("Fluss"), pct(b.flow), b.flow, 0.01f..1f) { v -> set { it.copy(flow = v) } }
+    Param(tr("Fluss-Jitter"), pct(b.flowJitter), b.flowJitter, 0f..1f) { v -> set { it.copy(flowJitter = v) } }
+    Choice(tr("Fluss steuern"), DynControl.entries, b.flowControl, { it.label }) { v -> set { it.copy(flowControl = v) } }
     if (DynControl.FADE in listOf(b.sizeControl, b.opacityControl, b.flowControl)) {
-        Param("Verblassen nach", "${b.fadeSteps} Abdrücken", b.fadeSteps.toFloat(), 5f..400f) { v -> set { it.copy(fadeSteps = v.roundToInt()) } }
+        Param(tr("Verblassen nach"), tr("{0} Abdrücken", b.fadeSteps), b.fadeSteps.toFloat(), 5f..400f) { v -> set { it.copy(fadeSteps = v.roundToInt()) } }
     }
 
-    Head("Farbeinstellungen")
-    Text("Wirkt je Pinselabdruck; Vorder- und Hintergrundfarbe aus dem Farbfeld.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    Param("Vorder-/Hintergrund-Jitter", pct(b.fgBgJitter), b.fgBgJitter, 0f..1f) { v -> set { it.copy(fgBgJitter = v) } }
-    Param("Farbton-Jitter", pct(b.hueJitter), b.hueJitter, 0f..1f) { v -> set { it.copy(hueJitter = v) } }
-    Param("Sättigungs-Jitter", pct(b.saturationJitter), b.saturationJitter, 0f..1f) { v -> set { it.copy(saturationJitter = v) } }
-    Param("Helligkeits-Jitter", pct(b.brightnessJitter), b.brightnessJitter, 0f..1f) { v -> set { it.copy(brightnessJitter = v) } }
+    Head(tr("Farbeinstellungen"))
+    Text(tr("Wirkt je Pinselabdruck; Vorder- und Hintergrundfarbe aus dem Farbfeld."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Param(tr("Vorder-/Hintergrund-Jitter"), pct(b.fgBgJitter), b.fgBgJitter, 0f..1f) { v -> set { it.copy(fgBgJitter = v) } }
+    Param(tr("Farbton-Jitter"), pct(b.hueJitter), b.hueJitter, 0f..1f) { v -> set { it.copy(hueJitter = v) } }
+    Param(tr("Sättigungs-Jitter"), pct(b.saturationJitter), b.saturationJitter, 0f..1f) { v -> set { it.copy(saturationJitter = v) } }
+    Param(tr("Helligkeits-Jitter"), pct(b.brightnessJitter), b.brightnessJitter, 0f..1f) { v -> set { it.copy(brightnessJitter = v) } }
 
-    Head("Sonstiges")
+    Head(tr("Sonstiges"))
     ModeChooser(b.mode) { v -> set { it.copy(mode = v) } }
-    Toggle("Airbrush", "Farbe baut sich auf, solange der Stift aufliegt", b.airbrush) { v -> set { it.copy(airbrush = v) } }
+    Toggle(tr("Airbrush"), tr("Farbe baut sich auf, solange der Stift aufliegt"), b.airbrush) { v -> set { it.copy(airbrush = v) } }
 }
 
 private fun pct(v: Float) = "${(v * 100).roundToInt()} %"
@@ -248,7 +249,7 @@ private fun Toggle(label: String, sub: String, checked: Boolean, onChange: (Bool
 private fun ModeChooser(mode: BrushMode, onSelect: (BrushMode) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-        Text("Modus", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(170.dp))
+        Text(tr("Modus"), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(170.dp))
         Box {
             OutlinedButton(onClick = { open = true }) { Text(mode.label); Icon(Icons.Filled.ArrowDropDown, null) }
             DropdownMenu(open, { open = false }) {

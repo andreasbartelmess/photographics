@@ -174,7 +174,7 @@ footer a:hover { color: var(--ink); }
 <header class="hero" id="top">
   <img src="../img/alpen-abend.jpg" alt="Snow-covered peaks in the last evening light under dark clouds" fetchpriority="high">
   <div class="wrap">
-    <span class="status">Preview · version 0.2 · Android 8.1 and newer</span>
+    <span class="status">Preview · version 0.3 · Android 8.1 and newer</span>
     <h1>A photo editor with layers for Android tablets</h1>
     <p class="lead">photographics opens PSD, TIFF and GIMP files with all their layers and saves them the same way. You retouch with the pen, and colour profiles are kept. Free, open source and no account needed.</p>
     <div class="ctas">
@@ -197,9 +197,9 @@ footer a:hover { color: var(--ink); }
       <p>Tools on the left, layers on the right, the image in the middle. Adjustments sit on their own layers above the photo and stay editable until the end; masks limit them to parts of the image.</p>
       <ul>
         <li>Pixel, text and smart object layers, groups</li>
-        <li>12 adjustment layers, including curves, levels, colour balance and black &amp; white</li>
+        <li>12 adjustment layers, including per-channel curves with histogram, levels, colour balance and black &amp; white</li>
         <li>All 27 Photoshop blend modes</li>
-        <li>Layer masks and clipping masks</li>
+        <li>Layer masks and clipping masks; Photoshop layer effects are rendered</li>
         <li>Transform with skew, distort and perspective, lossless as a smart object</li>
       </ul>
     </div>
@@ -217,8 +217,8 @@ footer a:hover { color: var(--ink); }
       <h2>Retouching with the pen</h2>
       <p>Pen pressure controls size, opacity and flow. Your hand can rest on the display without painting. Two fingers zoom, and a short two-finger tap undoes the last step.</p>
       <ul>
-        <li>Spot healing, healing brush, patch and clone stamp</li>
-        <li>Dodge, burn, sponge and smudge</li>
+        <li>Spot healing, healing brush, patch, clone stamp and content-aware fill</li>
+        <li>Dodge, burn, sponge, smudge and liquify</li>
         <li>Brushes with custom tips, scattering and smoothing</li>
         <li>Retouch on an empty layer and leave the original untouched</li>
       </ul>
@@ -276,7 +276,10 @@ footer a:hover { color: var(--ink); }
       <div><h3>Guides</h3><p>Rulers, guide layouts and smart guides, kept in PSD and XCF files.</p></div>
       <div><h3>Swatches</h3><p>Load and save swatches from Photoshop, Illustrator and GIMP (.aco, .ase, .gpl).</p></div>
       <div><h3>Keyboard and mouse</h3><p>With a keyboard cover, a Chromebook or Samsung DeX, the familiar Photoshop shortcuts work.</p></div>
-      <div><h3>Large files</h3><p>Image data lives outside the app memory limit, and filters run on all cores.</p></div>
+      <div><h3>Large files</h3><p>Image data lives outside the app memory limit, filters run on all cores, and moving and transforming run on the GPU.</p></div>
+      <div><h3>Selections</h3><p>Magic wand, object selection with a box, and lasso. The move tool can pick the layer you tap.</p></div>
+      <div><h3>Gradients</h3><p>Linear, radial and reflected, on layers or straight into masks, for example as a graduated filter for the sky.</p></div>
+      <div><h3>English and German</h3><p>The interface follows the system language and can be switched in the settings.</p></div>
     </div>
   </div>
 </section>
@@ -285,25 +288,26 @@ footer a:hover { color: var(--ink); }
   <div class="wrap">
     <header>
       <h2>Roadmap</h2>
-      <p>What is planned next. The order may change and there are no fixed dates. Suggestions are welcome.</p>
+      <p>What is planned next. The order may change and there are no fixed dates. Suggestions are welcome. New in 0.3: GPU preview, layer effects, English interface, liquify, gradients, magic wand, object selection and per-channel curves.</p>
     </header>
     <div class="stages">
       <div>
         <h3>Next</h3>
         <ul>
-          <li>Moving and transforming on the GPU, so large files feel smoother</li>
-          <li>Rendering layer effects: drop shadow, stroke, glow</li>
-          <li>English user interface</li>
+          <li>Autosave and recovery after crashes</li>
+          <li>Custom fonts (TTF, OTF)</li>
+          <li>History with snapshots</li>
+          <li>Select subject and sky with on-device AI, refine edges for hair</li>
         </ul>
       </div>
       <div>
         <h3>After that</h3>
         <ul>
-          <li>Liquify</li>
-          <li>Gradient tool, magic wand and object selection</li>
-          <li>Per-channel curves with histogram</li>
-          <li>Custom fonts (TTF, OTF)</li>
-          <li>Autosave and recovery after crashes</li>
+          <li>RAW development, DNG first</li>
+          <li>Frequency separation as a retouching helper</li>
+          <li>Editing and creating layer effects</li>
+          <li>Batch export in several sizes and formats</li>
+          <li>Pen tool and paths</li>
         </ul>
       </div>
       <div>
@@ -312,6 +316,7 @@ footer a:hover { color: var(--ink); }
           <li>16-bit editing</li>
           <li>CMYK documents and CMYK export</li>
           <li>Display colour management</li>
+          <li>Full compositing on the GPU</li>
           <li>Versions for Linux (GNOME) and iPad</li>
         </ul>
       </div>

@@ -1,5 +1,6 @@
 package de.photographics.core.doc
 
+import de.photographics.core.tr
 import de.photographics.core.image.Affine
 import de.photographics.core.image.IntRect
 import de.photographics.core.image.TileGrid
@@ -143,7 +144,7 @@ class Document(width: Int, height: Int) {
             if (background != null) {
                 for (ty in 0 until grid.tilesY) for (tx in 0 until grid.tilesX) grid.tileOrCreate(tx, ty).fill(background)
             }
-            val bg = PixelLayer(if (background != null) "Hintergrund" else "Ebene 1", grid)
+            val bg = PixelLayer(if (background != null) tr("Hintergrund") else tr("Ebene 1"), grid)
             d.root.add(bg)
             d.activeLayer = bg
             return d

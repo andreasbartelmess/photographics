@@ -1,5 +1,6 @@
 package de.photographics.core.adjust
 
+import de.photographics.core.tr
 import de.photographics.core.image.Colors
 import kotlin.math.max
 import kotlin.math.min
@@ -37,19 +38,19 @@ sealed class Adjustment {
 }
 
 enum class AdjustmentType(val label: String, val psdKey: String) {
-    BRIGHTNESS_CONTRAST("Helligkeit/Kontrast", "brit"),
-    LEVELS("Tonwertkorrektur", "levl"),
-    CURVES("Gradationskurven", "curv"),
-    EXPOSURE("Belichtung", "expA"),
-    VIBRANCE("Dynamik", "vibA"),
-    HUE_SATURATION("Farbton/Sättigung", "hue2"),
-    COLOR_BALANCE("Farbbalance", "blnc"),
-    BLACK_WHITE("Schwarzweiß", "blwh"),
-    PHOTO_FILTER("Fotofilter", "phfl"),
-    INVERT("Umkehren", "nvrt"),
-    POSTERIZE("Tontrennung", "post"),
-    THRESHOLD("Schwellenwert", "thrs"),
-    COLOR_LOOKUP("Farbtabelle (LUT)", "clrL");
+    BRIGHTNESS_CONTRAST(tr("Helligkeit/Kontrast"), "brit"),
+    LEVELS(tr("Tonwertkorrektur"), "levl"),
+    CURVES(tr("Gradationskurven"), "curv"),
+    EXPOSURE(tr("Belichtung"), "expA"),
+    VIBRANCE(tr("Dynamik"), "vibA"),
+    HUE_SATURATION(tr("Farbton/Sättigung"), "hue2"),
+    COLOR_BALANCE(tr("Farbbalance"), "blnc"),
+    BLACK_WHITE(tr("Schwarzweiß"), "blwh"),
+    PHOTO_FILTER(tr("Fotofilter"), "phfl"),
+    INVERT(tr("Umkehren"), "nvrt"),
+    POSTERIZE(tr("Tontrennung"), "post"),
+    THRESHOLD(tr("Schwellenwert"), "thrs"),
+    COLOR_LOOKUP(tr("Farbtabelle (LUT)"), "clrL");
 
     fun createDefault(): Adjustment = when (this) {
         BRIGHTNESS_CONTRAST -> BrightnessContrastAdj()
@@ -90,7 +91,7 @@ private fun lum(r: Float, g: Float, b: Float) = 0.299f * r + 0.587f * g + 0.114f
 
 data class BrightnessContrastAdj(val brightness: Int = 0, val contrast: Int = 0) : Adjustment() {
     override val type get() = AdjustmentType.BRIGHTNESS_CONTRAST
-    override fun params() = listOf(AdjParam("Helligkeit", -150f, 150f, brightness.toFloat()), AdjParam("Kontrast", -50f, 100f, contrast.toFloat()))
+    override fun params() = listOf(AdjParam(tr("Helligkeit"), -150f, 150f, brightness.toFloat()), AdjParam(tr("Kontrast"), -50f, 100f, contrast.toFloat()))
     override fun withValues(v: FloatArray) = copy(brightness = v[0].roundToInt(), contrast = v[1].roundToInt())
     override fun compile(): RgbMap {
         val b = brightness / 150f
@@ -111,11 +112,11 @@ data class LevelsAdj(
 ) : Adjustment() {
     override val type get() = AdjustmentType.LEVELS
     override fun params() = listOf(
-        AdjParam("Tiefen", 0f, 253f, inBlack.toFloat()),
-        AdjParam("Mitteltöne (Gamma)", 0.1f, 9.99f, gamma, decimals = 2),
-        AdjParam("Lichter", 2f, 255f, inWhite.toFloat()),
-        AdjParam("Ausgabe Schwarz", 0f, 255f, outBlack.toFloat()),
-        AdjParam("Ausgabe Weiß", 0f, 255f, outWhite.toFloat()),
+        AdjParam(tr("Tiefen"), 0f, 253f, inBlack.toFloat()),
+        AdjParam(tr("Mitteltöne (Gamma)"), 0.1f, 9.99f, gamma, decimals = 2),
+        AdjParam(tr("Lichter"), 2f, 255f, inWhite.toFloat()),
+        AdjParam(tr("Ausgabe Schwarz"), 0f, 255f, outBlack.toFloat()),
+        AdjParam(tr("Ausgabe Weiß"), 0f, 255f, outWhite.toFloat()),
     )
     override fun withValues(v: FloatArray) = copy(inBlack = v[0].roundToInt(), gamma = v[1], inWhite = v[2].roundToInt(), outBlack = v[3].roundToInt(), outWhite = v[4].roundToInt())
     override fun compile(): RgbMap {
@@ -141,9 +142,9 @@ data class CurvesAdj(
     override val type get() = AdjustmentType.CURVES
     /** Regler-Darstellung: Tiefen-/Mitteltöne-/Lichter-Punkte der Gesamtkurve (Kurveneditor nutzt [master] direkt). */
     override fun params() = listOf(
-        AdjParam("Tiefen (Ausgabe bei 64)", 0f, 255f, evaluate(master, 64).toFloat()),
-        AdjParam("Mitteltöne (Ausgabe bei 128)", 0f, 255f, evaluate(master, 128).toFloat()),
-        AdjParam("Lichter (Ausgabe bei 192)", 0f, 255f, evaluate(master, 192).toFloat()),
+        AdjParam(tr("Tiefen (Ausgabe bei 64)"), 0f, 255f, evaluate(master, 64).toFloat()),
+        AdjParam(tr("Mitteltöne (Ausgabe bei 128)"), 0f, 255f, evaluate(master, 128).toFloat()),
+        AdjParam(tr("Lichter (Ausgabe bei 192)"), 0f, 255f, evaluate(master, 192).toFloat()),
     )
     override fun withValues(v: FloatArray) = copy(
         master = listOf(0 to 0, 64 to v[0].roundToInt(), 128 to v[1].roundToInt(), 192 to v[2].roundToInt(), 255 to 255),
@@ -193,9 +194,9 @@ data class CurvesAdj(
 data class ExposureAdj(val exposure: Float = 0f, val offset: Float = 0f, val gamma: Float = 1f) : Adjustment() {
     override val type get() = AdjustmentType.EXPOSURE
     override fun params() = listOf(
-        AdjParam("Belichtung", -5f, 5f, exposure, decimals = 2),
-        AdjParam("Versatz", -0.5f, 0.5f, offset, decimals = 3),
-        AdjParam("Gammakorrektur", 0.1f, 3f, gamma, decimals = 2),
+        AdjParam(tr("Belichtung"), -5f, 5f, exposure, decimals = 2),
+        AdjParam(tr("Versatz"), -0.5f, 0.5f, offset, decimals = 3),
+        AdjParam(tr("Gammakorrektur"), 0.1f, 3f, gamma, decimals = 2),
     )
     override fun withValues(v: FloatArray) = copy(exposure = v[0], offset = v[1], gamma = v[2])
     override fun compile() = lutMap { v ->
@@ -208,7 +209,7 @@ data class ExposureAdj(val exposure: Float = 0f, val offset: Float = 0f, val gam
 
 data class VibranceAdj(val vibrance: Int = 0, val saturation: Int = 0) : Adjustment() {
     override val type get() = AdjustmentType.VIBRANCE
-    override fun params() = listOf(AdjParam("Dynamik", -100f, 100f, vibrance.toFloat()), AdjParam("Sättigung", -100f, 100f, saturation.toFloat()))
+    override fun params() = listOf(AdjParam(tr("Dynamik"), -100f, 100f, vibrance.toFloat()), AdjParam(tr("Sättigung"), -100f, 100f, saturation.toFloat()))
     override fun withValues(v: FloatArray) = copy(vibrance = v[0].roundToInt(), saturation = v[1].roundToInt())
     override fun compile(): RgbMap {
         val vib = vibrance / 100f; val sat = saturation / 100f
@@ -228,10 +229,10 @@ data class VibranceAdj(val vibrance: Int = 0, val saturation: Int = 0) : Adjustm
 data class HueSaturationAdj(val hue: Int = 0, val saturation: Int = 0, val lightness: Int = 0, val colorize: Boolean = false) : Adjustment() {
     override val type get() = AdjustmentType.HUE_SATURATION
     override fun params() = listOf(
-        AdjParam("Farbton", -180f, 180f, hue.toFloat(), kind = AdjParam.Kind.HUE),
-        AdjParam("Sättigung", -100f, 100f, saturation.toFloat()),
-        AdjParam("Helligkeit", -100f, 100f, lightness.toFloat()),
-        AdjParam("Färben", 0f, 1f, if (colorize) 1f else 0f, kind = AdjParam.Kind.SWITCH),
+        AdjParam(tr("Farbton"), -180f, 180f, hue.toFloat(), kind = AdjParam.Kind.HUE),
+        AdjParam(tr("Sättigung"), -100f, 100f, saturation.toFloat()),
+        AdjParam(tr("Helligkeit"), -100f, 100f, lightness.toFloat()),
+        AdjParam(tr("Färben"), 0f, 1f, if (colorize) 1f else 0f, kind = AdjParam.Kind.SWITCH),
     )
     override fun withValues(v: FloatArray) = copy(hue = v[0].roundToInt(), saturation = v[1].roundToInt(), lightness = v[2].roundToInt(), colorize = v[3] >= 0.5f)
     override fun compile(): RgbMap {
@@ -262,14 +263,14 @@ data class ColorBalanceAdj(
 ) : Adjustment() {
     override val type get() = AdjustmentType.COLOR_BALANCE
     override fun params() = listOf(
-        AdjParam("Mitteltöne Cyan ↔ Rot", -100f, 100f, midtones[0].toFloat()),
-        AdjParam("Mitteltöne Magenta ↔ Grün", -100f, 100f, midtones[1].toFloat()),
-        AdjParam("Mitteltöne Gelb ↔ Blau", -100f, 100f, midtones[2].toFloat()),
-        AdjParam("Tiefen Cyan ↔ Rot", -100f, 100f, shadows[0].toFloat()),
-        AdjParam("Tiefen Gelb ↔ Blau", -100f, 100f, shadows[2].toFloat()),
-        AdjParam("Lichter Cyan ↔ Rot", -100f, 100f, highlights[0].toFloat()),
-        AdjParam("Lichter Gelb ↔ Blau", -100f, 100f, highlights[2].toFloat()),
-        AdjParam("Luminanz erhalten", 0f, 1f, if (preserveLuminosity) 1f else 0f, kind = AdjParam.Kind.SWITCH),
+        AdjParam(tr("Mitteltöne Cyan ↔ Rot"), -100f, 100f, midtones[0].toFloat()),
+        AdjParam(tr("Mitteltöne Magenta ↔ Grün"), -100f, 100f, midtones[1].toFloat()),
+        AdjParam(tr("Mitteltöne Gelb ↔ Blau"), -100f, 100f, midtones[2].toFloat()),
+        AdjParam(tr("Tiefen Cyan ↔ Rot"), -100f, 100f, shadows[0].toFloat()),
+        AdjParam(tr("Tiefen Gelb ↔ Blau"), -100f, 100f, shadows[2].toFloat()),
+        AdjParam(tr("Lichter Cyan ↔ Rot"), -100f, 100f, highlights[0].toFloat()),
+        AdjParam(tr("Lichter Gelb ↔ Blau"), -100f, 100f, highlights[2].toFloat()),
+        AdjParam(tr("Luminanz erhalten"), 0f, 1f, if (preserveLuminosity) 1f else 0f, kind = AdjParam.Kind.SWITCH),
     )
     override fun withValues(v: FloatArray) = copy(
         midtones = listOf(v[0].roundToInt(), v[1].roundToInt(), v[2].roundToInt()),
@@ -298,12 +299,12 @@ data class BlackWhiteAdj(
 ) : Adjustment() {
     override val type get() = AdjustmentType.BLACK_WHITE
     override fun params() = listOf(
-        AdjParam("Rottöne", -200f, 300f, red.toFloat()), AdjParam("Gelbtöne", -200f, 300f, yellow.toFloat()),
-        AdjParam("Grüntöne", -200f, 300f, green.toFloat()), AdjParam("Cyantöne", -200f, 300f, cyan.toFloat()),
-        AdjParam("Blautöne", -200f, 300f, blue.toFloat()), AdjParam("Magentatöne", -200f, 300f, magenta.toFloat()),
-        AdjParam("Farbton", 0f, 1f, if (tint) 1f else 0f, kind = AdjParam.Kind.SWITCH),
-        AdjParam("Tönung Farbton", 0f, 360f, tintHue.toFloat(), kind = AdjParam.Kind.HUE),
-        AdjParam("Tönung Sättigung", 0f, 100f, tintSaturation.toFloat()),
+        AdjParam(tr("Rottöne"), -200f, 300f, red.toFloat()), AdjParam(tr("Gelbtöne"), -200f, 300f, yellow.toFloat()),
+        AdjParam(tr("Grüntöne"), -200f, 300f, green.toFloat()), AdjParam(tr("Cyantöne"), -200f, 300f, cyan.toFloat()),
+        AdjParam(tr("Blautöne"), -200f, 300f, blue.toFloat()), AdjParam(tr("Magentatöne"), -200f, 300f, magenta.toFloat()),
+        AdjParam(tr("Farbton"), 0f, 1f, if (tint) 1f else 0f, kind = AdjParam.Kind.SWITCH),
+        AdjParam(tr("Tönung Farbton"), 0f, 360f, tintHue.toFloat(), kind = AdjParam.Kind.HUE),
+        AdjParam(tr("Tönung Sättigung"), 0f, 100f, tintSaturation.toFloat()),
     )
     override fun withValues(v: FloatArray) = BlackWhiteAdj(
         v[0].roundToInt(), v[1].roundToInt(), v[2].roundToInt(), v[3].roundToInt(), v[4].roundToInt(), v[5].roundToInt(),
@@ -336,9 +337,9 @@ data class BlackWhiteAdj(
 data class PhotoFilterAdj(val hue: Int = 30, val density: Int = 25, val preserveLuminosity: Boolean = true) : Adjustment() {
     override val type get() = AdjustmentType.PHOTO_FILTER
     override fun params() = listOf(
-        AdjParam("Filterfarbe", 0f, 360f, hue.toFloat(), kind = AdjParam.Kind.HUE),
-        AdjParam("Dichte", 0f, 100f, density.toFloat()),
-        AdjParam("Luminanz erhalten", 0f, 1f, if (preserveLuminosity) 1f else 0f, kind = AdjParam.Kind.SWITCH),
+        AdjParam(tr("Filterfarbe"), 0f, 360f, hue.toFloat(), kind = AdjParam.Kind.HUE),
+        AdjParam(tr("Dichte"), 0f, 100f, density.toFloat()),
+        AdjParam(tr("Luminanz erhalten"), 0f, 1f, if (preserveLuminosity) 1f else 0f, kind = AdjParam.Kind.SWITCH),
     )
     override fun withValues(v: FloatArray) = copy(hue = v[0].roundToInt(), density = v[1].roundToInt(), preserveLuminosity = v[2] >= 0.5f)
     val color: Int get() { val o = FloatArray(3); Colors.hslToRgb(hue.toFloat(), 0.85f, 0.55f, o); return pack(o[0], o[1], o[2]) }
@@ -364,7 +365,7 @@ object InvertAdj : Adjustment() {
 
 data class PosterizeAdj(val levels: Int = 4) : Adjustment() {
     override val type get() = AdjustmentType.POSTERIZE
-    override fun params() = listOf(AdjParam("Stufen", 2f, 255f, levels.toFloat()))
+    override fun params() = listOf(AdjParam(tr("Stufen"), 2f, 255f, levels.toFloat()))
     override fun withValues(v: FloatArray) = copy(levels = v[0].roundToInt().coerceIn(2, 255))
     override fun compile(): RgbMap {
         val n = levels - 1
@@ -374,7 +375,7 @@ data class PosterizeAdj(val levels: Int = 4) : Adjustment() {
 
 data class ThresholdAdj(val level: Int = 128) : Adjustment() {
     override val type get() = AdjustmentType.THRESHOLD
-    override fun params() = listOf(AdjParam("Schwellenwert", 1f, 255f, level.toFloat()))
+    override fun params() = listOf(AdjParam(tr("Schwellenwert"), 1f, 255f, level.toFloat()))
     override fun withValues(v: FloatArray) = copy(level = v[0].roundToInt().coerceIn(1, 255))
     override fun compile() = RgbMap { c ->
         val l = (0.299f * ((c shr 16) and 0xFF) + 0.587f * ((c shr 8) and 0xFF) + 0.114f * (c and 0xFF))

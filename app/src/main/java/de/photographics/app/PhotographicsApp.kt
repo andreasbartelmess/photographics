@@ -17,6 +17,10 @@ import java.nio.ByteBuffer
 class PhotographicsApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        // Sprache vor allem anderen setzen: Texte in Aufzählungen und Objekten werden beim ersten Zugriff übersetzt
+        val lang = getSharedPreferences("settings", MODE_PRIVATE).getString("language", null)
+            ?.let { n -> Language.entries.firstOrNull { it.name == n } } ?: Language.SYSTEM
+        de.photographics.core.I18n.lang = lang.resolve()
         TileMemory.current = createTileMemory()
     }
 

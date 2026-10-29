@@ -1,5 +1,6 @@
 package de.photographics.core.color
 
+import de.photographics.core.tr
 import de.photographics.core.doc.AdjustmentLayer
 import de.photographics.core.doc.Document
 import de.photographics.core.doc.GroupLayer
@@ -12,7 +13,7 @@ import de.photographics.core.doc.Layer
  * Pixelebenen und Masken spielen keine Rolle – eine LUT kennt nur Farben.
  */
 object LutExport {
-    fun fromAdjustments(doc: Document, size: Int = 33, title: String = "Photographics"): Lut3D? {
+    fun fromAdjustments(doc: Document, size: Int = 33, title: String = tr("Photographics")): Lut3D? {
         val layers = ArrayList<AdjustmentLayer>()
         fun walk(children: List<Layer>) {
             for (l in children) {

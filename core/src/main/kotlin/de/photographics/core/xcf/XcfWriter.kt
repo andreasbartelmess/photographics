@@ -1,5 +1,6 @@
 package de.photographics.core.xcf
 
+import de.photographics.core.tr
 import de.photographics.core.doc.AdjustmentLayer
 import de.photographics.core.doc.Document
 import de.photographics.core.doc.GroupLayer
@@ -46,11 +47,11 @@ object XcfWriter {
 
     private fun items(group: GroupLayer, prefix: IntArray, out: MutableList<Item>, warnings: MutableSet<String>) {
         val kept = group.children.filter { l ->
-            if (l is AdjustmentLayer) { warnings += "Einstellungsebenen gibt es in GIMP nicht – sie wurden weggelassen."; false } else true
+            if (l is AdjustmentLayer) { warnings += tr("Einstellungsebenen gibt es in GIMP nicht – sie wurden weggelassen."); false } else true
         }
         for ((i, l) in kept.asReversed().withIndex()) {
             val path = prefix + i
-            if (l.clipped) warnings += "Schnittmasken gibt es in GIMP nicht – die Ebenen wirken dort auf alles darunter."
+            if (l.clipped) warnings += tr("Schnittmasken gibt es in GIMP nicht – die Ebenen wirken dort auf alles darunter.")
             out += Item(l, path)
             if (l is GroupLayer) items(l, path, out, warnings)
         }

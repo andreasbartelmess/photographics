@@ -1,5 +1,6 @@
 package de.photographics.app.ui
 
+import de.photographics.core.tr
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -58,43 +59,43 @@ private class IntroPage(val icon: ImageVector?, val title: String, val text: Str
 
 private val PAGES = listOf(
     IntroPage(
-        null, "Willkommen bei photographics",
-        "Ebenenbasierte Bildbearbeitung für professionelle Workflows unterwegs. Ein kurzer Überblick über das Wichtigste.",
+        null, tr("Willkommen bei photographics"),
+        tr("Ebenenbasierte Bildbearbeitung für professionelle Workflows unterwegs. Ein kurzer Überblick über das Wichtigste."),
     ),
     IntroPage(
-        Icons.Filled.Draw, "Stift und Finger",
-        "Gemacht fürs Tablet mit Stift – Tastatur und Maus funktionieren genauso.",
+        Icons.Filled.Draw, tr("Stift und Finger"),
+        tr("Gemacht fürs Tablet mit Stift – Tastatur und Maus funktionieren genauso."),
         listOf(
-            Icons.Filled.Brush to "Der Stift malt, Finger zoomen und verschieben. Der Stift-Modus schaltet sich beim ersten Stiftkontakt ein.",
-            Icons.Filled.Undo to "Mit zwei Fingern kurz tippen macht rückgängig, mit drei Fingern wiederholt.",
-            Icons.Filled.Gesture to "Radier-Ende radiert, die Seitentaste nimmt Farbe auf. Größe und Deckkraft regelst du am Bildrand mit dem Daumen.",
+            Icons.Filled.Brush to tr("Der Stift malt, Finger zoomen und verschieben. Der Stift-Modus schaltet sich beim ersten Stiftkontakt ein."),
+            Icons.Filled.Undo to tr("Mit zwei Fingern kurz tippen macht rückgängig, mit drei Fingern wiederholt."),
+            Icons.Filled.Gesture to tr("Radier-Ende radiert, die Seitentaste nimmt Farbe auf. Größe und Deckkraft regelst du am Bildrand mit dem Daumen."),
         ),
     ),
     IntroPage(
-        Icons.Filled.Layers, "Ebenen wie gewohnt",
-        "Alles bleibt veränderbar, bis du es anders willst.",
+        Icons.Filled.Layers, tr("Ebenen wie gewohnt"),
+        tr("Alles bleibt veränderbar, bis du es anders willst."),
         listOf(
-            Icons.Filled.Layers to "Pixel-, Text- und Smartobjekt-Ebenen, Gruppen, Masken, Schnittmasken und alle 27 Mischmodi.",
-            Icons.Filled.Tune to "Korrekturen als Einstellungsebenen, Farbtabellen und Film-Looks – nicht-destruktiv.",
-            Icons.Filled.AutoFixHigh to "Retusche mit Bereichsreparatur, Reparatur-Pinsel, Kopierstempel und Ausbessern.",
+            Icons.Filled.Layers to tr("Pixel-, Text- und Smartobjekt-Ebenen, Gruppen, Masken, Schnittmasken und alle 27 Mischmodi."),
+            Icons.Filled.Tune to tr("Korrekturen als Einstellungsebenen, Farbtabellen und Film-Looks – nicht-destruktiv."),
+            Icons.Filled.AutoFixHigh to tr("Retusche mit Bereichsreparatur, Reparatur-Pinsel, Kopierstempel und Ausbessern."),
         ),
     ),
     IntroPage(
-        Icons.Filled.SwapHoriz, "Zwischen Schreibtisch und unterwegs",
-        "Deine Dateien kommen so zurück, wie sie gegangen sind.",
+        Icons.Filled.SwapHoriz, tr("Zwischen Schreibtisch und unterwegs"),
+        tr("Deine Dateien kommen so zurück, wie sie gegangen sind."),
         listOf(
-            Icons.Filled.Folder to "PSD, PSB, TIFF und GIMP-Dateien öffnen und mit allen Ebenen wieder speichern.",
-            Icons.Filled.ColorLens to "Farbprofile bleiben erhalten; Umwandeln, Zuweisen und eigene ICC-Profile.",
-            Icons.Filled.Print to "Farbproof für Druckerei und Fotodrucker, mit Farbumfang-Warnung.",
+            Icons.Filled.Folder to tr("PSD, PSB, TIFF und GIMP-Dateien öffnen und mit allen Ebenen wieder speichern."),
+            Icons.Filled.ColorLens to tr("Farbprofile bleiben erhalten; Umwandeln, Zuweisen und eigene ICC-Profile."),
+            Icons.Filled.Print to tr("Farbproof für Druckerei und Fotodrucker, mit Farbumfang-Warnung."),
         ),
     ),
     IntroPage(
-        Icons.Filled.AutoAwesome, "KI auf dem Gerät – wenn du willst",
-        "Optional und komplett lokal: Deine Bilder verlassen das Tablet nicht.",
+        Icons.Filled.AutoAwesome, tr("KI auf dem Gerät – wenn du willst"),
+        tr("Optional und komplett lokal: Deine Bilder verlassen das Tablet nicht."),
         listOf(
-            Icons.Filled.AutoAwesome to "Objekte entfernen und Auswahlen füllen.",
-            Icons.Filled.PhotoSizeSelectLarge to "Bilder hochskalieren.",
-            Icons.Filled.Lock to "Die Modelle werden erst geladen, wenn du sie zum ersten Mal brauchst.",
+            Icons.Filled.AutoAwesome to tr("Objekte entfernen und Auswahlen füllen."),
+            Icons.Filled.PhotoSizeSelectLarge to tr("Bilder hochskalieren."),
+            Icons.Filled.Lock to tr("Die Modelle werden erst geladen, wenn du sie zum ersten Mal brauchst."),
         ),
     ),
 )
@@ -123,7 +124,7 @@ fun IntroOverlay(onDone: () -> Unit) {
                 val last = pager.currentPage == PAGES.lastIndex
                 // Punkte genau in der Mitte, Knöpfe an den Rändern
                 Box(Modifier.fillMaxWidth().padding(top = 16.dp)) {
-                    if (!last) TextButton(onClick = onDone, modifier = Modifier.align(Alignment.CenterStart)) { Text("Überspringen") }
+                    if (!last) TextButton(onClick = onDone, modifier = Modifier.align(Alignment.CenterStart)) { Text(tr("Überspringen")) }
                     Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.Center) {
                         repeat(PAGES.size) { k ->
                             val on = k == pager.currentPage
@@ -135,7 +136,7 @@ fun IntroOverlay(onDone: () -> Unit) {
                     }
                     Button(onClick = {
                         if (last) onDone() else scope.launch { pager.animateScrollToPage(pager.currentPage + 1) }
-                    }, modifier = Modifier.align(Alignment.CenterEnd)) { Text(if (last) "Los geht’s" else "Weiter") }
+                    }, modifier = Modifier.align(Alignment.CenterEnd)) { Text(if (last) tr("Los geht’s") else tr("Weiter")) }
                 }
             }
         }

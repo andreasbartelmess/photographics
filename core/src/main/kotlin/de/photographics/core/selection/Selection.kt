@@ -1,5 +1,6 @@
 package de.photographics.core.selection
 
+import de.photographics.core.tr
 import de.photographics.core.image.Blur
 import de.photographics.core.image.IntRect
 import de.photographics.core.image.TileGrid
@@ -11,7 +12,12 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-enum class SelectionShape(val label: String) { RECT("Rechteck"), ELLIPSE("Ellipse"), LASSO("Lasso") }
+enum class SelectionShape(val label: String) {
+    RECT(tr("Rechteck")), ELLIPSE(tr("Ellipse")), LASSO(tr("Lasso")), WAND(tr("Zauberstab")), OBJECT(tr("Objekt"));
+
+    /** Form aus einem Zug (Rechteck/Ellipse/Lasso) – für Werkzeuge, die nur solche Formen brauchen. */
+    val isShape get() = this == RECT || this == ELLIPSE || this == LASSO
+}
 enum class SelectionOp { REPLACE, ADD, SUBTRACT }
 
 /**
@@ -99,6 +105,66 @@ class Selection(
     }
 
     companion object {
+        /**
+         * Umrisse (für die laufenden Ameisen) einer beliebigen Maske: folgt den Kanten zwischen
+         * ausgewählten (≥ 128) und nicht ausgewählten Pixeln. Große Auswahlen werden auf einem
+         * verkleinerten Raster verfolgt (Umrisse dienen nur der Anzeige); höchstens [maxContours] Umrisse.
+         */
+        fun outlinesOf(mask: TileGrid, maxCells: Int = 2_000_000, maxContours: Int = 400): List<FloatArray> {
+            val b = if (mask.defaultValue != 0) IntRect.ofSize(mask.width, mask.height) else mask.contentBounds(alphaOnly = false)
+            if (b.isEmpty) return emptyList()
+            var st = 1
+            while ((b.width / st).toLong() * (b.height / st) > maxCells) st++
+            val gw = (b.width + st - 1) / st; val gh = (b.height + st - 1) / st
+            val sel = BooleanArray(gw * gh)
+            val row = IntArray(b.width)
+            for (gy in 0 until gh) {
+                val y = minOf(b.bottom - 1, b.top + gy * st + st / 2)
+                mask.readRect(IntRect(b.left, y, b.right, y + 1), row)
+                for (gx in 0 until gw) sel[gy * gw + gx] = row[minOf(b.width - 1, gx * st + st / 2)] >= 128
+            }
+            fun at(x: Int, y: Int) = x in 0 until gw && y in 0 until gh && sel[y * gw + x]
+            // Gerichtete Kanten (ausgewählt rechts der Laufrichtung, y nach unten): Bits je Eckpunkt
+            val vw = gw + 1
+            val bits = ByteArray(vw * (gh + 1))
+            val R = 1; val D = 2; val L = 4; val U = 8
+            for (y in 0 until gh) for (x in 0 until gw) {
+                if (!sel[y * gw + x]) continue
+                if (!at(x, y - 1)) bits[y * vw + x] = (bits[y * vw + x].toInt() or R).toByte()
+                if (!at(x + 1, y)) bits[y * vw + x + 1] = (bits[y * vw + x + 1].toInt() or D).toByte()
+                if (!at(x, y + 1)) bits[(y + 1) * vw + x + 1] = (bits[(y + 1) * vw + x + 1].toInt() or L).toByte()
+                if (!at(x - 1, y)) bits[(y + 1) * vw + x] = (bits[(y + 1) * vw + x].toInt() or U).toByte()
+            }
+            fun rightOf(d: Int) = when (d) { R -> D; D -> L; L -> U; else -> R }
+            fun leftOf(d: Int) = when (d) { R -> U; U -> L; L -> D; else -> R }
+            val loops = ArrayList<FloatArray>()
+            for (start in bits.indices) {
+                while (bits[start].toInt() != 0) {
+                    var v = start
+                    var b0 = bits[v].toInt()
+                    var dir = listOf(R, D, L, U).first { b0 and it != 0 }
+                    val pts = ArrayList<Float>()
+                    var prev = -1
+                    var guard = 0
+                    while (true) {
+                        val bv = bits[v].toInt()
+                        if (prev != -1) {
+                            // An Diagonal-Kreuzungen rechts abbiegen: getrennte Bereiche bleiben getrennt
+                            dir = when { bv and rightOf(prev) != 0 -> rightOf(prev); bv and prev != 0 -> prev; bv and leftOf(prev) != 0 -> leftOf(prev); else -> 0 }
+                            if (dir == 0) break
+                        }
+                        if (dir != prev) { pts += (b.left + (v % vw) * st).toFloat(); pts += (b.top + (v / vw) * st).toFloat() }
+                        bits[v] = (bv and dir.inv()).toByte()
+                        v += when (dir) { R -> 1; D -> vw; L -> -1; else -> -vw }
+                        prev = dir
+                        if (++guard > 50_000_000) break
+                    }
+                    if (pts.size >= 6) loops += pts.toFloatArray()
+                }
+            }
+            return if (loops.size <= maxContours) loops else loops.sortedByDescending { it.size }.take(maxContours)
+        }
+
         fun all(w: Int, h: Int) = Selection(
             TileGrid(w, h, 255),
             listOf(floatArrayOf(0f, 0f, w.toFloat(), 0f, w.toFloat(), h.toFloat(), 0f, h.toFloat())),

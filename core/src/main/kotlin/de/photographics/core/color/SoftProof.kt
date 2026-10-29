@@ -1,5 +1,6 @@
 package de.photographics.core.color
 
+import de.photographics.core.tr
 import kotlin.math.atan2
 import kotlin.math.cbrt
 import kotlin.math.floor
@@ -16,12 +17,12 @@ import kotlin.math.sqrt
  * Vorschau, ersetzt aber keinen Proof mit dem Profil der Druckerei.
  */
 enum class ProofCondition(val label: String, val description: String) {
-    COATED("Offsetdruck gestrichen", "ISO Coated v2 / FOGRA39 (Bilderdruckpapier)"),
-    UNCOATED("Offsetdruck ungestrichen", "PSO Uncoated / FOGRA52 (Naturpapier)"),
-    NEWSPAPER("Zeitungsdruck", "ISO Newspaper 26 (IFRA26)"),
-    GRAYSCALE("Graustufen", "Dot Gain 15 %"),
-    PROTANOPIA("Farbenblindheit – Protanopie", "Rotschwäche"),
-    DEUTERANOPIA("Farbenblindheit – Deuteranopie", "Grünschwäche");
+    COATED(tr("Offsetdruck gestrichen"), tr("ISO Coated v2 / FOGRA39 (Bilderdruckpapier)")),
+    UNCOATED(tr("Offsetdruck ungestrichen"), tr("PSO Uncoated / FOGRA52 (Naturpapier)")),
+    NEWSPAPER(tr("Zeitungsdruck"), tr("ISO Newspaper 26 (IFRA26)")),
+    GRAYSCALE(tr("Graustufen"), tr("Dot Gain 15 %")),
+    PROTANOPIA(tr("Farbenblindheit – Protanopie"), tr("Rotschwäche")),
+    DEUTERANOPIA(tr("Farbenblindheit – Deuteranopie"), tr("Grünschwäche"));
 
     val isPrint get() = this == COATED || this == UNCOATED || this == NEWSPAPER
 }

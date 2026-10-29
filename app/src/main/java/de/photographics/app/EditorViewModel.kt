@@ -1,5 +1,6 @@
 package de.photographics.app
 
+import de.photographics.core.tr
 import android.app.Application
 import android.graphics.Bitmap
 import android.net.Uri
@@ -73,28 +74,30 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 enum class Tool(val label: String) {
-    MOVE("Verschieben"),
-    SELECT("Auswahl"),
-    CROP("Freistellen"),
-    BRUSH("Pinsel"),
-    ERASER("Radiergummi"),
-    CLONE("Kopierstempel"),
-    HEAL("Reparatur-Pinsel"),
-    SPOT_HEAL("Bereichsreparatur"),
-    BLUR("Weichzeichner"),
-    SHARPEN("Scharfzeichner"),
-    DODGE("Abwedler"),
-    BURN("Nachbelichter"),
-    SPONGE("Schwamm"),
-    EYEDROPPER("Pipette"),
-    TRANSFORM("Transformieren"),
-    TEXT("Text"),
-    SMUDGE("Wischfinger"),
-    PATCH("Ausbessern"),
-    RED_EYE("Rote Augen"),
-    AI_REMOVE("KI-Entfernen");
+    MOVE(tr("Verschieben")),
+    SELECT(tr("Auswahl")),
+    CROP(tr("Freistellen")),
+    BRUSH(tr("Pinsel")),
+    ERASER(tr("Radiergummi")),
+    CLONE(tr("Kopierstempel")),
+    HEAL(tr("Reparatur-Pinsel")),
+    SPOT_HEAL(tr("Bereichsreparatur")),
+    BLUR(tr("Weichzeichner")),
+    SHARPEN(tr("Scharfzeichner")),
+    DODGE(tr("Abwedler")),
+    BURN(tr("Nachbelichter")),
+    SPONGE(tr("Schwamm")),
+    EYEDROPPER(tr("Pipette")),
+    TRANSFORM(tr("Transformieren")),
+    TEXT(tr("Text")),
+    SMUDGE(tr("Wischfinger")),
+    PATCH(tr("Ausbessern")),
+    RED_EYE(tr("Rote Augen")),
+    AI_REMOVE(tr("KI-Entfernen")),
+    LIQUIFY(tr("Verflüssigen")),
+    GRADIENT(tr("Verlauf"));
 
-    val isPaintTool get() = this in setOf(BRUSH, ERASER, CLONE, HEAL, SPOT_HEAL, BLUR, SHARPEN, DODGE, BURN, SPONGE, SMUDGE, AI_REMOVE)
+    val isPaintTool get() = this in setOf(BRUSH, ERASER, CLONE, HEAL, SPOT_HEAL, BLUR, SHARPEN, DODGE, BURN, SPONGE, SMUDGE, AI_REMOVE, LIQUIFY)
 }
 
 enum class LayerType { PIXEL, GROUP, ADJUSTMENT, TEXT, SMART }
@@ -129,7 +132,7 @@ data class LayerItem(
 data class CropAspect(val label: String, val w: Double, val h: Double)
 
 /** Überlagerung im Freistellungsrahmen. */
-enum class CropOverlay(val label: String) { THIRDS("Drittelregel"), GOLDEN("Goldener Schnitt"), GRID("Raster"), DIAGONAL("Diagonalen"), NONE("Keine") }
+enum class CropOverlay(val label: String) { THIRDS(tr("Drittelregel")), GOLDEN(tr("Goldener Schnitt")), GRID(tr("Raster")), DIAGONAL(tr("Diagonalen")), NONE(tr("Keine")) }
 
 /** Zielgröße beim Freistellen (Photoshop: „B × H × Auflösung“). */
 data class CropTarget(val width: Int, val height: Int, val dpi: Float)
@@ -148,16 +151,17 @@ data class TransformBox(val layerId: Int, val w: Double, val h: Double, val affi
 }
 
 /** Modus des Frei-Transformierens (Photoshop: Bearbeiten → Transformieren). */
-enum class TransformMode(val label: String) { FREE("Frei"), SKEW("Neigen"), DISTORT("Verzerren"), PERSPECTIVE("Perspektive") }
+enum class TransformMode(val label: String) { FREE(tr("Frei")), SKEW(tr("Neigen")), DISTORT(tr("Verzerren")), PERSPECTIVE(tr("Perspektive")) }
 
 /** Offene Einstellungsebene im Eigenschaften-Panel. */
-data class AdjustEdit(val layerId: Int, val adjustment: Adjustment)
+/** [histogram]: Tonwerte unter der Ebene (nur für Kurven), siehe [de.photographics.core.adjust.Histogram]. */
+data class AdjustEdit(val layerId: Int, val adjustment: Adjustment, val histogram: IntArray? = null)
 
 data class EditorUiState(
     val hasDocument: Boolean = false,
     val docWidth: Int = 0,
     val docHeight: Int = 0,
-    val fileName: String = "Unbenannt",
+    val fileName: String = tr("Unbenannt"),
     val layers: List<LayerItem> = emptyList(),
     val activeLayerId: Int? = null,
     val tool: Tool = Tool.BRUSH,
@@ -171,12 +175,22 @@ data class EditorUiState(
     val selectionShape: SelectionShape = SelectionShape.RECT,
     val selectionOp: SelectionOp = SelectionOp.REPLACE,
     val featherRadius: Float = 0f,
+    /** Zauberstab: Toleranz je Kanal (0..255) und ob nur zusammenhängende Pixel gewählt werden. */
+    val wandTolerance: Int = 32,
+    /** Verschieben: angetippte Ebene automatisch auswählen (Photoshop „Automatisch auswählen“). */
+    val autoSelectLayer: Boolean = false,
+    val wandContiguous: Boolean = true,
+    val gradientType: de.photographics.core.editor.GradientType = de.photographics.core.editor.GradientType.LINEAR,
+    /** Verlauf Vordergrund → transparent statt Vordergrund → Hintergrund. */
+    val gradientToTransparent: Boolean = false,
+    val gradientOpacity: Float = 1f,
     val cloneSource: Pair<Float, Float>? = null,
     val settingCloneSource: Boolean = false,
     val sampleAllLayers: Boolean = false,
     val toneRange: ToneRange = ToneRange.MIDTONES,
     val toolStrength: Float = 0.5f,
     val spongeSaturate: Boolean = false,
+    val liquifyMode: de.photographics.core.tools.LiquifyMode = de.photographics.core.tools.LiquifyMode.PUSH,
     val canUndo: Boolean = false,
     val canRedo: Boolean = false,
     val undoLabel: String? = null,
@@ -257,6 +271,26 @@ data class EditorUiState(
  */
 class DetailView(val bitmap: TiledBitmap, val rect: IntRect, val step: Int, val shown: IntRect = rect)
 
+/**
+ * GPU-Vorschau beim Verschieben, Transformieren und Ändern der Deckkraft einer Ebene („Sandwich“):
+ * [below] (alles darunter) und [above] (alles darüber) für den sichtbaren Bereich [region] bei
+ * [step] einmal gerechnet; die Ebene selbst als eigene Bitmap, die die Leinwand bei jedem Bild mit
+ * [matrix] (Bitmap → Dokument), [alpha] und [blend] zeichnet – ohne Rechenarbeit auf dem Prozessor.
+ */
+class GpuLive(
+    val layerId: Int,
+    val region: IntRect,
+    val step: Int,
+    val below: TiledBitmap?,
+    val layer: TiledBitmap,
+    val above: TiledBitmap?,
+    val blend: de.photographics.core.render.BlendMode,
+) {
+    /** 3×3 zeilenweise wie [android.graphics.Matrix.setValues]. */
+    @Volatile var matrix: FloatArray = FloatArray(9)
+    @Volatile var alpha: Float = 1f
+}
+
 /** Bis zu dieser Größe (Pixel in Anzeigeauflösung) werden Live-Änderungen direkt gezeichnet. */
 private const val LIVE_DIRECT_PIXELS = 1_200_000L
 /** Zielgröße der schnellen Vorschau. */
@@ -288,7 +322,18 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     private val renderTickState = androidx.compose.runtime.mutableLongStateOf(0L)
     val renderTick: androidx.compose.runtime.LongState get() = renderTickState
     /** Neues Bild anfordern – vorher alles Gerechnete an die Anzeige übergeben ([DisplayWrites]). */
-    private fun bumpRender() { DisplayWrites.flush(); renderTickState.longValue++ }
+    private fun bumpRender() {
+        DisplayWrites.flush()
+        // GPU-Vorschau erst ausblenden, wenn die fertige Anzeige übergeben ist (kein Aufblitzen des alten Stands)
+        if (gpuDropPending) { gpuDropPending = false; gpuLiveState.value = null }
+        renderTickState.longValue++
+    }
+
+    private val gpuLiveState = androidx.compose.runtime.mutableStateOf<GpuLive?>(null)
+    /** Laufende GPU-Vorschau (nur die Leinwand liest sie beim Zeichnen). */
+    val gpuLive: androidx.compose.runtime.State<GpuLive?> get() = gpuLiveState
+    private var gpuDropPending = false
+    private fun dropGpu() { if (gpuLiveState.value != null) gpuDropPending = true }
 
     private var displayScale = 1
     /** Detailansicht: aktueller Ausschnitt, sichtbarer Bereich (Dokument) und Zoom der Leinwand. */
@@ -354,13 +399,13 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             }
         } finally { busy(false) }
         val pss = android.os.Debug.getPss() shr 10
-        val summary = "Heap max. ${r.maxHeapMb} MB, Kacheln max. ${r.maxTileMb} MB, PSS $pss MB, ${r.totalMs / 1000} s"
+        val summary = tr("Heap max. {0} MB, Kacheln max. {1} MB, PSS {2} MB, {3} s", r.maxHeapMb, r.maxTileMb, pss, r.totalMs / 1000)
         if (r.ok) {
             android.util.Log.i(tag, "ERGEBNIS: OK – $summary")
-            message("Selbsttest bestanden ($summary)")
+            message(tr("Selbsttest bestanden ({0})", summary))
         } else {
             android.util.Log.e(tag, "ERGEBNIS: FEHLER bei „${r.failedStep}“: ${r.error} – $summary", r.error)
-            message("Selbsttest fehlgeschlagen bei „${r.failedStep}“")
+            message(tr("Selbsttest fehlgeschlagen bei „{0}“", r.failedStep))
         }
     }
 
@@ -384,15 +429,15 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 y = r.bottom
             }
         }
-        doc.root.add(PixelLayer("Hintergrund", photo(1)))
-        doc.root.add(PixelLayer("Retusche", photo(9)).also { it.blendMode = de.photographics.core.render.BlendMode.SOFT_LIGHT; it.opacity = 0.6f })
-        val curves = AdjustmentLayer("Kurven", de.photographics.core.adjust.AdjustmentType.CURVES.createDefault())
+        doc.root.add(PixelLayer(tr("Hintergrund"), photo(1)))
+        doc.root.add(PixelLayer(tr("Retusche"), photo(9)).also { it.blendMode = de.photographics.core.render.BlendMode.SOFT_LIGHT; it.opacity = 0.6f })
+        val curves = AdjustmentLayer(tr("Kurven"), de.photographics.core.adjust.AdjustmentType.CURVES.createDefault())
         doc.root.add(curves)
-        val top = PixelLayer("Motiv", de.photographics.core.image.TileGrid(w, h).also { g ->
+        val top = PixelLayer(tr("Motiv"), de.photographics.core.image.TileGrid(w, h).also { g ->
             val r = IntRect(w / 3, h / 3, w / 3 + w / 4, h / 3 + h / 4); g.writeRect(r, IntArray(r.width * r.height) { 0xFFCC5522.toInt() })
         })
         doc.root.add(top); doc.activeLayer = top
-        setDocument(doc, "Benchmark", emptyList())
+        setDocument(doc, tr("Benchmark"), emptyList())
         // In den Editor wechseln: die Leinwand soll sichtbar sein (Bildzeiten), nicht der Startbildschirm
         _state.update { it.copy(showStart = false) }
         val ed = editor ?: return@onEngine
@@ -401,16 +446,16 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             for (i in 0 until n) { val t0 = System.nanoTime(); f(i); t[i] = (System.nanoTime() - t0) / 1_000_000 }
             log("%-34s Ø %4d ms  max %4d ms  (erstes %d ms)".format(label, t.drop(1).average().toInt(), t.maxOrNull() ?: 0, t[0]))
         }
-        frames("Gesamtansicht neu zeichnen", 3) { renderNow(null) }
+        frames(tr("Gesamtansicht neu zeichnen"), 3) { renderNow(null) }
         run {
             val sc = displayScale; val bw = (w + sc - 1) / sc; val bh = (h + sc - 1) / sc
             val px = IntArray(bw * 64)
-            frames("  davon nur rechnen (1 Kern)", 2) { var y = 0; while (y < bh) { Compositor.renderArgbSampled(doc, IntRect(0, y, bw, minOf(bh, y + 64)), sc); y += 64 } }
-            frames("  davon nur rechnen (alle Kerne)", 2) {
+            frames(tr("  davon nur rechnen (1 Kern)"), 2) { var y = 0; while (y < bh) { Compositor.renderArgbSampled(doc, IntRect(0, y, bw, minOf(bh, y + 64)), sc); y += 64 } }
+            frames(tr("  davon nur rechnen (alle Kerne)"), 2) {
                 de.photographics.core.image.Parallel.bands((bh + 63) / 64, bw * 64L * 40, compute = { i -> Compositor.renderArgbSampled(doc, IntRect(0, i * 64, bw, minOf(bh, i * 64 + 64)), sc) }, consume = { _, _ -> })
             }
             val bmp = bitmap
-            if (bmp != null) frames("  davon nur Bitmap schreiben", 2) { var y = 0; while (y < bh) { val n = minOf(64, bh - y); bmp.setPixels(px, 0, bw, 0, y, bw, n); y += 64 } }
+            if (bmp != null) frames(tr("  davon nur Bitmap schreiben"), 2) { var y = 0; while (y < bh) { val n = minOf(64, bh - y); bmp.setPixels(px, 0, bw, 0, y, bw, n); y += 64 } }
         }
         // Hineinzoomen auf 100 % (Bildschirm 2560×1600): Detailausschnitt in voller Auflösung
         viewVisible = IntRect(w / 2 - 1280, h / 2 - 800, w / 2 + 1280, h / 2 + 800); viewScale = 1f
@@ -429,15 +474,15 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         }
         // Verschieben (wie moveTo): kleine Ebene über das Bild ziehen
         val bounds = top.pixels.contentBounds()
-        frames("Verschieben (je Bild)", 20) { i ->
+        frames(tr("Verschieben (je Bild)"), 20) { i ->
             val old = bounds.offset(top.previewDx, top.previewDy)
             top.previewDx = i * 15; top.previewDy = i * 8
             renderLive(old.union(bounds.offset(top.previewDx, top.previewDy)), top)
         }
         top.previewDx = 0; top.previewDy = 0; clearPreview(); renderNow(null)
-        frames("Deckkraft-Regler (je Bild)", 20) { i -> doc.root.children[1].opacity = 0.3f + i * 0.02f; renderLive(null, doc.root.children[1]) }
+        frames(tr("Deckkraft-Regler (je Bild)"), 20) { i -> doc.root.children[1].opacity = 0.3f + i * 0.02f; renderLive(null, doc.root.children[1]) }
         clearPreview(); renderNow(null)
-        frames("Einstellungsebene ziehen (je Bild)", 20) { i ->
+        frames(tr("Einstellungsebene ziehen (je Bild)"), 20) { i ->
             val c = de.photographics.core.adjust.CurvesAdj(master = listOf(0 to 0, 128 to 128 + i * 3, 255 to 255))
             ed.previewAdjustment(curves, c); renderLive(null, curves)
         }
@@ -445,28 +490,28 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val smart = ed.convertToSmartObject(top)
         if (smart != null) {
             val base = smart.transform
-            frames("Transformieren (je Bild)", 20) { i ->
+            frames(tr("Transformieren (je Bild)"), 20) { i ->
                 val t = base.then(de.photographics.core.image.Affine.around(w / 2.0, h / 2.0, de.photographics.core.image.Affine.rotate(i * 1.5)))
                 ed.previewTransform(smart, t); renderLive(doc.bounds, smart)
             }
-            frames("Transformieren übernehmen", 1) { ed.commitTransform(smart, base, smart.transform); renderNow(null) }
+            frames(tr("Transformieren übernehmen"), 1) { ed.commitTransform(smart, base, smart.transform); renderNow(null) }
         }
         clearPreview()
         doc.activeLayer = doc.root.children[0]
         val st = ed.beginStroke(BrushTool(0xFF2050A0.toInt()), BrushSettings(size = 200f, hardness = 0.6f), PaintTarget.PIXELS)
         if (st != null) {
             strokeCache = StrokeRenderCache.create(doc, doc.root.children[0] as PixelLayer)
-            frames("Pinsel bei 100 % (je Ereignis, 200 px)", 60) { i -> renderNow(st.addPoint(w * 0.4f + i * 25f, h * 0.5f + (i % 10) * 12f, 0.8f)) }
+            frames(tr("Pinsel bei 100 % (je Ereignis, 200 px)"), 60) { i -> renderNow(st.addPoint(w * 0.4f + i * 25f, h * 0.5f + (i % 10) * 12f, 0.8f)) }
             strokeCache = null
-            frames("Pinsel absetzen", 1) { renderNow(ed.endStroke(st)) }
+            frames(tr("Pinsel absetzen"), 1) { renderNow(ed.endStroke(st)) }
         }
         // Echtzeit-Phase für die Bildzeiten der Oberfläche (dumpsys gfxinfo, siehe tools/device_bench.sh)
         clearPreview(); renderNow(null)
         log("UI-PHASE: Start"); Thread.sleep(1500)
         // Phasengrenzen in CLOCK_MONOTONIC (wie die Zeitstempel von gfxinfo framestats)
-        FrameStats.phase = "Leerlauf"
+        FrameStats.phase = tr("Leerlauf")
         for (i in 0 until 90) { bumpRender(); Thread.sleep(8) }
-        FrameStats.phase = "Verschieben"
+        FrameStats.phase = tr("Verschieben")
         val tb = top.pixels.contentBounds()
         for (i in 0 until 90) {
             val old = tb.offset(top.previewDx, top.previewDy)
@@ -474,7 +519,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             renderLive(old.union(tb.offset(top.previewDx, top.previewDy)), top); Thread.sleep(16)
         }
         top.previewDx = 0; top.previewDy = 0; clearPreview(); renderNow(null)
-        FrameStats.phase = "Malen"
+        FrameStats.phase = tr("Malen")
         val st2 = ed.beginStroke(BrushTool(0xFF20A050.toInt()), BrushSettings(size = 120f, hardness = 0.6f), PaintTarget.PIXELS)
         if (st2 != null) {
             strokeCache = StrokeRenderCache.create(doc, doc.root.children[0] as PixelLayer)
@@ -516,14 +561,14 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 if (h == null || !h.trim()) throw e
                 System.gc()
                 block()
-                message("Wenig Arbeitsspeicher: Ältere Verlaufsschritte wurden ausgelagert bzw. verworfen.")
+                message(tr("Wenig Arbeitsspeicher: Ältere Verlaufsschritte wurden ausgelagert bzw. verworfen."))
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: OutOfMemoryError) {
-            message("Nicht genug Arbeitsspeicher für diese Aktion. Tipp: Bild verkleinern oder Ebenen zusammenfügen.")
+            message(tr("Nicht genug Arbeitsspeicher für diese Aktion. Tipp: Bild verkleinern oder Ebenen zusammenfügen."))
         } catch (e: Exception) {
-            message("Fehler: ${e.message ?: e.javaClass.simpleName}")
+            message(tr("Fehler: {0}", e.message ?: e.javaClass.simpleName))
         }
     }
 
@@ -537,7 +582,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val doc = Document.blank(w, h, if (transparent) null else 0xFFFFFFFF.toInt())
         doc.dpi = dpi
         doc.colorProfile = settings.value.workingRgb.profile
-        setDocument(doc, "Unbenannt", emptyList())
+        setDocument(doc, tr("Unbenannt"), emptyList())
         rebuildProof()
         if (showEditor) _state.update { it.copy(showStart = false) }
     }
@@ -563,7 +608,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 editor?.let { ed ->
                     ed.convertToProfile(working, s.conversionIntent, s.conversionBpc)
                     ed.history.clear()
-                    warnings += "Profil „${docProfile.description}“ wurde in den Arbeitsfarbraum „${working.description}“ umgewandelt."
+                    warnings += tr("Profil „{0}“ wurde in den Arbeitsfarbraum „{1}“ umgewandelt.", docProfile.description, working.description)
                 }
             }
             rebuildProof()
@@ -571,15 +616,15 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             _state.update { it.copy(showStart = false) }
             if (remember) addRecent(uri, loaded.name, loaded.doc)
         } catch (e: PsdFormatException) {
-            message("PSD konnte nicht gelesen werden: ${e.message}")
+            message(tr("PSD konnte nicht gelesen werden: {0}", e.message))
         } catch (e: de.photographics.core.tiff.TiffFormatException) {
-            message("TIFF konnte nicht gelesen werden: ${e.message}")
+            message(tr("TIFF konnte nicht gelesen werden: {0}", e.message))
         } catch (e: de.photographics.core.xcf.XcfFormatException) {
-            message("GIMP-Datei konnte nicht gelesen werden: ${e.message}")
+            message(tr("GIMP-Datei konnte nicht gelesen werden: {0}", e.message))
         } catch (e: SecurityException) {
             recentFiles.remove(uri)
             _state.update { it.copy(recent = recentFiles.list()) }
-            message("Kein Zugriff mehr auf die Datei – bitte erneut über „Öffnen“ auswählen.")
+            message(tr("Kein Zugriff mehr auf die Datei – bitte erneut über „Öffnen“ auswählen."))
         } finally {
             busy(false)
         }
@@ -589,7 +634,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val scale = 360f / max(doc.width, doc.height)
         val tw = max(1, (doc.width * scale).roundToInt()); val th = max(1, (doc.height * scale).roundToInt())
         val bmp = thumbnail(doc, tw, th)
-        recentFiles.add(uri, name, "${doc.width} × ${doc.height} px · ${doc.allLayers().size} Ebenen", bmp)
+        recentFiles.add(uri, name, tr("{0} × {1} px · {2} Ebenen", doc.width, doc.height, doc.allLayers().size), bmp)
         bmp.recycle()
         _state.update { it.copy(recent = recentFiles.list()) }
     }
@@ -649,7 +694,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val app = getApplication<Application>()
             ImageIO.savePsd(app.contentResolver, uri, ed.doc, java.io.File(app.cacheDir, "psd-write"))
-            message("Als PSD gespeichert.")
+            message(tr("Als PSD gespeichert."))
         } finally {
             busy(false)
         }
@@ -660,8 +705,8 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val app = getApplication<Application>()
             val warnings = ImageIO.saveXcf(app.contentResolver, uri, ed.doc, java.io.File(app.cacheDir, "xcf-write"))
-            if (warnings.isEmpty()) message("Als GIMP-Datei gespeichert.")
-            else _state.update { it.copy(warnings = listOf("Als GIMP-Datei gespeichert.") + warnings) }
+            if (warnings.isEmpty()) message(tr("Als GIMP-Datei gespeichert."))
+            else _state.update { it.copy(warnings = listOf(tr("Als GIMP-Datei gespeichert.")) + warnings) }
         } finally {
             busy(false)
         }
@@ -673,7 +718,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             val app = getApplication<Application>()
             val s = settings.value
             ImageIO.saveTiff(app.contentResolver, uri, ed.doc, java.io.File(app.cacheDir, "tiff-write"), s.tiffCompression, s.tiffLayers)
-            message("Als TIFF gespeichert (${s.tiffCompression.label}${if (s.tiffLayers) ", mit Ebenen" else ""}).")
+            message(tr("Als TIFF gespeichert ({0}{1}).", tr(s.tiffCompression.label), if (s.tiffLayers) tr(", mit Ebenen") else ""))
         } finally {
             busy(false)
         }
@@ -684,8 +729,8 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val toSrgb = settings.value.exportToSrgb
             ImageIO.export(getApplication<Application>().contentResolver, uri, ed.doc, format, toSrgb)
-            val profileNote = if (toSrgb || ed.doc.colorProfile.bytes.contentEquals(IccProfiles.sRGB.bytes)) "sRGB" else "Profil „${ed.doc.colorProfile.description}“ eingebettet"
-            message("Exportiert als ${format.ext.uppercase()} ($profileNote).")
+            val profileNote = if (toSrgb || ed.doc.colorProfile.bytes.contentEquals(IccProfiles.sRGB.bytes)) "sRGB" else tr("Profil „{0}“ eingebettet", ed.doc.colorProfile.description)
+            message(tr("Exportiert als {0} ({1}).", format.ext.uppercase(), profileNote))
         } finally {
             busy(false)
         }
@@ -752,6 +797,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     /** Rendert sofort (nur auf dem Engine-Thread aufrufen). */
     private fun renderNow(rect: IntRect?, notify: Boolean = true, withDetail: Boolean = true) {
         dropLiveBelow()
+        if (notify) dropGpu()
         val ed = editor ?: return
         val bmp = bitmap ?: return
         val doc = ed.doc
@@ -776,8 +822,8 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         } else if (s > 1) {
             // Verkleinerte Anzeige: direkt in Anzeigeauflösung aus den Mipmaps der Ebenen komponieren
             // (statt in voller Auflösung zu rechnen und danach zu verkleinern), auf allen Kernen
-            Compositor.prepare(doc, s)
             val out = IntRect(r.left / s, r.top / s, minOf(bmp.width, (r.right + s - 1) / s), minOf(bmp.height, (r.bottom + s - 1) / s))
+            Compositor.prepare(doc, s, out)
             val bandH = maxOf(1, 65_536 / maxOf(1, out.width))
             val count = (out.height + bandH - 1) / bandH
             de.photographics.core.image.Parallel.bands(count, out.width.toLong() * bandH * 40, compute = { i ->
@@ -789,7 +835,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             })
         } else {
             // Große Bereiche auf allen Kernen
-            Compositor.prepare(doc)
+            Compositor.prepare(doc, 1, r)
             val bandH = maxOf(s, (65_536 / maxOf(1, r.width) + s - 1) / s * s)
             val count = (r.height + bandH - 1) / bandH
             de.photographics.core.image.Parallel.bands(count, r.width.toLong() * bandH * 40, compute = { i ->
@@ -901,12 +947,12 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val name = ImageIO.displayName(cr, uri).replace(Regex("[/\\\\]"), "_")
         val bytes = cr.openInputStream(uri)?.use { it.readBytes() } ?: return@onEngine
         val p = try { de.photographics.core.color.IccProfile(bytes).also { it.toPcs(de.photographics.core.color.RenderingIntent.RELATIVE) } }
-            catch (e: Exception) { message("Kein verwendbares ICC-Profil: ${e.message}"); return@onEngine }
+            catch (e: Exception) { message(tr("Kein verwendbares ICC-Profil: {0}", e.message)); return@onEngine }
         iccDir.mkdirs()
         java.io.File(iccDir, name).writeBytes(bytes)
         iccLoaded[name] = p
         loadIccLibrary()
-        message("Profil „${p.description}“ (${p.colorSpace.trim()}) hinzugefügt.")
+        message(tr("Profil „{0}“ ({1}) hinzugefügt.", p.description, p.colorSpace.trim()))
     }
 
     fun deleteIcc(name: String) = onEngine {
@@ -920,18 +966,18 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         builtin?.profile ?: libraryName?.let { iccProfile(it) }
 
     fun assignProfile(builtin: IccProfiles.Builtin?, libraryName: String?) = withEditor { ed ->
-        val p = targetProfile(builtin, libraryName)?.takeIf { it.isRgb } ?: run { message("Nur RGB-Profile können zugewiesen werden."); return@withEditor }
+        val p = targetProfile(builtin, libraryName)?.takeIf { it.isRgb } ?: run { message(tr("Nur RGB-Profile können zugewiesen werden.")); return@withEditor }
         ed.assignProfile(p)
         rebuildProof()
-        message("Profil „${p.description}“ zugewiesen.")
+        message(tr("Profil „{0}“ zugewiesen.", p.description))
     }
 
     fun convertToProfile(builtin: IccProfiles.Builtin?, libraryName: String?, intent: de.photographics.core.color.RenderingIntent, bpc: Boolean) = withEditor { ed ->
-        val p = targetProfile(builtin, libraryName)?.takeIf { it.isRgb } ?: run { message("Nur in RGB-Profile kann umgewandelt werden."); return@withEditor }
+        val p = targetProfile(builtin, libraryName)?.takeIf { it.isRgb } ?: run { message(tr("Nur in RGB-Profile kann umgewandelt werden.")); return@withEditor }
         busy(true)
         try {
             val smart = ed.convertToProfile(p, intent, bpc)
-            message("In „${p.description}“ umgewandelt" + if (smart > 0) " – $smart Smartobjekt(e) unverändert." else ".")
+            message(tr("In „{0}“ umgewandelt", p.description) + if (smart > 0) tr(" – {0} Smartobjekt(e) unverändert.", smart) else ".")
         } finally { busy(false) }
         thumbs.clear()
         rebuildProof()
@@ -966,10 +1012,14 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val doc = editor?.doc ?: return
         val r = (rect ?: doc.bounds).intersect(doc.bounds)
         if (r.isEmpty) return
+        if (layer != null && gpuPreview(doc, layer, r)) return
+        // Andere Live-Änderung: eine laufende GPU-Vorschau endet mit der neuen Anzeige
+        dropGpu()
         val s = displayScale
         // Kleine Änderungen (z. B. eine Ebene verschieben): direkt in Anzeigeauflösung aus den Mipmaps,
         // nur der betroffene Bereich – kein Umweg über die Vorschau
-        if (_state.value.previewBitmap == null && r.width.toLong() * r.height / (s * s) <= LIVE_DIRECT_PIXELS) {
+        // (nicht während einer GPU-Vorschau: die Anzeige darunter ist dann noch nicht nachgeführt)
+        if (_state.value.previewBitmap == null && gpuLiveState.value == null && r.width.toLong() * r.height / (s * s) <= LIVE_DIRECT_PIXELS) {
             renderNow(r, withDetail = false); staleDetail(r); return
         }
         staleDetail(r)
@@ -991,7 +1041,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val area = (if (running) IntRect(r.left / step, r.top / step, (r.right + step - 1) / step, (r.bottom + step - 1) / step)
             else IntRect(ox, oy, ox + pw, oy + ph)).intersect(IntRect(ox, oy, ox + pw, oy + ph))
         if (area.isEmpty) { settleDirty = settleDirty.union(r); scheduleSettle(); return }
-        Compositor.prepare(doc, step)
+        Compositor.prepare(doc, step, area)
         val full = IntRect(ox, oy, ox + pw, oy + ph)
         val from = layer?.let { Compositor.liveSplit(doc, it) } ?: 0
         val key = Triple(region, step, from)
@@ -1024,6 +1074,133 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         scheduleSettle()
     }
 
+    /** Mischmodi, die Android genauso rechnet wie photographics (sonst bliebe ein Sprung nach dem Loslassen). */
+    private fun gpuBlendOk(m: de.photographics.core.render.BlendMode) = when (m) {
+        de.photographics.core.render.BlendMode.NORMAL -> true
+        de.photographics.core.render.BlendMode.MULTIPLY, de.photographics.core.render.BlendMode.SCREEN,
+        de.photographics.core.render.BlendMode.DARKEN, de.photographics.core.render.BlendMode.LIGHTEN,
+        de.photographics.core.render.BlendMode.DIFFERENCE, de.photographics.core.render.BlendMode.EXCLUSION,
+        de.photographics.core.render.BlendMode.OVERLAY, de.photographics.core.render.BlendMode.HARD_LIGHT ->
+            android.os.Build.VERSION.SDK_INT >= 29
+        else -> false
+    }
+
+    /**
+     * Kann [l] über die GPU gezeichnet werden? Oberste Ebene ohne Schnittmaske, Maske nur verbunden
+     * (bei Smartobjekten keine), darüber nur normale Pixel-, Text- und Smartobjekt-Ebenen – dann ist
+     * „darunter + Ebene + darüber“ exakt das Ergebnis des Compositors. Kein Farbproof (nicht linear).
+     */
+    private fun gpuEligible(doc: de.photographics.core.doc.Document, l: Layer): Boolean {
+        if (l !is de.photographics.core.doc.RasterLayer || l.parent != null && l.parent !== doc.root) return false
+        if (!l.visible || l.clipped || !gpuBlendOk(l.blendMode) || _state.value.proofOn) return false
+        if (l.effects?.visible == true) return false   // Effekte rechnet nur der Compositor
+        val m = l.mask
+        if (m != null && m.enabled && (l is SmartLayer || !m.linked || m.previewDx != 0 || m.previewDy != 0)) return false
+        val kids = doc.root.children
+        val i = kids.indexOf(l)
+        if (i < 0 || kids.getOrNull(i + 1)?.clipped == true) return false
+        for (k in i + 1 until kids.size) {
+            val a = kids[k]
+            if (!a.visible) continue
+            if (a !is de.photographics.core.doc.RasterLayer) return false
+            if (!a.clipped && a.blendMode != de.photographics.core.render.BlendMode.NORMAL) return false
+        }
+        return true
+    }
+
+    /**
+     * Live-Änderung an [layer] über die GPU: beim ersten Aufruf die drei Bitmaps aufbauen, danach nur
+     * Lage, Deckkraft und Matrix setzen. false = nicht möglich (normale Vorschau auf dem Prozessor).
+     */
+    private fun gpuPreview(doc: de.photographics.core.doc.Document, layer: Layer, r: IntRect): Boolean {
+        if (!gpuEligible(doc, layer)) return false
+        val l = layer as de.photographics.core.doc.RasterLayer
+        var g = gpuLiveState.value?.takeIf { it.layerId == l.id }
+        if (g == null) {
+            g = buildGpuLive(doc, l) ?: return false
+            DisplayWrites.flush()
+            gpuLiveState.value = g
+        }
+        g.matrix = gpuMatrix(l, g)
+        g.alpha = (l.opacity * l.fillOpacity).coerceIn(0f, 1f)
+        staleDetail(r)
+        settleDirty = settleDirty.union(r)
+        bumpRender()
+        scheduleSettle()
+        return true
+    }
+
+    /** Größte Ebenen-Bitmap der GPU-Vorschau (Pixel). */
+    private val gpuLayerPixels = 12_000_000L
+
+    private fun buildGpuLive(doc: de.photographics.core.doc.Document, l: de.photographics.core.doc.RasterLayer): GpuLive? {
+        val region = viewVisible.intersect(doc.bounds).takeIf { viewScale > 0f && !it.isEmpty } ?: doc.bounds
+        val budget = kotlin.math.ceil(kotlin.math.sqrt(region.width.toDouble() * region.height / PROXY_PIXELS)).toInt()
+        val step = maxOf(1, budget, detailLevel().coerceAtMost(displayScale))
+        val kids = doc.root.children
+        val from = kids.indexOf(l)
+        val ox = region.left / step; val oy = region.top / step
+        val out = IntRect(ox, oy, (region.right + step - 1) / step, (region.bottom + step - 1) / step)
+        Compositor.prepare(doc, step, out)
+        fun stack(start: Int, end: Int): TiledBitmap? {
+            if (kids.subList(start, end).none { it.visible }) return null
+            val b = TiledBitmap(out.width, out.height)
+            bandsOf(out) { band -> Compositor.renderRangeSampled(doc, band, step, start, end, null) }.let { run ->
+                run { band, px -> b.setPixels(px, 0, band.width, band.left - ox, band.top - oy, band.width, band.height) }
+            }
+            return b
+        }
+        val layerBmp: TiledBitmap
+        if (l is SmartLayer) {
+            // Smartobjekt: die Quelle selbst (passende Mipmap-Stufe); die Matrix übernimmt Skalieren, Drehen, Perspektive
+            val perOut = step / maxOf(1e-6, l.homography().scaleFor(l.source.width.toDouble(), l.source.height.toDouble()))
+            var level = de.photographics.core.image.MipMap.levelFor(perOut.toInt())
+            while ((l.source.width shr level).toLong() * (l.source.height shr level) > gpuLayerPixels) level++
+            val src = if (level > 0) l.source.mip(level) else l.source
+            val b = TiledBitmap(src.width, src.height)
+            bandsOf(IntRect(0, 0, src.width, src.height)) { band -> IntArray(band.width * band.height).also { src.readRect(band, it) } }.let { run ->
+                run { band, px -> b.setPixels(px, 0, band.width, band.left, band.top, band.width, band.height) }
+            }
+            layerBmp = b
+            gpuSourceLevel = level
+        } else {
+            // Pixelebene: ihr Inhalt (unverschoben) in Vorschauauflösung; die Matrix verschiebt
+            val cb = l.raster.contentBounds()
+            if (cb.isEmpty) return null
+            val lr = IntRect(Math.floorDiv(cb.left, step), Math.floorDiv(cb.top, step), (cb.right + step - 1) / step, (cb.bottom + step - 1) / step)
+            if (lr.width.toLong() * lr.height > gpuLayerPixels) return null
+            val b = TiledBitmap(lr.width, lr.height)
+            bandsOf(lr) { band -> Compositor.renderLayerSampled(l, band, step) }.let { run ->
+                run { band, px -> b.setPixels(px, 0, band.width, band.left - lr.left, band.top - lr.top, band.width, band.height) }
+            }
+            layerBmp = b
+            gpuLayerRect = lr
+        }
+        return GpuLive(l.id, IntRect(ox * step, oy * step, out.right * step, out.bottom * step), step,
+            stack(0, from), layerBmp, stack(from + 1, kids.size), l.blendMode)
+    }
+
+    /** Lage der Ebenen-Bitmap beim Aufbau (Ausgabekoordinaten) bzw. Mipmap-Stufe der Smartobjekt-Quelle. */
+    private var gpuLayerRect = IntRect.EMPTY
+    private var gpuSourceLevel = 0
+
+    /** Bitmap → Dokument für den aktuellen Stand der Ebene. */
+    private fun gpuMatrix(l: de.photographics.core.doc.RasterLayer, g: GpuLive): FloatArray {
+        if (l is SmartLayer) {
+            val f = (1 shl gpuSourceLevel).toDouble()
+            val h = l.homography().m
+            // H · Skalierung(f): Mipmap-Pixel → Quellpixel → Dokument; Vorschau-Verschiebung dazu
+            val dx = l.previewDx.toDouble(); val dy = l.previewDy.toDouble()
+            return floatArrayOf(
+                ((h[0] + dx * h[6]) * f).toFloat(), ((h[1] + dx * h[7]) * f).toFloat(), (h[2] + dx * h[8]).toFloat(),
+                ((h[3] + dy * h[6]) * f).toFloat(), ((h[4] + dy * h[7]) * f).toFloat(), (h[5] + dy * h[8]).toFloat(),
+                (h[6] * f).toFloat(), (h[7] * f).toFloat(), h[8].toFloat(),
+            )
+        }
+        val s = g.step.toFloat(); val lr = gpuLayerRect
+        return floatArrayOf(s, 0f, lr.left * s + l.previewDx, 0f, s, lr.top * s + l.previewDy, 0f, 0f, 1f)
+    }
+
     /**
      * Teilt [area] in Streifen, rechnet sie mit [compute] auf allen Kernen und liefert eine Funktion,
      * die die Ergebnisse der Reihe nach auf dem aufrufenden Thread übergibt.
@@ -1052,6 +1229,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 kotlinx.coroutines.yield()   // neue Live-Änderungen haben Vorrang
             }
             settleDirty = IntRect.EMPTY
+            dropGpu()
             _state.update { it.copy(previewBitmap = null) }; bumpRender()
         }
     }
@@ -1147,7 +1325,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val mx = vis.width / 6; val my = vis.height / 6
         val out = IntRect(maxOf(0, vis.left - mx) / l, maxOf(0, vis.top - my) / l, (minOf(doc.width, vis.right + mx) + l - 1) / l, (minOf(doc.height, vis.bottom + my) + l - 1) / l)
         val bmp = TiledBitmap(out.width, out.height)
-        Compositor.prepare(doc, l)
+        Compositor.prepare(doc, l, out)
         suspend fun renderPart(part: IntRect) {
             if (part.isEmpty) return
             val bandH = maxOf(1, 65_536 / maxOf(1, part.width))
@@ -1208,6 +1386,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         }
         val out = IntRect(a.left / l, a.top / l, minOf(d.bitmap.width + ox, (a.right + l - 1) / l), minOf(d.bitmap.height + oy, (a.bottom + l - 1) / l))
         if (out.isEmpty) return
+        Compositor.prepare(doc, l, out)
         val bandH = maxOf(1, 65_536 / maxOf(1, out.width))
         val count = (out.height + bandH - 1) / bandH
         de.photographics.core.image.Parallel.bands(count, out.width.toLong() * bandH * 40, compute = { i ->
@@ -1221,6 +1400,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun clearPreview() {
         dropLiveBelow()
+        if (gpuLiveState.value != null) { gpuDropPending = false; gpuLiveState.value = null }
         settleJob?.cancel(); settleJob = null
         settleDirty = IntRect.EMPTY
         if (_state.value.previewBitmap != null) _state.update { it.copy(previewBitmap = null) }
@@ -1254,8 +1434,8 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 val detail = when (c) {
                     is AdjustmentLayer -> c.adjustment.label
-                    is TextLayer -> "Text"
-                    is SmartLayer -> "Smartobjekt"
+                    is TextLayer -> tr("Text")
+                    is SmartLayer -> tr("Smartobjekt")
                     else -> null
                 }
                 val mThumb = c.mask?.let { m -> maskThumbs.getOrPut(c.id) { makeThumb(m.grid, doc, isMask = true) } }
@@ -1361,7 +1541,8 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     private val colorPrefs by lazy { getApplication<Application>().getSharedPreferences("colors", android.content.Context.MODE_PRIVATE) }
     private val paletteDir get() = java.io.File(getApplication<Application>().filesDir, "palettes")
-    private val userPaletteName get() = "Eigene Farbfelder"
+    // Fester Name (Schlüssel der Datei); angezeigt wird die Übersetzung
+    private val userPaletteName = "Eigene Farbfelder"
 
     private fun addRecentColor(c: Int) {
         val col = c or 0xFF000000.toInt()
@@ -1438,12 +1619,12 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val bytes = cr.openInputStream(uri)?.use { it.readBytes() } ?: return@onEngine
             var p = de.photographics.core.color.PaletteIO.read(bytes, fileName)
-            if (p.swatches.isEmpty()) { message("Keine Farbfelder in „$fileName“."); return@onEngine }
-            if (isBuiltinPalette(p.name)) p = p.copy(name = p.name + " (importiert)")
+            if (p.swatches.isEmpty()) { message(tr("Keine Farbfelder in „{0}“.", fileName)); return@onEngine }
+            if (isBuiltinPalette(p.name)) p = p.copy(name = p.name + tr(" (importiert)"))
             withContext(kotlinx.coroutines.Dispatchers.Main) { savePalette(p) }
-            message("${p.swatches.size} Farbfelder aus „$fileName“ übernommen.")
+            message(tr("{0} Farbfelder aus „{1}“ übernommen.", p.swatches.size, fileName))
         } catch (e: Exception) {
-            message("Farbfelder konnten nicht gelesen werden: ${e.message}")
+            message(tr("Farbfelder konnten nicht gelesen werden: {0}", e.message))
         }
     }
 
@@ -1457,7 +1638,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             else -> de.photographics.core.color.PaletteIO.writeGpl(p).toByteArray()
         }
         getApplication<Application>().contentResolver.openOutputStream(uri, "wt")?.use { it.write(bytes) }
-        message("Farbfelder „${p.name}“ exportiert (.$ext).")
+        message(tr("Farbfelder „{0}“ exportiert (.{1}).", p.name, ext))
     }
 
     // ---------------------------------------------------------------- Pinselvorgaben
@@ -1493,7 +1674,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun saveBrushPreset(name: String) {
         val n = name.trim().ifEmpty { return }
         storeUserPresets(userPresets().filter { it.name != n } + de.photographics.core.tools.BrushPreset(n, _state.value.brush, keepSize = false))
-        message("Pinselvorgabe „$n“ gespeichert.")
+        message(tr("Pinselvorgabe „{0}“ gespeichert.", n))
     }
 
     fun deleteBrushPreset(name: String) = storeUserPresets(userPresets().filter { it.name != name })
@@ -1505,7 +1686,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun brushPreview(settings: BrushSettings, w: Int, h: Int): Bitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
         val st = _state.value
         val doc = de.photographics.core.doc.Document(w, h)
-        val layer = PixelLayer("Vorschau", de.photographics.core.image.TileGrid(w, h))
+        val layer = PixelLayer(tr("Vorschau"), de.photographics.core.image.TileGrid(w, h))
         doc.root.add(layer); doc.activeLayer = layer
         val ed = Editor(doc)
         // Große Pinsel verkleinert zeigen, Streuung bleibt im Verhältnis
@@ -1539,7 +1720,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun onStylusDetected() {
         if (_state.value.stylusSeen) return
         _state.update { it.copy(stylusSeen = true, stylusOnly = true) }
-        message("Stift erkannt: Nur der Stift malt, Finger zoomen und verschieben. Umschalten über das Stift-Symbol oben.")
+        message(tr("Stift erkannt: Nur der Stift malt, Finger zoomen und verschieben. Umschalten über das Stift-Symbol oben."))
     }
 
     fun setStylusOnly(b: Boolean) = _state.update { it.copy(stylusOnly = b, stylusSeen = true) }
@@ -1557,6 +1738,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun setToneRange(r: ToneRange) = _state.update { it.copy(toneRange = r) }
     fun setToolStrength(v: Float) = _state.update { it.copy(toolStrength = v) }
     fun setSpongeSaturate(b: Boolean) = _state.update { it.copy(spongeSaturate = b) }
+    fun setLiquifyMode(m: de.photographics.core.tools.LiquifyMode) = _state.update { it.copy(liquifyMode = m) }
     fun startSettingCloneSource() = _state.update { it.copy(settingCloneSource = true) }
 
     fun setCloneSource(x: Float, y: Float) {
@@ -1571,7 +1753,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         Tool.CLONE, Tool.HEAL -> {
             val src = s.cloneSource
             if (src == null) {
-                message("Zuerst eine Quelle festlegen („Quelle setzen“, dann ins Bild tippen).")
+                message(tr("Zuerst eine Quelle festlegen („Quelle setzen“, dann ins Bild tippen)."))
                 null
             } else {
                 val off = cloneOffset ?: ((src.first - x).roundToInt() to (src.second - y).roundToInt()).also { cloneOffset = it }
@@ -1581,13 +1763,14 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         }
         Tool.SPOT_HEAL -> SpotHealTool(s.sampleAllLayers)
         Tool.SMUDGE -> SmudgeTool(0.3f + s.toolStrength * 0.6f)
+        Tool.LIQUIFY -> de.photographics.core.tools.LiquifyTool(s.liquifyMode, 0.15f + s.toolStrength * 0.85f)
         Tool.AI_REMOVE -> {
             val m = ai.firstReady(AiPurpose.INPAINT, s.aiInpaintModel)
             if (m == null) {
                 _state.update { it.copy(requestAiModels = AiPurpose.INPAINT) }
-                message("Für „KI-Entfernen“ zuerst ein KI-Modell laden.")
+                message(tr("Für „KI-Entfernen“ zuerst ein KI-Modell laden."))
                 null
-            } else SpotHealTool(s.sampleAllLayers, OnnxInpainter(ai, m), "KI-Entfernen")
+            } else SpotHealTool(s.sampleAllLayers, OnnxInpainter(ai, m), tr("KI-Entfernen"))
         }
         Tool.BLUR -> BlurTool(sigma = 1f + s.brush.size * 0.04f, strength = s.toolStrength * 2f)
         Tool.SHARPEN -> SharpenTool(strength = s.toolStrength * 2f)
@@ -1608,10 +1791,10 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             if (st == null) {
                 message(
                     when {
-                        layer == null -> "Keine Ebene ausgewählt."
-                        !layer.visible -> "Die Ebene ist ausgeblendet."
-                        s.paintTarget == PaintTarget.MASK && !tool.supportsMask -> "${tool.label} funktioniert nicht auf Masken."
-                        else -> "Auf dieser Ebene kann nicht gemalt werden (Gruppe?)."
+                        layer == null -> tr("Keine Ebene ausgewählt.")
+                        !layer.visible -> tr("Die Ebene ist ausgeblendet.")
+                        s.paintTarget == PaintTarget.MASK && !tool.supportsMask -> tr("{0} funktioniert nicht auf Masken.", tool.label)
+                        else -> tr("Auf dieser Ebene kann nicht gemalt werden (Gruppe?).")
                     },
                 )
                 return@withEditor
@@ -1697,9 +1880,16 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------------------------------------------------------- Verschieben
 
-    fun moveBegin() = withEditor { ed ->
+    fun setAutoSelectLayer(b: Boolean) = _state.update { it.copy(autoSelectLayer = b) }
+
+    /** [pickX]/[pickY]: Ebene unter diesem Punkt vorher aktiv machen (automatisch auswählen). */
+    fun moveBegin(pickX: Float? = null, pickY: Float? = null) = withEditor { ed ->
+        if (pickX != null && pickY != null) {
+            val hit = de.photographics.core.doc.LayerPick.at(ed.doc, pickX.toInt(), pickY.toInt())
+            if (hit != null && hit !== ed.doc.activeLayer) { ed.setActive(hit); refreshLayers() }
+        }
         val l = ed.doc.activeLayer
-        if (l !is RasterLayer) { message("Gruppen und Einstellungsebenen können nicht verschoben werden."); return@withEditor }
+        if (l !is RasterLayer) { message(tr("Gruppen und Einstellungsebenen können nicht verschoben werden.")); return@withEditor }
         moveLayer = l
         snapTargets = if (settings.value.snap) de.photographics.core.editor.Snap.targets(ed.doc, l) else null
         val m = l.mask
@@ -1754,18 +1944,72 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun finishSelection(points: FloatArray) = withEditor { ed ->
         val s = _state.value
         val d = ed.doc
-        var sel = when (s.selectionShape) {
-            SelectionShape.RECT -> Selection.rect(d.width, d.height, points[0], points[1], points[2], points[3])
+        val sel = when (s.selectionShape) {
             SelectionShape.ELLIPSE -> Selection.ellipse(d.width, d.height, points[0], points[1], points[2], points[3])
             SelectionShape.LASSO -> Selection.polygon(d.width, d.height, points)
+            else -> Selection.rect(d.width, d.height, points[0], points[1], points[2], points[3])
         }
-        if (s.featherRadius > 0f) sel = sel.feathered(s.featherRadius)
-        val existing = d.selection
-        ed.setSelection(if (existing != null) existing.combine(sel, s.selectionOp) else sel)
-        refreshLayers()
+        commitSelection(ed, sel, tr("Auswahl"))
     }
 
     fun setFeather(r: Float) = _state.update { it.copy(featherRadius = r) }
+    fun setWandTolerance(t: Int) = _state.update { it.copy(wandTolerance = t) }
+    fun setWandContiguous(b: Boolean) = _state.update { it.copy(wandContiguous = b) }
+
+    /** Neue Auswahl mit Weicher Kante und Verknüpfung (Neu/Hinzu/Weg) übernehmen. */
+    private fun commitSelection(ed: Editor, selection: Selection, label: String) {
+        val s = _state.value
+        val sel = if (s.featherRadius > 0f) selection.feathered(s.featherRadius) else selection
+        val existing = ed.doc.selection
+        ed.setSelection(if (existing != null) existing.combine(sel, s.selectionOp) else sel, label)
+        refreshLayers()
+    }
+
+    /** Zauberstab an ([x], [y]): aktive Ebene oder (Alle Ebenen) das sichtbare Bild. */
+    fun magicWand(x: Float, y: Float) = withEditor { ed ->
+        val s = _state.value
+        val d = ed.doc
+        val px = x.toInt(); val py = y.toInt()
+        if (px !in 0 until d.width || py !in 0 until d.height) return@withEditor
+        busy(true)
+        try {
+            val src = if (s.sampleAllLayers) d.newGrid().also { g -> Compositor.renderBands(d, d.bounds) { r, buf -> g.writeRect(r, buf) } }
+                else (d.activeLayer as? RasterLayer)?.raster ?: run { message(tr("Zauberstab braucht eine Pixelebene oder „Alle Ebenen“.")); return@withEditor }
+            commitSelection(ed, de.photographics.core.selection.MagicWand.select(src, px, py, s.wandTolerance, s.wandContiguous), tr("Zauberstab"))
+        } finally { busy(false) }
+    }
+
+    /** Objektauswahl im aufgezogenen Rechteck (GrabCut auf dem sichtbaren Bild). */
+    fun objectSelect(x0: Float, y0: Float, x1: Float, y1: Float) = withEditor { ed ->
+        val d = ed.doc
+        val r = IntRect(minOf(x0, x1).toInt(), minOf(y0, y1).toInt(), maxOf(x0, x1).toInt() + 1, maxOf(y0, y1).toInt() + 1)
+        busy(true)
+        try {
+            val sel = de.photographics.core.selection.ObjectSelect.select(d.width, d.height, r, { rr, st -> Compositor.renderArgbSampled(d, rr, st) })
+            if (sel.bounds.isEmpty) { message(tr("Kein Objekt im Rechteck gefunden.")); return@withEditor }
+            commitSelection(ed, sel, tr("Objektauswahl"))
+        } finally { busy(false) }
+    }
+
+    fun setGradientType(t: de.photographics.core.editor.GradientType) = _state.update { it.copy(gradientType = t) }
+    fun setGradientToTransparent(b: Boolean) = _state.update { it.copy(gradientToTransparent = b) }
+    fun setGradientOpacity(v: Float) = _state.update { it.copy(gradientOpacity = v) }
+
+    /** Verlauf von ([x0], [y0]) nach ([x1], [y1]) auf Pixel oder Maske der aktiven Ebene. */
+    fun applyGradient(x0: Float, y0: Float, x1: Float, y1: Float) = withEditor { ed ->
+        val s = _state.value
+        val l = ed.doc.activeLayer
+        val target = if (s.paintTarget == PaintTarget.MASK && l?.mask != null) PaintTarget.MASK else PaintTarget.PIXELS
+        val c1 = if (s.gradientToTransparent) s.color and 0x00FFFFFF else s.bgColor
+        busy(true)
+        try {
+            val r = ed.fillGradient(target, de.photographics.core.editor.Gradient(s.gradientType, x0, y0, x1, y1, s.color, c1), s.gradientOpacity)
+            if (r == null) { message(tr("Verlauf nur auf Pixelebenen oder Masken.")); return@withEditor }
+            if (target == PaintTarget.MASK) l?.let { maskThumbs.remove(it.id) }
+            renderNow(r)
+        } finally { busy(false) }
+        refreshLayers(ed.doc.activeLayer)
+    }
 
     /** Lasso-Auswahl unabhängig von der eingestellten Form (z. B. für das Ausbessern-Werkzeug). */
     fun finishLasso(points: FloatArray) = withEditor { ed ->
@@ -1835,7 +2079,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun setCropAspect(a: CropAspect?) {
         _state.update { st ->
             // „Original“: Verhältnis des Dokuments, in dessen Ausrichtung
-            val portrait = if (a != null && a.label == "Original") st.docHeight > st.docWidth else st.cropPortrait
+            val portrait = if (a != null && a.label == tr("Original")) st.docHeight > st.docWidth else st.cropPortrait
             st.copy(cropAspect = a, cropPortrait = portrait, cropTarget = null)
         }
         _state.update { it.copy(cropRect = fitCrop(it)) }
@@ -1913,7 +2157,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     fun addGuide(vertical: Boolean, pos: Double) = withEditor { ed ->
         if (pos < 0 || pos > (if (vertical) ed.doc.width else ed.doc.height)) return@withEditor
-        ed.setGuides("Neue Hilfslinie", ed.doc.guides + de.photographics.core.doc.Guide(vertical, pos))
+        ed.setGuides(tr("Neue Hilfslinie"), ed.doc.guides + de.photographics.core.doc.Guide(vertical, pos))
         refreshLayers()
     }
 
@@ -1923,11 +2167,11 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val inside = pos >= 0 && pos <= (if (g.vertical) ed.doc.width else ed.doc.height)
         val list = ed.doc.guides.toMutableList()
         if (inside) list[index] = g.copy(position = pos) else list.removeAt(index)
-        ed.setGuides(if (inside) "Hilfslinie verschieben" else "Hilfslinie löschen", list)
+        ed.setGuides(if (inside) tr("Hilfslinie verschieben") else tr("Hilfslinie löschen"), list)
         refreshLayers()
     }
 
-    fun clearGuides() = withEditor { ed -> ed.setGuides("Hilfslinien löschen", emptyList()); refreshLayers() }
+    fun clearGuides() = withEditor { ed -> ed.setGuides(tr("Hilfslinien löschen"), emptyList()); refreshLayers() }
 
     /** Hilfslinien-Layout: Spalten und Zeilen mit Rand (Photoshop: Neues Hilfslinienlayout). */
     fun guideLayout(columns: Int, rows: Int, margin: Double, gutter: Double) = withEditor { ed ->
@@ -1945,7 +2189,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         axis(true, columns, w); axis(false, rows, h)
-        ed.setGuides("Hilfslinienlayout", ed.doc.guides + list.filter { it.position in 0.0..(if (it.vertical) w else h) })
+        ed.setGuides(tr("Hilfslinienlayout"), ed.doc.guides + list.filter { it.position in 0.0..(if (it.vertical) w else h) })
         refreshLayers()
     }
 
@@ -1976,7 +2220,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             val upscaler = if (useAi) {
                 val m = ai.firstReady(AiPurpose.UPSCALE, _state.value.aiUpscaleModel)
                 if (m == null) { _state.update { it.copy(requestAiModels = AiPurpose.UPSCALE) }; return@withEditor }
-                _state.update { it.copy(progress = 0f, progressLabel = "KI-Hochskalierung (${m.title})") }
+                _state.update { it.copy(progress = 0f, progressLabel = tr("KI-Hochskalierung ({0})", m.title)) }
                 OnnxUpscaler(ai, m) { p -> _state.update { it.copy(progress = p) } }
             } else null
             ed.resizeImage(w, h, method, upscaler)
@@ -2002,7 +2246,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun duplicateLayer() = withEditor { it.duplicateLayer(); fullRefresh() }
     fun deleteLayer() = withEditor { it.deleteLayer(); fullRefresh() }
     fun mergeDown() = withEditor { ed ->
-        if (!ed.mergeDown()) message("Darunter liegt keine Pixelebene.") else fullRefresh()
+        if (!ed.mergeDown()) message(tr("Darunter liegt keine Pixelebene.")) else fullRefresh()
     }
 
     fun moveLayer(id: Int, up: Boolean) = withEditor { ed ->
@@ -2012,7 +2256,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleVisibility(id: Int) = withEditor { ed ->
         val l = layerById(ed, id) ?: return@withEditor
-        ed.setProps(l, if (l.visible) "Ebene ausblenden" else "Ebene einblenden") { visible = !visible }
+        ed.setProps(l, if (l.visible) tr("Ebene ausblenden") else tr("Ebene einblenden")) { visible = !visible }
         renderNow(null); refreshLayers()
     }
 
@@ -2022,18 +2266,18 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun renameLayer(id: Int, name: String) = withEditor { ed ->
-        layerById(ed, id)?.let { l -> ed.setProps(l, "Ebene umbenennen") { this.name = name } }
+        layerById(ed, id)?.let { l -> ed.setProps(l, tr("Ebene umbenennen")) { this.name = name } }
         refreshLayers()
     }
 
     fun setBlendMode(id: Int, mode: BlendMode) = withEditor { ed ->
-        layerById(ed, id)?.let { l -> ed.setProps(l, "Mischmodus") { blendMode = mode } }
+        layerById(ed, id)?.let { l -> ed.setProps(l, tr("Mischmodus")) { blendMode = mode } }
         renderNow(null); refreshLayers()
     }
 
     fun toggleClipping(id: Int) = withEditor { ed ->
         val l = layerById(ed, id) ?: return@withEditor
-        if (!ed.setClipping(l, !l.clipped)) message("Die unterste Ebene einer Gruppe kann keine Schnittmaske sein.")
+        if (!ed.setClipping(l, !l.clipped)) message(tr("Die unterste Ebene einer Gruppe kann keine Schnittmaske sein."))
         renderNow(null); refreshLayers()
     }
 
@@ -2046,7 +2290,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun toggleLockTransparency(id: Int) = withEditor { ed ->
-        layerById(ed, id)?.let { l -> ed.setProps(l, "Transparenz fixieren") { lockTransparency = !lockTransparency } }
+        layerById(ed, id)?.let { l -> ed.setProps(l, tr("Transparenz fixieren")) { lockTransparency = !lockTransparency } }
         refreshLayers()
     }
 
@@ -2065,7 +2309,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     fun endOpacityEdit() = withEditor { ed ->
         val l = propEditLayer ?: return@withEditor
-        propEditBefore?.let { ed.commitProps(l, it, "Deckkraft") }
+        propEditBefore?.let { ed.commitProps(l, it, tr("Deckkraft")) }
         propEditLayer = null; propEditBefore = null
         refreshLayers()
     }
@@ -2080,7 +2324,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun applyMask() = withEditor { it.applyMask(); fullRefresh() }
 
     fun toggleMaskEnabled(id: Int) = withEditor { ed ->
-        layerById(ed, id)?.let { l -> if (l.mask != null) ed.setProps(l, "Maske aktivieren/deaktivieren") { mask?.enabled = !(mask?.enabled ?: true) } }
+        layerById(ed, id)?.let { l -> if (l.mask != null) ed.setProps(l, tr("Maske aktivieren/deaktivieren")) { mask?.enabled = !(mask?.enabled ?: true) } }
         renderNow(null); refreshLayers()
     }
 
@@ -2088,7 +2332,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startFilter(label: String) = withEditor { ed ->
         if (ed.doc.activeLayer !is PixelLayer) {
-            message("Filter benötigen eine Pixelebene (Text/Smartobjekt ggf. rastern oder eine Einstellungsebene verwenden).")
+            message(tr("Filter benötigen eine Pixelebene (Text/Smartobjekt ggf. rastern oder eine Einstellungsebene verwenden)."))
             return@withEditor
         }
         filterTx = null
@@ -2133,14 +2377,14 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------------------------------------------------------- Retusche-Befehle
 
     fun contentAwareFill() = withEditor { ed ->
-        if (ed.doc.selection == null) { message("Zuerst einen Bereich auswählen."); return@withEditor }
+        if (ed.doc.selection == null) { message(tr("Zuerst einen Bereich auswählen.")); return@withEditor }
         busy(true)
-        try { ed.contentAwareFill()?.let { renderNow(it) } ?: message("Nur auf Pixelebenen möglich.") } finally { busy(false) }
+        try { ed.contentAwareFill()?.let { renderNow(it) } ?: message(tr("Nur auf Pixelebenen möglich.")) } finally { busy(false) }
         refreshLayers(ed.doc.activeLayer)
     }
 
     fun aiFillSelection() = withEditor { ed ->
-        if (ed.doc.selection == null) { message("Zuerst einen Bereich auswählen."); return@withEditor }
+        if (ed.doc.selection == null) { message(tr("Zuerst einen Bereich auswählen.")); return@withEditor }
         val m = ai.firstReady(AiPurpose.INPAINT, _state.value.aiInpaintModel)
             ?: run { _state.update { it.copy(requestAiModels = AiPurpose.INPAINT) }; return@withEditor }
         busy(true)
@@ -2149,7 +2393,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun patchSelection(dx: Float, dy: Float) = withEditor { ed ->
-        if (ed.doc.selection == null) { message("Ausbessern: zuerst den Fehler mit der Auswahl umranden."); return@withEditor }
+        if (ed.doc.selection == null) { message(tr("Ausbessern: zuerst den Fehler mit der Auswahl umranden.")); return@withEditor }
         busy(true)
         try { ed.patchSelection(dx.roundToInt(), dy.roundToInt())?.let { renderNow(it) } } finally { busy(false) }
         refreshLayers(ed.doc.activeLayer)
@@ -2158,7 +2402,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun redEye(x: Float, y: Float) = withEditor { ed ->
         val r = (_state.value.brush.size / 2).roundToInt().coerceAtLeast(4)
         val dirty = ed.redEye(x.roundToInt(), y.roundToInt(), r)
-        if (dirty == null) message("Keine roten Pupillen im Pinselkreis gefunden.") else { renderNow(dirty); refreshLayers(ed.doc.activeLayer) }
+        if (dirty == null) message(tr("Keine roten Pupillen im Pinselkreis gefunden.")) else { renderNow(dirty); refreshLayers(ed.doc.activeLayer) }
     }
 
     /** Aktive Ebene mit Pfeiltasten verschieben. */
@@ -2183,7 +2427,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun addAdjustmentLayer(type: AdjustmentType) = withEditor { ed ->
         val l = ed.addAdjustmentLayer(type.createDefault())
         adjustBefore = l.adjustment
-        _state.update { it.copy(adjustEdit = AdjustEdit(l.id, l.adjustment)) }
+        _state.update { it.copy(adjustEdit = AdjustEdit(l.id, l.adjustment, histogramFor(ed, l))) }
         renderNow(null); refreshLayers()
     }
 
@@ -2203,9 +2447,12 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val l = ed.doc.findLayer(id) as? AdjustmentLayer ?: return@withEditor
         ed.setActive(l)
         adjustBefore = l.adjustment
-        _state.update { it.copy(adjustEdit = AdjustEdit(l.id, l.adjustment)) }
+        _state.update { it.copy(adjustEdit = AdjustEdit(l.id, l.adjustment, histogramFor(ed, l))) }
         refreshLayers()
     }
+
+    private fun histogramFor(ed: Editor, l: AdjustmentLayer): IntArray? =
+        if (l.adjustment is de.photographics.core.adjust.CurvesAdj) de.photographics.core.adjust.Histogram.below(ed.doc, l) else null
 
     private var adjustJob: Job? = null
 
@@ -2251,22 +2498,22 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val adj = try {
             de.photographics.core.adjust.ColorLookupAdj.fromFile(bytes, name)
         } catch (e: IllegalArgumentException) {
-            message("LUT konnte nicht gelesen werden: ${e.message}"); return@onEngine
+            message(tr("LUT konnte nicht gelesen werden: {0}", e.message)); return@onEngine
         }
         lutDir.mkdirs()
         java.io.File(lutDir, name.replace(Regex("[/\\\\]"), "_")).writeBytes(bytes)
         _state.update { s -> s.copy(lutLibrary = (s.lutLibrary.filter { it.lutName != adj.lutName } + adj).sortedBy { it.lutName.lowercase() }) }
         withContext(kotlinx.coroutines.Dispatchers.Main) { previewAdjustment(adj) }
-        message("LUT „${adj.lutName}“ geladen (${adj.lut?.size}³)")
+        message(tr("LUT „{0}“ geladen ({1}³)", adj.lutName, adj.lut?.size))
     }
 
     /** Wirkung der sichtbaren Einstellungsebenen als .cube-Datei speichern. */
     fun exportLut(uri: Uri) = withEditor { ed ->
         val title = _state.value.fileName.substringBeforeLast('.')
         val lut = de.photographics.core.color.LutExport.fromAdjustments(ed.doc, 33, title)
-            ?: run { message("Keine sichtbaren Einstellungsebenen – nichts zu exportieren."); return@withEditor }
+            ?: run { message(tr("Keine sichtbaren Einstellungsebenen – nichts zu exportieren.")); return@withEditor }
         getApplication<Application>().contentResolver.openOutputStream(uri, "wt")?.use { it.write(lut.toCube()) }
-        message("Farbtabelle exportiert (33³, .cube).")
+        message(tr("Farbtabelle exportiert (33³, .cube)."))
     }
 
     // ---------------------------------------------------------------- Text
@@ -2289,7 +2536,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val layer = hit ?: run {
             // Startgröße passend zum Dokument (≈ 1/12 der kürzeren Seite), solange keine eigene gewählt wurde
             val base = if (textSizeChosen) lastTextStyle else lastTextStyle.copy(sizePx = (minOf(ed.doc.width, ed.doc.height) / 12f).coerceIn(24f, 600f))
-            val st = base.copy(color = _state.value.color, text = "Text")
+            val st = base.copy(color = _state.value.color, text = tr("Text"))
             ed.addTextLayer(st, x.toDouble(), y.toDouble())
         }
         ed.setActive(layer)
@@ -2346,13 +2593,13 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun beginTransform() = withEditor { ed ->
         var l = ed.doc.activeLayer
         if (l is PixelLayer) {
-            l = ed.convertToSmartObject(l) ?: run { message("Die Ebene ist leer."); return@withEditor }
-            message("Ebene in Smartobjekt umgewandelt – Transformieren ohne Qualitätsverlust.")
+            l = ed.convertToSmartObject(l) ?: run { message(tr("Die Ebene ist leer.")); return@withEditor }
+            message(tr("Ebene in Smartobjekt umgewandelt – Transformieren ohne Qualitätsverlust."))
         }
         val box = when (l) {
             is SmartLayer -> TransformBox(l.id, l.source.width.toDouble(), l.source.height.toDouble(), l.transform, l.warp)
             is TextLayer -> AndroidTextRasterizer.measure(l.style).let { (w, h) -> TransformBox(l.id, w.toDouble(), h.toDouble(), l.transform) }
-            else -> { message("Diese Ebene kann nicht transformiert werden."); _state.update { it.copy(tool = Tool.MOVE) }; return@withEditor }
+            else -> { message(tr("Diese Ebene kann nicht transformiert werden.")); _state.update { it.copy(tool = Tool.MOVE) }; return@withEditor }
         }
         transformBefore = box.affine
         transformBeforeGeom = ed.geometryOf(l)
@@ -2363,7 +2610,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun setTransformMode(m: TransformMode) = withEditor { ed ->
         val box = _state.value.transform
         if (box != null && m != TransformMode.FREE && ed.doc.findLayer(box.layerId) is TextLayer) {
-            message("Text lässt sich nur frei transformieren – für Verzerren zuerst in ein Smartobjekt umwandeln.")
+            message(tr("Text lässt sich nur frei transformieren – für Verzerren zuerst in ein Smartobjekt umwandeln."))
             return@withEditor
         }
         _state.update { it.copy(transformMode = m) }
@@ -2434,7 +2681,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     fun convertToSmart(id: Int) = withEditor { ed ->
         val l = ed.doc.findLayer(id) as? PixelLayer ?: return@withEditor
-        ed.convertToSmartObject(l) ?: message("Die Ebene ist leer.")
+        ed.convertToSmartObject(l) ?: message(tr("Die Ebene ist leer."))
         refreshLayers()
     }
 

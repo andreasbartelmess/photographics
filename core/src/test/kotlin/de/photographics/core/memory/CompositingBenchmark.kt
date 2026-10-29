@@ -60,6 +60,25 @@ class CompositingBenchmark {
             println("f) $label nur Kacheln lesen (1 Kern): ${ms(t)} ms")
         }
         region("4 MP bei 100 %", 1); region("4 MP aus Stufe 1", 2)
+        // g) Ebeneneffekte auf einer Textebene-ähnlichen Ebene (viele kleine Formen): Schatten 40 px + Kontur 8 px
+        run {
+            val fxLayer = PixelLayer("Formen", TileGrid(w, h).also { g ->
+                for (k in 0 until 400) { val x = (k * 977) % (w - 200); val y = (k * 613) % (h - 120); g.writeRect(IntRect(x, y, x + 120, y + 60), IntArray(120 * 60) { 0xFFE0E0E0.toInt() }) }
+            })
+            fxLayer.preservedBlocks = listOf(de.photographics.core.psd.PsdEffects.toBlock(LayerEffects(
+                dropShadows = listOf(LayerEffects.Shadow(0, 0.6f, BlendMode.MULTIPLY, 120.0, true, 20.0, 0.0, 40.0)),
+                strokes = listOf(LayerEffects.Stroke(0xFF0000, 1f, BlendMode.NORMAL, 8.0, LayerEffects.StrokePosition.OUTSIDE)),
+            )))
+            doc.root.add(fxLayer)
+            for (k in 1..3) {
+                if (k == 3) fxLayer.pixels.writeRect(IntRect(3000, 2000, 3100, 2050), IntArray(5000) { -1 })   // kleine Änderung
+                val t = System.nanoTime(); Compositor.prepare(doc, 1, doc.bounds)
+                val bh = 64; val n = (h + bh - 1) / bh
+                Parallel.bands(n, w.toLong() * bh * 40, compute = { i -> Compositor.renderArgb(doc, IntRect(0, i * bh, w, minOf(h, (i + 1) * bh))) }, consume = { _, _ -> })
+                println("g) Gesamtbild mit Ebeneneffekten (48 MP, Durchgang $k): ${ms(t)} ms")
+            }
+            doc.root.remove(fxLayer)
+        }
         (doc.root.children[1] as PixelLayer).pixels.writeRect(IntRect(100, 100, 200, 200), IntArray(10000) { -1 })
         display("nach kleiner Änderung")
                 // b) Vorschau 1,5 MP

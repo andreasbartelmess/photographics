@@ -1,5 +1,6 @@
 package de.photographics.core.psd
 
+import de.photographics.core.tr
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 
@@ -15,7 +16,7 @@ class BinaryReader(val buf: ByteBuffer, var pos: Int = 0, val limit: Int = buf.l
     val remaining get() = limit - pos
 
     private fun need(n: Long) {
-        if (n < 0 || pos + n > limit) throw PsdFormatException("Unerwartetes Dateiende bei Offset $pos (benötigt $n Bytes)")
+        if (n < 0 || pos + n > limit) throw PsdFormatException(tr("Unerwartetes Dateiende bei Offset {0} (benötigt {1} Bytes)", pos, n))
     }
 
     private fun b(i: Int) = buf.get(i).toInt()
@@ -57,7 +58,7 @@ class BinaryReader(val buf: ByteBuffer, var pos: Int = 0, val limit: Int = buf.l
     fun peekAscii(n: Int): String? = if (pos + n <= limit) String(ByteArray(n).also { copy(pos, it, 0, n) }, Charsets.ISO_8859_1) else null
 
     fun skip(n: Long) { need(n); pos += n.toInt() }
-    fun seek(p: Int) { if (p < 0 || p > limit) throw PsdFormatException("Ungültiger Offset $p"); pos = p }
+    fun seek(p: Int) { if (p < 0 || p > limit) throw PsdFormatException(tr("Ungültiger Offset {0}", p)); pos = p }
 
     /** Pascal-String, aufgefüllt auf ein Vielfaches von [pad] (inkl. Längenbyte). */
     fun pascal(pad: Int): String {
@@ -72,7 +73,7 @@ class BinaryReader(val buf: ByteBuffer, var pos: Int = 0, val limit: Int = buf.l
 
     fun unicode(): String {
         val n = i32()
-        if (n < 0 || n.toLong() * 2 > remaining) throw PsdFormatException("Ungültige Unicode-Länge $n")
+        if (n < 0 || n.toLong() * 2 > remaining) throw PsdFormatException(tr("Ungültige Unicode-Länge {0}", n))
         val sb = StringBuilder(n)
         repeat(n) { sb.append(u16().toChar()) }
         return sb.toString().trimEnd('\u0000')

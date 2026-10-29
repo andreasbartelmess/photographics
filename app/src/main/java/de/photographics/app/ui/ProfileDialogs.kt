@@ -1,5 +1,6 @@
 package de.photographics.app.ui
 
+import de.photographics.core.tr
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -51,17 +52,17 @@ fun ProfileDialog(
     var bpc by remember { mutableStateOf(defaultBpc) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (convert) "In Profil umwandeln" else "Profil zuweisen") },
+        title = { Text(if (convert) tr("In Profil umwandeln") else tr("Profil zuweisen")) },
         text = {
             Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState())) {
-                Text("Aktuell: $currentProfile", style = MaterialTheme.typography.bodyMedium)
+                Text(tr("Aktuell: {0}", currentProfile), style = MaterialTheme.typography.bodyMedium)
                 Text(
-                    if (convert) "Die Farben bleiben erhalten, die Pixelwerte werden in das Zielprofil umgerechnet."
-                    else "Die Pixelwerte bleiben unverändert – die Farben werden im neuen Profil anders dargestellt.",
+                    if (convert) tr("Die Farben bleiben erhalten, die Pixelwerte werden in das Zielprofil umgerechnet.")
+                    else tr("Die Pixelwerte bleiben unverändert – die Farben werden im neuen Profil anders dargestellt."),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
                 )
-                Text("Zielprofil", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                Text(tr("Zielprofil"), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                 for (b in IccProfiles.Builtin.entries) {
                     ChoiceRow(b.label, b.note, choice.builtin == b) { choice = ProfileChoice(b, null) }
                 }
@@ -70,20 +71,20 @@ fun ProfileDialog(
                 }
                 if (convert) {
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                    Text("Priorität", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    Text(tr("Priorität"), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                     for (i in RenderingIntent.entries) ChoiceRow(i.label, null, intent == i) { intent = i }
                     Row(
                         Modifier.fillMaxWidth().selectable(bpc, role = Role.Checkbox) { bpc = !bpc },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Checkbox(bpc, null)
-                        Text("Tiefenkompensierung verwenden", modifier = Modifier.padding(start = 8.dp))
+                        Text(tr("Tiefenkompensierung verwenden"), modifier = Modifier.padding(start = 8.dp))
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onConfirm(choice, intent, bpc) }) { Text(if (convert) "Umwandeln" else "Zuweisen") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
+        confirmButton = { TextButton(onClick = { onConfirm(choice, intent, bpc) }) { Text(if (convert) tr("Umwandeln") else tr("Zuweisen")) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Abbrechen")) } },
     )
 }
 

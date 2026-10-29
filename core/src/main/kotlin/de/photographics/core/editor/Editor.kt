@@ -1,5 +1,6 @@
 package de.photographics.core.editor
 
+import de.photographics.core.tr
 import de.photographics.core.adjust.Adjustment
 import de.photographics.core.doc.AdjustmentLayer
 import de.photographics.core.doc.Document
@@ -67,7 +68,7 @@ class Editor(doc: Document) {
 
     // ------------------------------------------------------------ Ebenen
 
-    private fun nextName() = "Ebene ${++layerCounter}"
+    private fun nextName() = tr("Ebene {0}", ++layerCounter)
 
     /** [retained]: Raster, die nur noch der Verlauf festhält (zählen zum Speicherbudget). */
     private fun structural(label: String, apply: () -> Unit, revert: () -> Unit) = structural(label, 0L, apply, revert)
@@ -102,7 +103,7 @@ class Editor(doc: Document) {
         return p to p.children.indexOf(a) + 1
     }
 
-    fun addLayer(name: String = nextName(), grid: TileGrid = doc.newGrid(), label: String = "Neue Ebene"): PixelLayer {
+    fun addLayer(name: String = nextName(), grid: TileGrid = doc.newGrid(), label: String = tr("Neue Ebene")): PixelLayer {
         val layer = PixelLayer(name, grid)
         // Innerhalb einer Schnittmaske angelegte Ebenen gehören wie in Photoshop dazu
         layer.clipped = doc.activeLayer?.clipped == true
@@ -112,9 +113,9 @@ class Editor(doc: Document) {
     }
 
     fun addGroup(): GroupLayer {
-        val g = GroupLayer("Gruppe ${++layerCounter}")
+        val g = GroupLayer(tr("Gruppe {0}", ++layerCounter))
         val (parent, index) = insertionPoint()
-        structural("Neue Gruppe", { parent.add(g, index); doc.activeLayer = g }, { parent.remove(g) })
+        structural(tr("Neue Gruppe"), { parent.add(g, index); doc.activeLayer = g }, { parent.remove(g) })
         return g
     }
 
@@ -123,8 +124,8 @@ class Editor(doc: Document) {
         val a = doc.activeLayer ?: return
         val p = doc.parentOf(a)
         val idx = p.children.indexOf(a)
-        val g = GroupLayer("Gruppe ${++layerCounter}")
-        structural("Ebene gruppieren", {
+        val g = GroupLayer(tr("Gruppe {0}", ++layerCounter))
+        structural(tr("Ebene gruppieren"), {
             p.add(g, idx); g.add(a); doc.activeLayer = g
         }, {
             p.remove(g); p.add(a, idx)
@@ -136,14 +137,14 @@ class Editor(doc: Document) {
         val copy = a.deepCopy()
         val p = doc.parentOf(a)
         val idx = p.children.indexOf(a) + 1
-        structural("Ebene duplizieren", { p.add(copy, idx); doc.activeLayer = copy }, { p.remove(copy) })
+        structural(tr("Ebene duplizieren"), { p.add(copy, idx); doc.activeLayer = copy }, { p.remove(copy) })
     }
 
     fun deleteLayer() {
         val a = doc.activeLayer ?: return
         val p = doc.parentOf(a)
         val idx = p.children.indexOf(a)
-        layerOperation("Ebene löschen", listOf(a), {
+        layerOperation(tr("Ebene löschen"), listOf(a), {
             p.remove(a)
             doc.activeLayer = p.children.getOrNull(idx - 1) ?: p.children.getOrNull(idx) ?: (if (p !== doc.root) p else doc.allLayers().lastOrNull())
         }, { p.add(a, idx) })
@@ -172,13 +173,13 @@ class Editor(doc: Document) {
             }
         }
         val (np, ni) = target ?: return
-        structural("Ebene verschieben", { np.add(layer, ni) }, { p.add(layer, idx) })
+        structural(tr("Ebene verschieben"), { np.add(layer, ni) }, { p.add(layer, idx) })
     }
 
     fun setActive(layer: Layer?) { doc.activeLayer = layer }
 
     /** Übernimmt interaktiv geänderte Eigenschaften (z. B. nach dem Loslassen eines Reglers) in den Verlauf. */
-    fun commitProps(layer: Layer, before: Layer.Props, label: String = "Ebeneneigenschaften") {
+    fun commitProps(layer: Layer, before: Layer.Props, label: String = tr("Ebeneneigenschaften")) {
         val after = layer.props()
         if (after == before) return
         push(LambdaEntry(label, { layer.applyProps(before) }, { layer.applyProps(after) }))
@@ -208,7 +209,7 @@ class Editor(doc: Document) {
             opacity = lower.opacity; fillOpacity = lower.fillOpacity; blendMode = lower.blendMode
             visible = lower.visible; clipped = lower.clipped; psdId = lower.psdId
         }
-        layerOperation("Auf eine Ebene reduzieren", listOf(upper, lower, merged), {
+        layerOperation(tr("Auf eine Ebene reduzieren"), listOf(upper, lower, merged), {
             p.remove(upper); p.remove(lower); p.add(merged, idx - 1); doc.activeLayer = merged
         }, {
             p.remove(merged); p.add(lower, idx - 1); p.add(upper, idx)
@@ -219,11 +220,11 @@ class Editor(doc: Document) {
     fun flatten() {
         history.makeRoom(doc.width.toLong() * doc.height * 12)
         // Auf Weiß reduzieren wie Photoshops "Auf Hintergrundebene reduzieren"
-        val flat = PixelLayer("Hintergrund", Compositor.renderGrid(doc) { px ->
+        val flat = PixelLayer(tr("Hintergrund"), Compositor.renderGrid(doc) { px ->
             for (i in px.indices) px[i] = Colors.srcOver(0xFFFFFFFF.toInt(), px[i])
         })
         val old = doc.root.children.toList()
-        layerOperation("Auf Hintergrundebene reduzieren", old + flat, {
+        layerOperation(tr("Auf Hintergrundebene reduzieren"), old + flat, {
             for (c in old) doc.root.remove(c)
             doc.root.add(flat); doc.activeLayer = flat
         }, {
@@ -240,13 +241,13 @@ class Editor(doc: Document) {
         val sel = doc.selection
         val grid = if (fromSelection && sel != null) sel.mask.copy() else TileGrid(doc.width, doc.height, 255)
         val mask = LayerMask(grid)
-        structural("Ebenenmaske hinzufügen", { a.mask = mask }, { a.mask = null })
+        structural(tr("Ebenenmaske hinzufügen"), { a.mask = mask }, { a.mask = null })
     }
 
     fun deleteMask() {
         val a = doc.activeLayer ?: return
         val m = a.mask ?: return
-        structural("Ebenenmaske löschen", m.grid.byteSize, { a.mask = null }, { a.mask = m })
+        structural(tr("Ebenenmaske löschen"), m.grid.byteSize, { a.mask = null }, { a.mask = m })
     }
 
     /** Maske auf die Pixel anwenden und entfernen. */
@@ -268,7 +269,7 @@ class Editor(doc: Document) {
             tT.unpin(); mT?.unpin()
         }
         newGrid.compact()
-        structural("Ebenenmaske anwenden", oldGrid.byteSize + m.grid.byteSize, { a.pixels = newGrid; a.mask = null }, { a.pixels = oldGrid; a.mask = m })
+        structural(tr("Ebenenmaske anwenden"), oldGrid.byteSize + m.grid.byteSize, { a.pixels = newGrid; a.mask = null }, { a.pixels = oldGrid; a.mask = m })
     }
 
     // ------------------------------------------------------------ Pinselstriche & Filter
@@ -315,13 +316,13 @@ class Editor(doc: Document) {
         val moveMask = mask != null && (mask.linked || maskOnly)
         val oldMask = mask?.grid; val newMask = if (moveMask) oldMask?.shifted(dx, dy) else null
         if (maskOnly) {
-            structural("Maske verschieben", oldMask!!.byteSize, { mask!!.grid = newMask!! }, { mask!!.grid = oldMask })
+            structural(tr("Maske verschieben"), oldMask!!.byteSize, { mask!!.grid = newMask!! }, { mask!!.grid = oldMask })
             return
         }
         when (layer) {
             is PixelLayer -> {
                 val oldPx = layer.pixels; val newPx = oldPx.shifted(dx, dy)
-                structural("Verschieben", oldPx.byteSize + (oldMask?.byteSize ?: 0L), {
+                structural(tr("Verschieben"), oldPx.byteSize + (oldMask?.byteSize ?: 0L), {
                     layer.pixels = newPx; if (newMask != null) layer.mask?.grid = newMask
                 }, {
                     layer.pixels = oldPx; if (oldMask != null) layer.mask?.grid = oldMask
@@ -331,7 +332,7 @@ class Editor(doc: Document) {
                 val old = geometryOf(layer)
                 val shift = Affine.translate(dx.toDouble(), dy.toDouble())
                 val new = Geometry(old.transform.then(shift), old.warp?.let { SmartLayer.mapQuad(it, shift) })
-                structural("Verschieben", {
+                structural(tr("Verschieben"), {
                     setGeometry(layer, new); if (newMask != null) layer.mask?.grid = newMask
                 }, {
                     setGeometry(layer, old); if (oldMask != null) layer.mask?.grid = oldMask
@@ -362,7 +363,7 @@ class Editor(doc: Document) {
         val same = before.transform == after.transform && (before.warp?.contentEquals(after.warp ?: DoubleArray(0)) ?: (after.warp == null))
         if (same) { setGeometry(layer, before); return }
         if (mask == null) {
-            structural("Verzerren", { setGeometry(layer, after) }, { setGeometry(layer, before) })
+            structural(tr("Verzerren"), { setGeometry(layer, after) }, { setGeometry(layer, before) })
             return
         }
         val sw = layer.source.width.toDouble(); val sh = layer.source.height.toDouble()
@@ -370,7 +371,7 @@ class Editor(doc: Document) {
         val oldMask = mask.grid
         val m = hom(before).inverse().then(hom(after))
         val newMask = transformMaskWith(oldMask, doc.width, doc.height) { argb -> de.photographics.core.image.Resample.renderProjective(argb, m, doc.width, doc.height) }
-        structural("Verzerren", oldMask.byteSize, { setGeometry(layer, after); mask.grid = newMask }, { setGeometry(layer, before); mask.grid = oldMask })
+        structural(tr("Verzerren"), oldMask.byteSize, { setGeometry(layer, after); mask.grid = newMask }, { setGeometry(layer, before); mask.grid = oldMask })
     }
 
     /**
@@ -385,7 +386,7 @@ class Editor(doc: Document) {
         for (l in doc.allLayers().filterIsInstance<TextLayer>()) rasterize(l)
         val m = de.photographics.core.image.Homography.quadToRect(quad, outW.toDouble(), outH.toDouble())
         history.makeRoom(outW.toLong() * outH * 8)
-        documentChange("Perspektivisch freistellen") {
+        documentChange(tr("Perspektivisch freistellen")) {
             for (l in doc.allLayers()) {
                 when (l) {
                     is PixelLayer -> l.pixels = de.photographics.core.image.Resample.renderProjective(l.pixels, m, outW, outH)
@@ -427,7 +428,7 @@ class Editor(doc: Document) {
             Affine.translate(b.left.toDouble(), b.top.toDouble()), doc.width, doc.height)
         copyLayerProps(layer, smart)
         smart.setCachedRaster(layer.pixels)
-        replaceLayer(layer, smart, "In Smartobjekt konvertieren")
+        replaceLayer(layer, smart, tr("In Smartobjekt konvertieren"))
         return smart
     }
 
@@ -440,11 +441,13 @@ class Editor(doc: Document) {
         }
         val pl = PixelLayer(layer.name, px)
         copyLayerProps(layer, pl)
-        replaceLayer(layer, pl, "Ebene rastern")
+        replaceLayer(layer, pl, tr("Ebene rastern"))
     }
 
     private fun copyLayerProps(from: Layer, to: Layer) {
         to.applyProps(from.props()); to.mask = from.mask; to.psdId = from.psdId
+        // Ebenenstil bleibt beim Rastern und Umwandeln erhalten (wie in Photoshop)
+        to.preservedBlocks = from.preservedBlocks.filter { it.key in EFFECT_BLOCKS }
     }
 
     private fun replaceLayer(old: Layer, new: Layer, label: String) {
@@ -468,13 +471,13 @@ class Editor(doc: Document) {
         if (before == after) { setTransform(layer, before); (layer as? SmartLayer)?.fastPreview = false; return }
         val mask = layer.mask?.takeIf { it.linked }
         if (mask == null) {
-            structural("Frei transformieren", { setTransform(layer, after) }, { setTransform(layer, before) })
+            structural(tr("Frei transformieren"), { setTransform(layer, after) }, { setTransform(layer, before) })
             return
         }
         // Verbundene Maske mittransformieren (Abbildung vom alten in den neuen Zustand)
         val oldMask = mask.grid
         val newMask = transformMask(oldMask, before.inverse().then(after))
-        structural("Frei transformieren", oldMask.byteSize, { setTransform(layer, after); mask.grid = newMask }, { setTransform(layer, before); mask.grid = oldMask })
+        structural(tr("Frei transformieren"), oldMask.byteSize, { setTransform(layer, after); mask.grid = newMask }, { setTransform(layer, before); mask.grid = oldMask })
     }
 
     /** Maske (Grauwerte) affin abbilden: über ein graues ARGB-Raster, außerhalb gilt der Standardwert. */
@@ -511,7 +514,7 @@ class Editor(doc: Document) {
     /** Maske mit der Ebene verbinden bzw. lösen (Kettensymbol). */
     fun toggleMaskLink(layer: Layer) {
         val m = layer.mask ?: return
-        setProps(layer, if (m.linked) "Maske lösen" else "Maske verbinden") { mask?.linked = !(mask?.linked ?: true) }
+        setProps(layer, if (m.linked) tr("Maske lösen") else tr("Maske verbinden")) { mask?.linked = !(mask?.linked ?: true) }
     }
 
     /**
@@ -524,12 +527,12 @@ class Editor(doc: Document) {
         val idx = parent.children.indexOf(layer)
         if (clip) {
             if (idx <= 0 || layer.clipped) return false
-            setProps(layer, "Schnittmaske erstellen") { clipped = true }
+            setProps(layer, tr("Schnittmaske erstellen")) { clipped = true }
             return true
         }
         if (!layer.clipped) return false
         val affected = parent.children.drop(idx).takeWhile { it.clipped }
-        structural("Schnittmaske zurückwandeln", { affected.forEach { it.clipped = false } }, { affected.forEach { it.clipped = true } })
+        structural(tr("Schnittmaske zurückwandeln"), { affected.forEach { it.clipped = false } }, { affected.forEach { it.clipped = true } })
         return true
     }
 
@@ -541,7 +544,7 @@ class Editor(doc: Document) {
         l.mask = LayerMask(doc.selection?.mask?.copy() ?: TileGrid(doc.width, doc.height, 255))
         l.clipped = doc.activeLayer?.clipped == true
         val (parent, index) = insertionPoint()
-        structural("Neue Einstellungsebene", { parent.add(l, index); doc.activeLayer = l }, { parent.remove(l) })
+        structural(tr("Neue Einstellungsebene"), { parent.add(l, index); doc.activeLayer = l }, { parent.remove(l) })
         return l
     }
 
@@ -551,24 +554,24 @@ class Editor(doc: Document) {
     fun commitAdjustment(layer: AdjustmentLayer, before: Adjustment) {
         val after = layer.adjustment
         if (before == after) return
-        push(LambdaEntry("${after.label} ändern", { layer.adjustment = before }, { layer.adjustment = after }))
+        push(LambdaEntry(tr("{0} ändern", after.label), { layer.adjustment = before }, { layer.adjustment = after }))
     }
 
     fun addTextLayer(style: TextStyle, x: Double, y: Double): TextLayer {
-        val l = TextLayer(style.text.lineSequence().first().take(30).ifBlank { "Text" }, style,
+        val l = TextLayer(style.text.lineSequence().first().take(30).ifBlank { tr("Text") }, style,
             Affine.translate(x, y), doc.width, doc.height)
         val (parent, index) = insertionPoint()
-        structural("Text erstellen", { parent.add(l, index); doc.activeLayer = l }, { parent.remove(l) })
+        structural(tr("Text erstellen"), { parent.add(l, index); doc.activeLayer = l }, { parent.remove(l) })
         return l
     }
 
     fun updateText(layer: TextLayer, style: TextStyle) {
         val before = layer.style; val beforeName = layer.name; val beforeOrig = layer.unchangedFromPsd
         if (before == style) return
-        val newName = style.text.lineSequence().first().take(30).ifBlank { "Text" }
+        val newName = style.text.lineSequence().first().take(30).ifBlank { tr("Text") }
         val apply = { layer.style = style; layer.name = newName }
         apply()
-        push(LambdaEntry("Text bearbeiten", {
+        push(LambdaEntry(tr("Text bearbeiten"), {
             layer.style = before; layer.name = beforeName; layer.unchangedFromPsd = beforeOrig
         }, { apply() }))
     }
@@ -591,7 +594,7 @@ class Editor(doc: Document) {
     fun crop(rect: IntRect, deleteCropped: Boolean = true) {
         val r = if (deleteCropped) rect.intersect(doc.bounds) else rect
         if (r.isEmpty || r == doc.bounds) return
-        documentChange("Freistellen") { doc.resizeCanvas(r.width, r.height, -r.left, -r.top, keepOutside = !deleteCropped) }
+        documentChange(tr("Freistellen")) { doc.resizeCanvas(r.width, r.height, -r.left, -r.top, keepOutside = !deleteCropped) }
     }
 
     /**
@@ -605,7 +608,7 @@ class Editor(doc: Document) {
             return
         }
         val m = Affine.translate(-cx, -cy).then(Affine.rotate(-angleDeg)).then(Affine.translate(w / 2.0, h / 2.0))
-        transformDocument("Freistellen (gedreht)", m, w, h)
+        transformDocument(tr("Freistellen (gedreht)"), m, w, h)
     }
 
     /**
@@ -622,7 +625,7 @@ class Editor(doc: Document) {
         val m = Affine.translate(-doc.width / 2.0, -doc.height / 2.0).then(Affine.rotate(angleDeg)).then(Affine.translate(nw / 2.0, nh / 2.0))
         val bottom = doc.root.children.firstOrNull() as? PixelLayer
         val fillBottom = fill != null && bottom != null && isOpaque(bottom.pixels)
-        transformDocument("Bild drehen", m, nw, nh) {
+        transformDocument(tr("Bild drehen"), m, nw, nh) {
             if (fillBottom) {
                 val g = bottom!!.pixels
                 val band = maxOf(1, (1 shl 18) / nw)
@@ -674,14 +677,14 @@ class Editor(doc: Document) {
         val w = doc.width.toDouble(); val h = doc.height.toDouble()
         // Abbildung alter Koordinaten auf die gedrehte Fläche (für Text/Smartobjekte)
         val m = if (clockwise) Affine(0.0, 1.0, -1.0, 0.0, h, 0.0) else Affine(0.0, -1.0, 1.0, 0.0, 0.0, w)
-        transformAll(if (clockwise) "90° im UZS drehen" else "90° gegen UZS drehen", swap = true, m) {
+        transformAll(if (clockwise) tr("90° im UZS drehen") else tr("90° gegen UZS drehen"), swap = true, m) {
             Transforms.rotate90(it, clockwise)
         }
     }
 
     fun flip(horizontal: Boolean) {
         val m = if (horizontal) Affine(-1.0, 0.0, 0.0, 1.0, doc.width.toDouble(), 0.0) else Affine(1.0, 0.0, 0.0, -1.0, 0.0, doc.height.toDouble())
-        transformAll(if (horizontal) "Horizontal spiegeln" else "Vertikal spiegeln", swap = false, m) {
+        transformAll(if (horizontal) tr("Horizontal spiegeln") else tr("Vertikal spiegeln"), swap = false, m) {
             if (horizontal) Transforms.flipHorizontal(it) else Transforms.flipVertical(it)
         }
     }
@@ -694,7 +697,7 @@ class Editor(doc: Document) {
         if (newW <= 0 || newH <= 0 || (newW == doc.width && newH == doc.height)) return
         val w = doc.width; val h = doc.height
         val scale = Affine.scale(newW.toDouble() / w, newH.toDouble() / h)
-        documentChange("Bildgröße", (documentBytes() * newW.toDouble() * newH / (w.toDouble() * h)).toLong()) {
+        documentChange(tr("Bildgröße"), (documentBytes() * newW.toDouble() * newH / (w.toDouble() * h)).toLong()) {
             for (l in doc.allLayers()) {
                 when (l) {
                     // KI nur für Ebenen innerhalb der Arbeitsfläche; herausragende Ebenen klassisch (verlustfrei mitskaliert)
@@ -720,7 +723,7 @@ class Editor(doc: Document) {
         if (newW <= 0 || newH <= 0 || (newW == doc.width && newH == doc.height)) return
         val oldW = doc.width; val oldH = doc.height
         val dx = ((newW - doc.width) * anchorX).toInt(); val dy = ((newH - doc.height) * anchorY).toInt()
-        documentChange("Arbeitsfläche") {
+        documentChange(tr("Arbeitsfläche")) {
             doc.resizeCanvas(newW, newH, dx, dy)
             val bottom = doc.root.children.firstOrNull() as? PixelLayer
             if (extensionColor != null && bottom != null) {
@@ -792,7 +795,7 @@ class Editor(doc: Document) {
         val before = doc.colorProfile
         if (before.bytes.contentEquals(p.bytes)) return
         doc.colorProfile = p
-        push(LambdaEntry("Profil zuweisen", { it.colorProfile = before }, { it.colorProfile = p }))
+        push(LambdaEntry(tr("Profil zuweisen"), { it.colorProfile = before }, { it.colorProfile = p }))
     }
 
     /**
@@ -829,28 +832,28 @@ class Editor(doc: Document) {
                         mapPx(px)
                         r to px
                     }, consume = { _, (r, px) -> l.pixels.writeRect(r, px) })
-                    tx.commit("In Profil umwandeln")?.let { entries += it }
+                    tx.commit(tr("In Profil umwandeln"))?.let { entries += it }
                 }
                 is TextLayer -> {
                     val old = l.style
                     val c = intArrayOf(old.color); mapPx(c)
                     val new = old.copy(color = c[0])
                     l.style = new
-                    entries += LambdaEntry("Textfarbe", { l.style = old }, { l.style = new })
+                    entries += LambdaEntry(tr("Textfarbe"), { l.style = old }, { l.style = new })
                 }
                 is SmartLayer -> smart++
                 else -> {}
             }
         }
         doc.colorProfile = p
-        entries += LambdaEntry("Profil", { it.colorProfile = before }, { it.colorProfile = p })
-        push(de.photographics.core.history.CompoundEntry("In Profil umwandeln", entries))
+        entries += LambdaEntry(tr("Profil"), { it.colorProfile = before }, { it.colorProfile = p })
+        push(de.photographics.core.history.CompoundEntry(tr("In Profil umwandeln"), entries))
         return smart
     }
 
     // ------------------------------------------------------------ Auswahl
 
-    fun setSelection(sel: Selection?, label: String = "Auswahl") {
+    fun setSelection(sel: Selection?, label: String = tr("Auswahl")) {
         val before = doc.selection
         val after = sel?.takeIf { !it.isEmpty }
         if (before == null && after == null) return
@@ -858,15 +861,37 @@ class Editor(doc: Document) {
         push(LambdaEntry(label, { it.selection = before }, { it.selection = after }))
     }
 
-    fun selectAll() = setSelection(Selection.all(doc.width, doc.height), "Alles auswählen")
-    fun deselect() = setSelection(null, "Auswahl aufheben")
-    fun invertSelection() { doc.selection?.let { setSelection(it.inverted(), "Auswahl umkehren") } }
-    fun featherSelection(radius: Float) { doc.selection?.let { setSelection(it.feathered(radius), "Weiche Auswahlkante") } }
+    fun selectAll() = setSelection(Selection.all(doc.width, doc.height), tr("Alles auswählen"))
+    fun deselect() = setSelection(null, tr("Auswahl aufheben"))
+    fun invertSelection() { doc.selection?.let { setSelection(it.inverted(), tr("Auswahl umkehren")) } }
+    fun featherSelection(radius: Float) { doc.selection?.let { setSelection(it.feathered(radius), tr("Weiche Auswahlkante")) } }
 
     /** Ausgewählte Pixel der aktiven Ebene löschen. */
-    fun clearSelection(): IntRect? = editSelected("Löschen") { orig, s -> Colors.withAlpha(orig, (orig ushr 24) * (255 - s) / 255) }
+    fun clearSelection(): IntRect? = editSelected(tr("Löschen")) { orig, s -> Colors.withAlpha(orig, (orig ushr 24) * (255 - s) / 255) }
 
-    fun fillSelection(color: Int): IntRect? = editSelected("Fläche füllen") { orig, s ->
+    /**
+     * Verlauf auf die aktive Ebene (Pixel) oder ihre Maske, innerhalb der Auswahl, als ein Schritt
+     * im Verlauf. Liefert den geänderten Bereich oder null (keine passende Ebene).
+     */
+    fun fillGradient(target: de.photographics.core.tools.PaintTarget, g: Gradient, opacity: Float): IntRect? {
+        val layer = doc.activeLayer ?: return null
+        val grid = when (target) {
+            de.photographics.core.tools.PaintTarget.PIXELS -> (layer as? PixelLayer)?.pixels
+            de.photographics.core.tools.PaintTarget.MASK -> layer.mask?.grid
+        } ?: return null
+        val sel = doc.selection
+        val area = (sel?.bounds ?: doc.bounds).intersect(doc.bounds)
+        if (area.isEmpty) return null
+        history.makeRoom(area.width.toLong() * area.height * 8)
+        val tx = TileTransaction(grid)
+        tx.touch(area)
+        g.apply(grid, area, opacity, sel?.mask, scalar = target == de.photographics.core.tools.PaintTarget.MASK,
+            lockAlpha = target == de.photographics.core.tools.PaintTarget.PIXELS && layer.lockTransparency)
+        tx.commit(tr("Verlauf"))?.let { push(it) }
+        return area
+    }
+
+    fun fillSelection(color: Int): IntRect? = editSelected(tr("Fläche füllen")) { orig, s ->
         Colors.srcOver(orig, Colors.withAlpha(color, Colors.a(color) * s / 255))
     }
 
@@ -902,7 +927,7 @@ class Editor(doc: Document) {
         val newLayer = PixelLayer(nextName(), grid)
         val p = doc.parentOf(layer)
         val idx = p.children.indexOf(layer) + 1
-        structural("Ebene durch Kopie", { p.add(newLayer, idx); doc.activeLayer = newLayer }, { p.remove(newLayer) })
+        structural(tr("Ebene durch Kopie"), { p.add(newLayer, idx); doc.activeLayer = newLayer }, { p.remove(newLayer) })
     }
 
     // ------------------------------------------------------------ Retusche-Befehle
@@ -924,7 +949,7 @@ class Editor(doc: Document) {
             val c = filled[(y - r.top) * r.width + (x - r.left)]
             layer.pixels[x, y] = Colors.lerp(layer.pixels[x, y], c, s / 255f)
         }
-        tx.commit("Inhaltsbasiert füllen")?.let { push(it) }
+        tx.commit(tr("Inhaltsbasiert füllen"))?.let { push(it) }
         return b
     }
 
@@ -952,7 +977,7 @@ class Editor(doc: Document) {
             val i = (y - b.top) * b.width + (x - b.left)
             layer.pixels[x, y] = Colors.lerp(target[i], healed[i], s / 255f)
         }
-        tx.commit("Ausbessern")?.let { push(it) }
+        tx.commit(tr("Ausbessern"))?.let { push(it) }
         return b
     }
 
@@ -978,7 +1003,7 @@ class Editor(doc: Document) {
             changed = true
         }
         if (!changed) { tx.rollback(); return null }
-        tx.commit("Rote Augen entfernen")?.let { push(it) }
+        tx.commit(tr("Rote Augen entfernen"))?.let { push(it) }
         return r
     }
 
@@ -1000,7 +1025,7 @@ class Editor(doc: Document) {
             y += n
         }
         grid.compact()
-        addLayer(name, grid, "Platzieren")
+        addLayer(name, grid, tr("Platzieren"))
     }
 
     fun placeImage(name: String, w: Int, h: Int, px: IntArray) {
@@ -1008,7 +1033,7 @@ class Editor(doc: Document) {
         val dx = (doc.width - w) / 2; val dy = (doc.height - h) / 2
         grid.writeRect(IntRect(dx, dy, dx + w, dy + h), px)
         grid.compact()
-        addLayer(name, grid, "Platzieren")
+        addLayer(name, grid, tr("Platzieren"))
     }
 }
 
@@ -1016,3 +1041,6 @@ class Editor(doc: Document) {
 fun interface Upscaler {
     fun upscale(src: TileGrid, targetW: Int, targetH: Int): TileGrid
 }
+
+/** PSD-Blöcke mit Ebeneneffekten. */
+private val EFFECT_BLOCKS = setOf("lfx2", "lmfx", "lrFX")

@@ -1,5 +1,6 @@
 package de.photographics.core.tools
 
+import de.photographics.core.tr
 import de.photographics.core.retouch.Inpainter
 import de.photographics.core.retouch.PatchMatchInpainter
 import de.photographics.core.retouch.Poisson
@@ -16,7 +17,7 @@ import kotlin.math.roundToInt
  * aus der Umgebung des Ziels.
  */
 class HealTool(private val dx: Int, private val dy: Int, private val sampleAll: Boolean) : PaintTool() {
-    override val label = "Reparatur-Pinsel"
+    override val label = tr("Reparatur-Pinsel")
     private lateinit var source: SourceSampler
 
     override fun begin(ctx: StrokeContext) { source = SourceSampler(ctx, sampleAll) }
@@ -58,7 +59,7 @@ class HealTool(private val dx: Int, private val dy: Int, private val sampleAll: 
 class SpotHealTool(
     private val sampleAll: Boolean,
     private val inpainter: Inpainter = PatchMatchInpainter(),
-    override val label: String = "Bereichsreparatur",
+    override val label: String = tr("Bereichsreparatur"),
 ) : PaintTool() {
     private lateinit var source: SourceSampler
 
@@ -90,7 +91,7 @@ class SpotHealTool(
  * (arbeitet auf dem aktuellen Zustand, nicht auf dem Original).
  */
 class SmudgeTool(private val strength: Float = 0.6f) : PaintTool() {
-    override val label = "Wischfinger"
+    override val label = tr("Wischfinger")
     override val customDab = true
     private var carry: IntArray? = null
     private var carrySize = 0
@@ -126,8 +127,8 @@ class SmudgeTool(private val strength: Float = 0.6f) : PaintTool() {
 
 /** Gemeinsame Hilfen für Füll- und Reparaturverfahren. */
 object Retouch {
-    /** Größter Ausschnitt, der in voller Auflösung bearbeitet wird; größere werden verkleinert. */
-    private const val MAX_AREA = 360_000
+    /** Größter Ausschnitt (Lücke plus Umgebung) in Pixeln. */
+    private const val MAX_REGION = 3_000_000L
 
     /**
      * Füllt die Lücke [isHole] innerhalb von [holeRect] aus der Umgebung.
@@ -138,8 +139,10 @@ object Retouch {
         bounds: IntRect, holeRect: IntRect, isHole: (Int, Int) -> Boolean,
         read: (IntRect, IntArray) -> Unit, inpainter: Inpainter,
     ): Triple<IntRect, IntArray, FloatArray>? {
-        // Umgebung: halbe Lückengröße (mind. 48, höchstens 300 px) – genug Quellmaterial, aber kompakt
-        val margin = (max(holeRect.width, holeRect.height) / 2).coerceIn(48, 300)
+        // Umgebung: drei Viertel der Lückengröße (mind. 64, höchstens 480 px) – genug Quellmaterial, aber kompakt
+        var margin = (max(holeRect.width, holeRect.height) * 3 / 4).coerceIn(64, 480)
+        // Sehr große Lücken: Umgebung begrenzen, sonst sprengen die Arbeitsfelder den Speicher
+        while (margin > 64 && holeRect.inset(-margin).intersect(bounds).let { it.width.toLong() * it.height } > MAX_REGION) margin = margin * 3 / 4
         val r = holeRect.inset(-margin).intersect(bounds)
         val w = r.width; val h = r.height; val n = w * h
         if (n == 0) return null
@@ -149,15 +152,17 @@ object Retouch {
             if (isHole(x, y)) hole[(y - r.top) * w + (x - r.left)] = true
         }
         val grown = dilate(hole, w, h, 2)
-        val filled = if (n <= MAX_AREA) inpainter.inpaint(base, w, h, grown) else {
+        val maxArea = inpainter.maxPixels
+        val filled = if (n <= maxArea) inpainter.inpaint(base, w, h, grown) else {
             // Großer Bereich: verkleinert füllen und die Lücke hochskaliert einsetzen
-            val f = kotlin.math.sqrt(MAX_AREA.toDouble() / n)
+            val f = kotlin.math.sqrt(maxArea.toDouble() / n)
             val sw = max(8, (w * f).toInt()); val sh = max(8, (h * f).toInt())
             val small = de.photographics.core.image.Resample.resizeArgb(base, w, h, sw, sh, de.photographics.core.image.ResampleMethod.BILINEAR)
             val smallHole = BooleanArray(sw * sh) { i -> grown[min(h - 1, (i / sw * h) / sh) * w + min(w - 1, (i % sw * w) / sw)] }
             val sf = inpainter.inpaint(small, sw, sh, smallHole)
             val up = de.photographics.core.image.Resample.resizeArgb(sf, sw, sh, w, h, de.photographics.core.image.ResampleMethod.BICUBIC)
-            IntArray(n) { if (grown[it]) up[it] else base[it] }
+            for (i in 0 until n) if (grown[i]) base[i] = up[i]
+            base
         }
         val soft = FloatArray(n) { if (grown[it]) 1f else 0f }
         de.photographics.core.image.Blur.gaussPlane(soft, w, h, 1.2f)

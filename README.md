@@ -7,21 +7,21 @@ Layers, masks and retouching with the pen. Opens and saves PSD, TIFF and GIMP fi
 
 <p align="center"><a href="https://photographics.andreasbartelmess.de/en/">Website</a> · <a href="README.de.md">Deutsch</a> · <a href="../../releases">Download</a> · <a href="CONTRIBUTING.md">Contributing</a></p>
 
-> **This is an early preview (version 0.2).** Most of it works, some things are missing or still change.
+> **This is an early preview (version 0.3).** Most of it works, some things are missing or still change.
 > Please keep a backup of important files. Feedback, bug reports and people who want to help build it
 > are very welcome: open an [issue](../../issues/new/choose) or write to info@andreasbartelmess.de.
 
 ![photographics on a tablet: a landscape photo with curves, hue/saturation and a film look as adjustment layers](docs/screenshots/editor-ebenen.png)
 
 Retouch on a tablet with a pen, then continue on the desktop with the same file. The user interface is
-currently **German only**; translations are one of the easiest ways to help.
+available in **English and German**; more translations are one of the easiest ways to help.
 
 ## Features
 
 - **PSD/PSB** read and write: layers, groups, all 27 blend modes (incl. pass through), pixel masks,
   clipping masks, adjustment layers (editable, in Photoshop's own format), text layers, smart objects,
-  8/16/32-bit and RGB/Grayscale/CMYK/Lab/Duotone/Indexed/Bitmap files. Unknown data such as layer
-  effects is written back unchanged.
+  8/16/32-bit and RGB/Grayscale/CMYK/Lab/Duotone/Indexed/Bitmap files. Layer effects (drop and inner
+  shadow, outer and inner glow, stroke, colour overlay) are rendered; unknown data is written back unchanged.
 - **TIFF** read and write, **including Photoshop layers** (in both Macintosh and IBM PC byte order):
   LZW/ZIP/PackBits, strips and tiles, 1–32 bit, RGB/grey/palette/CMYK/Lab, transparency, ICC profiles.
   Saved TIFFs open in Photoshop with all layers.
@@ -29,8 +29,12 @@ currently **German only**; translations are one of the easiest ways to help.
   ICC profile; 8/16/32-bit integer and half/float/double, linear or perceptual (verified layer by layer
   against GIMP 3). Saved XCFs use perceptual blending, so GIMP shows them exactly like photographics.
 - **Retouching:** spot healing (PatchMatch), healing brush and patch (Poisson blending), clone stamp,
-  red eye, dodge/burn/sponge, smudge, content-aware fill and optional **on-device AI** object removal
-  (MI-GAN, LaMa) and upscaling (Real-ESRGAN). Nothing leaves the device.
+  red eye, dodge/burn/sponge, smudge, liquify, content-aware fill (texture-aware PatchMatch with seamless
+  colour matching at the edge) and optional **on-device AI** object removal (MI-GAN, LaMa) and upscaling
+  (Real-ESRGAN). Nothing leaves the device.
+- **Selections and gradients:** rectangle, ellipse, lasso, **magic wand** and **object selection**
+  (drag a box around the subject); gradient tool (linear, radial, reflected) on layers or masks;
+  **auto-select** for the move tool picks the layer under your finger.
 - **Pen first:** pressure, eraser end, side button = eyedropper, palm rejection, hover preview,
   two-finger undo; keyboard and mouse with Photoshop-style shortcuts.
 - **Brush engine (F5):** tip angle/roundness, shape dynamics, scattering, transfer (opacity/flow by
@@ -39,8 +43,8 @@ currently **German only**; translations are one of the easiest ways to help.
   of Photoshop `.aco`/`.act`, Adobe Swatch Exchange `.ase` and GIMP `.gpl`.
 - **Layers like in Photoshop:** masks linked or unlinked from their layer (chain icon), clipping masks
   (Ctrl+Alt+G, adjustment layers "affect only the layer below").
-- **Non-destructive editing:** 13 adjustment layer types (curves, levels, hue/saturation, colour
-  lookup, …), free transform via smart objects, 24 filters with live preview.
+- **Non-destructive editing:** 13 adjustment layer types (curves per channel with histogram, levels,
+  hue/saturation, colour lookup, …), free transform via smart objects, 24 filters with live preview.
 - **Colour management:** ICC engine (v2/v4, matrix/TRC and LUT profiles, all rendering intents, black
   point compensation – verified against Little CMS), document profiles, assign/convert to profile,
   CMYK/Lab PSDs converted through their embedded profile, soft proof with your print shop's ICC profile
@@ -49,7 +53,8 @@ currently **German only**; translations are one of the easiest ways to help.
   10 built-in looks, export of your adjustments as a `.cube` LUT.
 - **Large files:** pixel data lives in native shared memory outside the Java heap, the undo history
   is swapped to a scratch disk like in Photoshop, and all heavy operations work in bands on all CPU
-  cores. Zoomed-out display composites from per-layer mipmaps (48 MP: 0.3 s instead of 3 s), and
+  cores. Moving, transforming and changing opacity preview on the GPU. Zoomed-out display composites
+  from per-layer mipmaps (48 MP: 0.3 s instead of 3 s), and
   transforming previews the smart object directly from its source. During live edits the layers
   below the edited one are cached, so each frame only composites the edited layer and those above it.
 - **Crop and transform:** aspect ratio presets, target size with resolution, thirds/golden ratio/grid
@@ -121,11 +126,15 @@ report (`report.html`, `report.csv`) with side-by-side previews of every file th
 
 No fixed dates, and the order may change. Suggestions are welcome.
 
-- **Next:** GPU compositing for smoother moving and transforming of large files; rendering layer
-  effects (drop shadow, stroke, glow); English user interface
-- **After that:** liquify; gradient tool, magic wand and object selection; per-channel curves with
-  histogram; custom fonts (TTF/OTF); autosave and crash recovery
-- **Later:** 16-bit editing; CMYK documents and export; display colour management; Linux (GNOME) and iPad
+- **Done in 0.3:** GPU preview for moving, transforming and opacity; rendering layer effects; English
+  user interface; liquify; gradient tool, magic wand, object selection and auto-select; per-channel
+  curves with histogram; better content-aware fill
+- **Next:** autosave and crash recovery; custom fonts (TTF/OTF); history panel with snapshots; select
+  subject and sky with an on-device model; refine edge for hair
+- **After that:** RAW development (DNG first); frequency separation helper; editing and creating layer
+  effects; batch export (several sizes and formats at once); pen tool and paths
+- **Later:** 16-bit editing; CMYK documents and export; display colour management; full GPU
+  compositing; Linux (GNOME) and iPad
 
 ## Help wanted
 
@@ -134,9 +143,10 @@ photographics is a one-person project so far. If any of this sounds like you, I'
 - **Testing with real Photoshop files.** PSD support has been verified with GIMP and ImageMagick, not yet
   with files from current Photoshop versions. The PSD check above produces a report you can share
   without sharing the files.
-- **Translations.** The UI strings are still in German and will move to Android resources.
-- **GPU compositing.** Moving and transforming layers still composites on the CPU.
-- **Layer effects.** Drop shadow, stroke and glow are kept in PSDs but not rendered yet.
+- **Translations.** English and German exist. Translations are plain tab-separated text files in
+  `core/src/main/resources/i18n/` (German text → translation, see `en.tsv`).
+- **GPU compositing.** Live previews run on the GPU, the final composite still runs on the CPU.
+- **Layer effects.** Rendered, but not editable yet; bevel, satin and gradient/pattern overlay are missing.
 - **Ports.** Linux (GNOME) and iOS are planned; the core is plain Kotlin/JVM without Android dependencies.
 
 Bug reports, PSD compatibility reports and pull requests are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).

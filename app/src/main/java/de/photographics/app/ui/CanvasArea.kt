@@ -1,5 +1,6 @@
 package de.photographics.app.ui
 
+import de.photographics.core.tr
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
@@ -162,8 +163,12 @@ fun CanvasArea(
     // Während Live-Änderungen die schnelle Vorschau zeigen (wird auf Dokumentgröße gestreckt)
     val preview = state.previewBitmap
     // Feinerer Ausschnitt beim Hineinzoomen (nur ohne laufende Live-Vorschau)
-    val detail = state.detail.takeIf { state.previewBitmap == null }
+    val detail = state.detail.takeIf { state.previewBitmap == null && vm.gpuLive.value == null }
     val tilePaint = remember { android.graphics.Paint().apply { isAntiAlias = false } }
+    // GPU-Vorschau: Ebene mit Matrix (gefiltert), Deckkraft und Mischmodus
+    val gpuPaint = remember { android.graphics.Paint().apply { isFilterBitmap = true; isAntiAlias = true } }
+    val gpuMatrix = remember { android.graphics.Matrix() }
+    val everywhere = remember { android.graphics.RectF(-1e9f, -1e9f, 1e9f, 1e9f) }
     // Sichtbaren Bereich nach dem Zoomen/Verschieben melden (kurz entprellt)
     LaunchedEffect(viewport, state.hasDocument) {
         snapshotFlow { Triple(viewport.scale, viewport.offset, viewport.viewSize) }.collectLatest { (sc, off, size) ->
@@ -223,9 +228,14 @@ fun CanvasArea(
                     abs((if (g.vertical) gs.x - sp.x else gs.y - sp.y)) < 8f * density.density
                 } else null
                 if (hit != null) guideDrag = Triple(hit.index, hit.value.vertical, hit.value.position)
-                else { dragStart = p; vm.moveBegin() }
+                else {
+                    dragStart = p
+                    // Strg/Cmd kehrt „Automatisch auswählen“ für diesen Zug um (wie in Photoshop)
+                    if (s.autoSelectLayer != mods.ctrl) vm.moveBegin(p.x, p.y) else vm.moveBegin()
+                }
             }
-            tool == Tool.SELECT -> { dragStart = p; dragNow = p; pathPoints = listOf(p) }
+            tool == Tool.SELECT && s.selectionShape == SelectionShape.WAND -> vm.magicWand(p.x, p.y)
+            tool == Tool.SELECT || tool == Tool.GRADIENT -> { dragStart = p; dragNow = p; pathPoints = listOf(p) }
             tool == Tool.CROP -> {
                 dragStart = p; dragNow = p
                 cropStartRect = s.cropRect
@@ -270,6 +280,15 @@ fun CanvasArea(
                 if (gd != null) guideDrag = gd.copy(third = vm.snapGuide(gd.second, (if (gd.second) p.x else p.y).toDouble(), 8.0 / viewport.scale * density.density))
                 else dragStart?.let { vm.moveTo(p.x - it.x, p.y - it.y, 8f * density.density / viewport.scale) }
             }
+            tool == Tool.GRADIENT -> {
+                // Shift: auf 45°-Schritte einrasten
+                dragNow = if (mods.shift) dragStart?.let { a ->
+                    val ang = Math.round(kotlin.math.atan2(p.y - a.y, p.x - a.x) / (Math.PI / 4)) * (Math.PI / 4)
+                    val len = (p - a).getDistance()
+                    Offset(a.x + (len * kotlin.math.cos(ang)).toFloat(), a.y + (len * kotlin.math.sin(ang)).toFloat())
+                } ?: p else p
+            }
+            tool == Tool.SELECT && s.selectionShape == SelectionShape.WAND -> {}
             tool == Tool.SELECT -> {
                 // Shift: Quadrat/Kreis
                 dragNow = if (s.selectionShape != SelectionShape.LASSO && mods.shift) dragStart?.let { a ->
@@ -323,6 +342,7 @@ fun CanvasArea(
                     val tiny = abs(a.x - b.x) * viewport.scale < 6 && abs(a.y - b.y) * viewport.scale < 6
                     when {
                         tiny -> vm.deselect()
+                        s.selectionShape == SelectionShape.OBJECT -> vm.objectSelect(a.x, a.y, b.x, b.y)
                         s.selectionShape == SelectionShape.LASSO -> {
                             val pts = FloatArray(pathPoints.size * 2)
                             pathPoints.forEachIndexed { i, o -> pts[i * 2] = o.x; pts[i * 2 + 1] = o.y }
@@ -331,6 +351,10 @@ fun CanvasArea(
                         else -> vm.finishSelection(floatArrayOf(a.x, a.y, b.x, b.y))
                     }
                 }
+            }
+            tool == Tool.GRADIENT -> {
+                val a = dragStart; val b = dragNow
+                if (!cancelled && a != null && b != null && (b - a).getDistance() * viewport.scale >= 4) vm.applyGradient(a.x, a.y, b.x, b.y)
             }
             else -> {}
         }
@@ -347,7 +371,7 @@ fun CanvasArea(
                     spacePressed -> PointerIcon.Hand
                     state.tool == Tool.TEXT -> PointerIcon.Text
                     state.tool == Tool.MOVE || state.tool == Tool.TRANSFORM -> PointerIcon.Hand
-                    state.tool.isPaintTool || state.tool in setOf(Tool.SELECT, Tool.CROP, Tool.EYEDROPPER, Tool.RED_EYE, Tool.PATCH) -> PointerIcon.Crosshair
+                    state.tool.isPaintTool || state.tool in setOf(Tool.SELECT, Tool.GRADIENT, Tool.CROP, Tool.EYEDROPPER, Tool.RED_EYE, Tool.PATCH) -> PointerIcon.Crosshair
                     else -> PointerIcon.Default
                 },
             )
@@ -515,7 +539,30 @@ fun CanvasArea(
                     base.drawBackdrop(nc, offset.x, offset.y, ds, clip, checkerPaint)
                     nc.restore()
                     val pr = state.previewRect
-                    if (preview != null && !pr.isEmpty) {
+                    val gpu = vm.gpuLive.value
+                    if (gpu != null) {
+                        // GPU-Vorschau: im sichtbaren Bereich darunter + Ebene (Matrix, Deckkraft, Mischmodus) + darüber
+                        val rg = gpu.region
+                        val d = android.graphics.RectF(offset.x + rg.left * scale, offset.y + rg.top * scale, offset.x + rg.right * scale, offset.y + rg.bottom * scale)
+                        nc.save(); nc.clipOutRect(d)
+                        if (!d.contains(clip)) base.draw(nc, offset.x, offset.y, ds, clip, tilePaint)
+                        nc.restore()
+                        d.intersect(docRect)
+                        // Isoliert mischen: Mischmodi wirken nur auf das Bild, nicht auf Schachbrett oder Hintergrund
+                        nc.saveLayer(d, null)
+                        nc.clipRect(d)
+                        val sc = gpu.step * scale
+                        gpu.below?.draw(nc, offset.x + rg.left * scale, offset.y + rg.top * scale, sc, clip, tilePaint)
+                        gpuPaint.alpha = (gpu.alpha * 255f + 0.5f).toInt()
+                        if (android.os.Build.VERSION.SDK_INT >= 29) gpuPaint.blendMode = gpuBlend(gpu.blend)
+                        nc.save()
+                        nc.translate(offset.x, offset.y); nc.scale(scale, scale)
+                        gpuMatrix.setValues(gpu.matrix); nc.concat(gpuMatrix)
+                        gpu.layer.draw(nc, 0f, 0f, 1f, everywhere, gpuPaint)
+                        nc.restore()
+                        gpu.above?.draw(nc, offset.x + rg.left * scale, offset.y + rg.top * scale, sc, clip, tilePaint)
+                        nc.restore()
+                    } else if (preview != null && !pr.isEmpty) {
                         // Live-Vorschau (sichtbarer Ausschnitt) über der Basis; Basis nur außerhalb
                         val d = android.graphics.RectF(offset.x + pr.left * scale, offset.y + pr.top * scale, offset.x + pr.right * scale, offset.y + pr.bottom * scale)
                         val docClip = android.graphics.RectF(offset.x, offset.y, offset.x + state.docWidth * scale, offset.y + state.docHeight * scale)
@@ -567,11 +614,21 @@ fun CanvasArea(
             if (state.tool == Tool.SELECT && a != null && b != null) {
                 val path = Path()
                 when (state.selectionShape) {
-                    SelectionShape.RECT -> path.addRect(rectBetween(s(a), s(b)))
                     SelectionShape.ELLIPSE -> path.addOval(rectBetween(s(a), s(b)))
                     SelectionShape.LASSO -> pathPoints.forEachIndexed { i, p -> if (i == 0) path.moveTo(s(p).x, s(p).y) else path.lineTo(s(p).x, s(p).y) }
+                    else -> path.addRect(rectBetween(s(a), s(b)))
                 }
                 marchingAnts(path, antPhase)
+            }
+
+            // Verlaufslinie während des Ziehens: Start- und Endpunkt mit Linie
+            if (state.tool == Tool.GRADIENT && a != null && b != null) {
+                val sa = s(a); val sb = s(b)
+                drawLine(Color.Black.copy(alpha = 0.5f), sa, sb, strokeWidth = 3f * density.density)
+                drawLine(Color.White, sa, sb, strokeWidth = 1.5f * density.density)
+                drawCircle(Color(state.color), 6f * density.density, sa); drawCircle(Color.White, 6f * density.density, sa, style = Stroke(1.5f * density.density))
+                drawCircle(if (state.gradientToTransparent) Color.Transparent else Color(state.bgColor), 6f * density.density, sb)
+                drawCircle(Color.White, 6f * density.density, sb, style = Stroke(1.5f * density.density))
             }
 
             // Spur der Bereichsreparatur
@@ -709,12 +766,12 @@ fun CanvasArea(
                 ) {
                     val b = state.brush
                     VerticalSlider(
-                        "Größe", sqrt((b.size - 1f) / 499f), "${b.size.roundToInt()} px",
+                        tr("Größe"), sqrt((b.size - 1f) / 499f), tr("{0} px", b.size.roundToInt()),
                         onChange = { v -> vm.updateBrush(current.brush.copy(size = 1f + 499f * v * v)) },
                         trackHeight = track,
                     )
                     VerticalSlider(
-                        "Deckkr.", b.opacity, "${(b.opacity * 100).roundToInt()} %",
+                        tr("Deckkr."), b.opacity, "${(b.opacity * 100).roundToInt()} %",
                         onChange = { v -> vm.setBrushOpacity(v) },
                         trackHeight = track,
                     )
@@ -762,7 +819,7 @@ fun CanvasArea(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp)) {
                 Text("${(viewport.scale * 100).roundToInt()} %", Modifier.padding(horizontal = 12.dp), style = MaterialTheme.typography.labelLarge)
-                TextButton(onClick = { viewport.fit() }) { Text("Einpassen") }
+                TextButton(onClick = { viewport.fit() }) { Text(tr("Einpassen")) }
                 TextButton(onClick = { viewport.zoomTo(1f) }) { Text("100 %") }
             }
         }
@@ -993,4 +1050,18 @@ private fun Ruler(vp: ViewportState, vertical: Boolean, modifier: Modifier) {
         if (vertical) drawLine(fg.copy(alpha = 0.4f), Offset(size.width - 0.5f, 0f), Offset(size.width - 0.5f, size.height), 1f)
         else drawLine(fg.copy(alpha = 0.4f), Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
     }
+}
+
+/** Mischmodus der GPU-Vorschau (nur Modi, die Android wie photographics rechnet, siehe EditorViewModel.gpuBlendOk). */
+@androidx.annotation.RequiresApi(29)
+private fun gpuBlend(m: de.photographics.core.render.BlendMode): android.graphics.BlendMode = when (m) {
+    de.photographics.core.render.BlendMode.MULTIPLY -> android.graphics.BlendMode.MULTIPLY
+    de.photographics.core.render.BlendMode.SCREEN -> android.graphics.BlendMode.SCREEN
+    de.photographics.core.render.BlendMode.DARKEN -> android.graphics.BlendMode.DARKEN
+    de.photographics.core.render.BlendMode.LIGHTEN -> android.graphics.BlendMode.LIGHTEN
+    de.photographics.core.render.BlendMode.DIFFERENCE -> android.graphics.BlendMode.DIFFERENCE
+    de.photographics.core.render.BlendMode.EXCLUSION -> android.graphics.BlendMode.EXCLUSION
+    de.photographics.core.render.BlendMode.OVERLAY -> android.graphics.BlendMode.OVERLAY
+    de.photographics.core.render.BlendMode.HARD_LIGHT -> android.graphics.BlendMode.HARD_LIGHT
+    else -> android.graphics.BlendMode.SRC_OVER
 }

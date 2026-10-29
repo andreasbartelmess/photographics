@@ -1,0 +1,1135 @@
+# photographics – englische Übersetzung. Je Zeile: deutscher Text, Tabulator, Englisch.
+# Escapes: \n, \t, \\. Erzeugt aus dem Quelltext (tr("…")), siehe I18n.kt.
+Sans Serif	Sans Serif
+Sans Serif Medium	Sans Serif Medium
+Sans Serif Light	Sans Serif Light
+Sans Serif Black	Sans Serif Black
+Sans Serif Condensed	Sans Serif Condensed
+Serif	Serif
+Monospace	Monospace
+Schreibschrift	Script
+Casual	Casual
+Kapitälchen	Small Caps
+System	System
+Hell	Light
+Dunkel	Dark
+Hintergrundbild (Material You)	Wallpaper (Material You)
+Eigene Akzentfarbe	Custom accent color
+Standard	Default
+Schwarz	Black
+Dunkelgrau	Dark gray
+Mittelgrau	Medium gray
+Hellgrau	Light gray
+Eigene Farbe	Custom color
+Links	Left
+Rechts	Right
+Oben	Top
+Unten	Bottom
+Aus	Off
+Eingebettetes Profil beibehalten	Keep embedded profile
+Farben bleiben exakt, das Dokument behält sein Profil	Colors stay exact, the document keeps its profile
+In Arbeitsfarbraum umwandeln	Convert to working space
+Beim Öffnen in den Arbeitsfarbraum umrechnen	Convert to the working space when opening
+Indigo	Indigo
+Blau	Blue
+Petrol	Teal
+Grün	Green
+Oliv	Olive
+Bernstein	Amber
+Orange	Orange
+Rot	Red
+Magenta	Magenta
+Violett	Violet
+Schiefer	Slate
+Graphit	Graphite
+Werkzeuge links, Ebenen rechts	Tools on the left, layers on the right
+Linkshänder	Left-handed
+Werkzeuge und Schnellregler rechts, Ebenen links	Tools and quick sliders on the right, layers on the left
+Minimal	Minimal
+Schmale Werkzeugleiste, Optionen unten, keine Schnellregler	Narrow toolbar, options at the bottom, no quick sliders
+Eingebettetes RGB-Profil	Embedded RGB profile
+Verschieben	Move
+Auswahl	Selection
+Freistellen	Crop
+Pinsel	Brush
+Radiergummi	Eraser
+Kopierstempel	Clone Stamp
+Reparatur-Pinsel	Healing Brush
+Bereichsreparatur	Spot Healing
+Weichzeichner	Blur
+Scharfzeichner	Sharpen
+Abwedler	Dodge
+Nachbelichter	Burn
+Schwamm	Sponge
+Pipette	Eyedropper
+Transformieren	Transform
+Text	Text
+Wischfinger	Smudge
+Ausbessern	Patch
+Rote Augen	Red Eye
+Drittelregel	Rule of thirds
+Goldener Schnitt	Golden ratio
+Raster	Grid
+Diagonalen	Diagonals
+Keine	None
+Frei	Free
+Neigen	Skew
+Verzerren	Distort
+Perspektive	Perspective
+Unbenannt	Untitled
+Heap max. {0} MB, Kacheln max. {1} MB, PSS {2} MB, {3} s	Heap max. {0} MB, tiles max. {1} MB, PSS {2} MB, {3} s
+Selbsttest bestanden ({0})	Self-test passed ({0})
+Selbsttest fehlgeschlagen bei „{0}“	Self-test failed at “{0}”
+Hintergrund	Background
+Retusche	Retouch
+Kurven	Curves
+Motiv	Subject
+Benchmark	Benchmark
+Gesamtansicht neu zeichnen	Redraw full view
+  davon nur rechnen (1 Kern)	  of which computing (1 core)
+  davon nur rechnen (alle Kerne)	  of which computing (all cores)
+  davon nur Bitmap schreiben	  of which writing the bitmap
+Verschieben (je Bild)	Move (per frame)
+Deckkraft-Regler (je Bild)	Opacity slider (per frame)
+Einstellungsebene ziehen (je Bild)	Drag adjustment layer (per frame)
+Transformieren (je Bild)	Transform (per frame)
+Transformieren übernehmen	Apply transform
+Pinsel bei 100 % (je Ereignis, 200 px)	Brush at 100 % (per event, 200 px)
+Pinsel absetzen	Finish brush stroke
+Leerlauf	Idle
+Malen	Painting
+Wenig Arbeitsspeicher: Ältere Verlaufsschritte wurden ausgelagert bzw. verworfen.	Low memory: older history steps were moved to storage or discarded.
+Nicht genug Arbeitsspeicher für diese Aktion. Tipp: Bild verkleinern oder Ebenen zusammenfügen.	Not enough memory for this action. Tip: reduce the image size or merge layers.
+Fehler: {0}	Error: {0}
+Profil „{0}“ wurde in den Arbeitsfarbraum „{1}“ umgewandelt.	Profile “{0}” was converted to the working space “{1}”.
+PSD konnte nicht gelesen werden: {0}	Could not read the PSD: {0}
+TIFF konnte nicht gelesen werden: {0}	Could not read the TIFF: {0}
+GIMP-Datei konnte nicht gelesen werden: {0}	Could not read the GIMP file: {0}
+Kein Zugriff mehr auf die Datei – bitte erneut über „Öffnen“ auswählen.	No access to the file any more – please select it again via “Open”.
+{0} × {1} px · {2} Ebenen	{0} × {1} px · {2} layers
+Als PSD gespeichert.	Saved as PSD.
+Als GIMP-Datei gespeichert.	Saved as GIMP file.
+Als TIFF gespeichert ({0}{1}).	Saved as TIFF ({0}{1}).
+, mit Ebenen	, with layers
+Profil „{0}“ eingebettet	Profile “{0}” embedded
+Exportiert als {0} ({1}).	Exported as {0} ({1}).
+Kein verwendbares ICC-Profil: {0}	No usable ICC profile: {0}
+Profil „{0}“ ({1}) hinzugefügt.	Profile “{0}” ({1}) added.
+Nur RGB-Profile können zugewiesen werden.	Only RGB profiles can be assigned.
+Profil „{0}“ zugewiesen.	Profile “{0}” assigned.
+Nur in RGB-Profile kann umgewandelt werden.	You can only convert to RGB profiles.
+In „{0}“ umgewandelt	Converted to “{0}”
+ – {0} Smartobjekt(e) unverändert.	 – {0} smart object(s) unchanged.
+Smartobjekt	Smart object
+Eigene Farbfelder	Custom swatches
+Keine Farbfelder in „{0}“.	No swatches in “{0}”.
+ (importiert)	 (imported)
+{0} Farbfelder aus „{1}“ übernommen.	{0} swatches imported from “{1}”.
+Farbfelder konnten nicht gelesen werden: {0}	Could not read the swatches: {0}
+Farbfelder „{0}“ exportiert (.{1}).	Swatches “{0}” exported (.{1}).
+Pinselvorgabe „{0}“ gespeichert.	Brush preset “{0}” saved.
+Vorschau	Preview
+Stift erkannt: Nur der Stift malt, Finger zoomen und verschieben. Umschalten über das Stift-Symbol oben.	Pen detected: only the pen paints, fingers zoom and pan. Switch with the pen icon at the top.
+Zuerst eine Quelle festlegen („Quelle setzen“, dann ins Bild tippen).	Set a source first (“Set source”, then tap the image).
+Für „KI-Entfernen“ zuerst ein KI-Modell laden.	Load an AI model first to use “AI Remove”.
+Keine Ebene ausgewählt.	No layer selected.
+Die Ebene ist ausgeblendet.	The layer is hidden.
+{0} funktioniert nicht auf Masken.	{0} does not work on masks.
+Auf dieser Ebene kann nicht gemalt werden (Gruppe?).	You can't paint on this layer (is it a group?).
+Gruppen und Einstellungsebenen können nicht verschoben werden.	Groups and adjustment layers can't be moved.
+Original	Original
+Neue Hilfslinie	New guide
+Hilfslinie verschieben	Move guide
+Hilfslinie löschen	Delete guide
+Hilfslinien löschen	Clear guides
+Hilfslinienlayout	Guide layout
+KI-Hochskalierung ({0})	AI upscaling ({0})
+Darunter liegt keine Pixelebene.	There is no pixel layer below.
+Ebene ausblenden	Hide layer
+Ebene einblenden	Show layer
+Ebene umbenennen	Rename layer
+Mischmodus	Blend mode
+Die unterste Ebene einer Gruppe kann keine Schnittmaske sein.	The bottom layer of a group can't be a clipping mask.
+Transparenz fixieren	Lock transparency
+Deckkraft	Opacity
+Maske aktivieren/deaktivieren	Enable/disable mask
+Filter benötigen eine Pixelebene (Text/Smartobjekt ggf. rastern oder eine Einstellungsebene verwenden).	Filters need a pixel layer (rasterize text or smart objects, or use an adjustment layer).
+Zuerst einen Bereich auswählen.	Select an area first.
+Nur auf Pixelebenen möglich.	Only possible on pixel layers.
+Ausbessern: zuerst den Fehler mit der Auswahl umranden.	Patch: first draw a selection around the flaw.
+Keine roten Pupillen im Pinselkreis gefunden.	No red pupils found inside the brush circle.
+LUT konnte nicht gelesen werden: {0}	Could not read the LUT: {0}
+LUT „{0}“ geladen ({1}³)	LUT “{0}” loaded ({1}³)
+Keine sichtbaren Einstellungsebenen – nichts zu exportieren.	No visible adjustment layers – nothing to export.
+Farbtabelle exportiert (33³, .cube).	Color lookup exported (33³, .cube).
+Die Ebene ist leer.	The layer is empty.
+Ebene in Smartobjekt umgewandelt – Transformieren ohne Qualitätsverlust.	Layer converted to a smart object – transform without loss of quality.
+Diese Ebene kann nicht transformiert werden.	This layer can't be transformed.
+Text lässt sich nur frei transformieren – für Verzerren zuerst in ein Smartobjekt umwandeln.	Text can only be transformed freely – convert it to a smart object first to distort it.
+Datei kann nicht geöffnet werden	Can't open the file
+Unbekanntes Bildformat	Unknown image format
+Bild konnte nicht dekodiert werden	Could not decode the image
+Speichern nicht möglich	Can't save
+Export fehlgeschlagen	Export failed
+Export nicht möglich	Can't export
+Objekte entfernen	Remove objects
+Hochskalieren	Upscale
+MIT (Picsart AI Research)	MIT (Picsart AI Research)
+Schnell, gut für kleine bis mittlere Objekte.	Fast, good for small and medium objects.
+Hohe Qualität, auch für große Flächen und Strukturen.	High quality, also for large areas and textures.
+Real-ESRGAN General	Real-ESRGAN General
+BSD 3-Clause (Tencent ARC)	BSD 3-Clause (Tencent ARC)
+Schnelle 4×-Vergrößerung für Fotos.	Fast 4× enlargement for photos.
+Real-ESRGAN x4plus	Real-ESRGAN x4plus
+Beste Detailtreue, deutlich langsamer.	Best detail, much slower.
+Server antwortet mit {0}	Server responded with {0}
+Archiv enthält kein ONNX-Modell	The archive contains no ONNX model
+Modell {0} ist nicht installiert	Model {0} is not installed
+Pinseleinstellungen	Brush settings
+Schließen	Close
+Vorschau des Pinselstrichs	Brush stroke preview
+Vorgaben	Presets
+Vorgabe löschen	Delete preset
+Name	Name
+Abbrechen	Cancel
+Speichern	Save
+Als Vorgabe speichern	Save as preset
+Pinselspitze	Brush tip
+Größe	Size
+{0} px	{0} px
+Härte	Hardness
+Winkel	Angle
+Rundheit	Roundness
+Abstand	Spacing
+Glättung	Smoothing
+Formeigenschaften	Shape dynamics
+Größen-Jitter	Size jitter
+Größe steuern	Size control
+Mindestdurchmesser	Minimum diameter
+Winkel-Jitter	Angle jitter
+Winkel steuern	Angle control
+Rundheit-Jitter	Roundness jitter
+Mindestrundheit	Minimum roundness
+Streuung	Scattering
+Beide Achsen	Both axes
+Auch entlang des Strichs streuen	Also scatter along the stroke
+Anzahl	Count
+Anzahl-Jitter	Count jitter
+Übertragung	Transfer
+Deckkraft-Jitter	Opacity jitter
+Deckkraft steuern	Opacity control
+Fluss	Flow
+Fluss-Jitter	Flow jitter
+Fluss steuern	Flow control
+Verblassen nach	Fade after
+{0} Abdrücken	{0} dabs
+Farbeinstellungen	Color dynamics
+Wirkt je Pinselabdruck; Vorder- und Hintergrundfarbe aus dem Farbfeld.	Applies per brush dab; foreground and background color from the swatch.
+Vorder-/Hintergrund-Jitter	Foreground/background jitter
+Farbton-Jitter	Hue jitter
+Sättigungs-Jitter	Saturation jitter
+Helligkeits-Jitter	Brightness jitter
+Sonstiges	Other
+Airbrush	Airbrush
+Farbe baut sich auf, solange der Stift aufliegt	Color builds up while the pen rests on the display
+Modus	Mode
+Deckkr.	Opacity
+Einpassen	Fit
+Anwenden	Apply
+Zurücksetzen	Reset
+A4 300 dpi	A4 300 dpi
+Neues Dokument	New document
+Breite	Width
+Höhe	Height
+Transparenter Hintergrund	Transparent background
+Erstellen	Create
+Hinweise zum Import	Import notes
+Farbe	Color
+Farbton	Hue
+Sättigung	Saturation
+Helligkeit	Brightness
+Hex	Hex
+Zuletzt verwendet	Recently used
+Schnellfarben	Quick colors
+Stift	Pen
+malt mit Druckstärke; Radier-Ende = Radiergummi; Seitentaste = Pipette	paints with pressure; eraser end = eraser; side button = eyedropper
+Stift schwebend	Pen hovering
+zeigt die Pinselgröße vorab an	shows the brush size in advance
+1 Finger	1 finger
+im Stift-Modus verschieben, sonst Werkzeug	pans in pen mode, otherwise uses the tool
+2 Finger ziehen/spreizen	2 fingers drag/pinch
+verschieben und zoomen	pan and zoom
+2 Finger tippen	2-finger tap
+Rückgängig	Undo
+3 Finger tippen	3-finger tap
+Wiederholen	Redo
+Regler am linken Rand	Sliders on the left edge
+Pinselgröße und Deckkraft	Brush size and opacity
+Maus	Mouse
+Rad = Zoom, Rechts-/Mittelklick = verschieben	Wheel = zoom, right/middle click = pan
+Verschieben / Auswahl / Freistellen	Move / Selection / Crop
+Pinsel / Radiergummi / Pipette	Brush / Eraser / Eyedropper
+Kopierstempel / Bereichsreparatur / Reparatur-Pinsel	Clone Stamp / Spot Healing / Healing Brush
+Weich- / Scharfzeichner / Abwedler / Nachbelichter	Blur / Sharpen / Dodge / Burn
+Pinsel kleiner / größer	Smaller / larger brush
+Deckkraft 10 … 100 %	Opacity 10 … 100 %
+Leertaste halten	Hold space
+Ansicht verschieben	Pan the view
+Strg+Z / Strg+⇧Z	Ctrl+Z / Ctrl+⇧Z
+Rückgängig / Wiederholen	Undo / Redo
+Strg+Y / Strg+⇧Y	Ctrl+Y / Ctrl+⇧Y
+Farbproof / Farbumfang-Warnung	Proof colors / Gamut warning
+Strg+S / Strg+O / Strg+N	Ctrl+S / Ctrl+O / Ctrl+N
+Speichern / Öffnen / Neu	Save / Open / New
+Strg+A / Strg+D / Strg+⇧I	Ctrl+A / Ctrl+D / Ctrl+⇧I
+Alles / Aufheben / Auswahl umkehren	All / Deselect / Invert selection
+Strg+J / Strg+E	Ctrl+J / Ctrl+E
+Ebene durch Kopie / Auf eine Ebene reduzieren	Layer via copy / Merge down
+Strg+L / Strg+U / Strg+I	Ctrl+L / Ctrl+U / Ctrl+I
+Tonwert / Farbton/Sättigung / Umkehren	Levels / Hue/Saturation / Invert
+Strg+0 / Strg+1 / Strg± 	Ctrl+0 / Ctrl+1 / Ctrl± 
+Einpassen / 100 % / Zoom	Fit / 100 % / Zoom
+Tab / F / Entf	Tab / F / Del
+Panels / Vollbild / Auswahl löschen	Panels / Full screen / Delete selection
+Vorder- und Hintergrundfarbe tauschen / Schwarz-Weiß	Swap foreground and background color / Black and white
+Strg+Alt+G	Ctrl+Alt+G
+Schnittmaske erstellen / zurückwandeln	Create / release clipping mask
+Strg+R / Strg+; / Strg+⇧+;	Ctrl+R / Ctrl+; / Ctrl+⇧+;
+Lineale / Hilfslinien / Ausrichten ein-aus	Rulers / Guides / Snap on-off
+Alt+Entf / Strg+Entf	Alt+Del / Ctrl+Del
+Mit Vordergrund- / Hintergrundfarbe füllen	Fill with foreground / background color
+Gesten & Tastaturkürzel	Gestures & keyboard shortcuts
+Gesten	Gestures
+Tastatur	Keyboard
+Korrekturen	Adjustments
+photographics – {0}	photographics – {0}
+{0} · {1} × {2} px	{0} · {1} × {2} px
+Startbildschirm	Start screen
+Strg+N	Ctrl+N
+Öffnen	Open
+Strg+O	Ctrl+O
+Als Ebene platzieren	Place as layer
+Speichern & Ausgeben	Save & export
+Als PSD speichern	Save as PSD
+Strg+S	Ctrl+S
+Als TIFF speichern …	Save as TIFF …
+Als GIMP-Datei speichern (.xcf)	Save as GIMP file (.xcf)
+Als PNG exportieren	Export as PNG
+Als JPEG exportieren	Export as JPEG
+Farbtabelle exportieren (.cube)	Export color lookup (.cube)
+Drucken	Print
+Strg+P	Ctrl+P
+Einführung	Introduction
+Einstellungen	Settings
+Menü	Menu
+{0} × {1} px	{0} × {1} px
+ · Proof: {0}	 · Proof: {0}
+ · Farbumfang-Warnung	 · Gamut warning
+Nur Stift malt	Only the pen paints
+Finger malen	Fingers paint
+Korrekturen & Filter	Adjustments & filters
+Ebenen	Layers
+Weitere Optionen	More options
+Bild	Image
+Bildgröße …	Image size …
+Strg+Alt+I	Ctrl+Alt+I
+Arbeitsfläche …	Canvas size …
+Strg+Alt+C	Ctrl+Alt+C
+Profil zuweisen …	Assign profile …
+In Profil umwandeln …	Convert to profile …
+Farbeinstellungen …	Color settings …
+Nach rechts drehen	Rotate right
+Nach links drehen	Rotate left
+Horizontal spiegeln	Flip horizontal
+Vertikal spiegeln	Flip vertical
+Drehen um Winkel …	Rotate by angle …
+Auf Hintergrund reduzieren	Flatten image
+Bearbeiten	Edit
+Frei transformieren	Free transform
+Strg+T	Ctrl+T
+Inhaltsbasiert füllen	Content-aware fill
+KI-Füllen (Auswahl entfernen)	AI fill (remove selection)
+Alles auswählen	Select all
+Strg+A	Ctrl+A
+Auswahl aufheben	Deselect
+Strg+D	Ctrl+D
+Auswahl umkehren	Invert selection
+Strg+⇧+I	Ctrl+⇧+I
+Weiche Auswahlkante …	Feather selection …
+Ansicht	View
+Farbproof	Proof colors
+Strg+Y	Ctrl+Y
+Farbumfang-Warnung	Gamut warning
+Strg+⇧+Y	Ctrl+⇧+Y
+Lineale	Rulers
+Strg+R	Ctrl+R
+Hilfslinien	Guides
+Strg+;	Ctrl+;
+Ausrichten	Snap
+Strg+⇧+;	Ctrl+⇧+;
+Intelligente Hilfslinien	Smart guides
+Neue Hilfslinie …	New guide …
+Hilfslinienlayout …	Guide layout …
+Proof einrichten …	Proof setup …
+Arbeitsbereich …	Workspace …
+Vollbild	Full screen
+Drucken …	Print …
+Strg+Z	Ctrl+Z
+Strg+⇧+Z	Ctrl+⇧+Z
+Ebene durch Kopie	Layer via copy
+Strg+J	Ctrl+J
+KI-Füllen	AI fill
+Löschen	Delete
+Entf	Del
+Neue Ebene	New layer
+Strg+⇧+N	Ctrl+⇧+N
+Strg+0	Ctrl+0
+Vollbild beenden	Exit full screen
+Als Einstellungsebene	As adjustment layer
+Direkt anwenden	Apply directly
+Nicht-destruktiv: jederzeit änderbar, mit Maske, bleibt in der PSD erhalten.	Non-destructive: editable at any time, with a mask, kept in the PSD.
+Verändert die Pixel der aktiven Ebene.	Changes the pixels of the active layer.
+Wird direkt angewendet	Applied directly
+Weiche Auswahlkante	Feather selection
+Radius	Radius
+Gaußscher Weichzeichner	Gaussian blur
+Weichzeichnungsfilter	Blur filters
+Radius (px)	Radius (px)
+Bewegungsunschärfe	Motion blur
+Winkel (°)	Angle (°)
+Distanz (px)	Distance (px)
+Radialer Weichzeichner	Radial blur
+Stärke	Amount
+Methode	Method
+Kreisförmig	Spin
+Strahlenförmig	Zoom
+Matter machen	Surface blur
+Schwellenwert	Threshold
+Tilt-Shift (Miniatur)	Tilt-shift (miniature)
+Unschärfe	Blur
+Position (%)	Position (%)
+Schärfebereich (%)	Focus area (%)
+Unscharf maskieren	Unsharp mask
+Scharfzeichnungsfilter	Sharpen filters
+Stärke (%)	Amount (%)
+Selektiver Scharfzeichner	Smart sharpen
+Rauschen reduzieren (%)	Reduce noise (%)
+Hochpass	High pass
+Sonstige Filter	Other filters
+Rauschen reduzieren	Reduce noise
+Rauschfilter	Noise filters
+Median	Median
+Staub & Kratzer	Dust & scratches
+Rauschen hinzufügen	Add noise
+Gaußsche Verteilung	Gaussian distribution
+Monochromatisch	Monochromatic
+Haut glätten	Smooth skin
+Struktur erhalten (%)	Preserve texture (%)
+Klarheit	Clarity
+Dunst entfernen	Dehaze
+Vignette	Vignette
+Objektiv	Lens
+Mittelpunkt (%)	Midpoint (%)
+Objektivkorrektur (Verzeichnung)	Lens correction (distortion)
+Verzeichnung	Distortion
+Ölfarbe	Oil paint
+Stilisierungsfilter	Stylize filters
+Pinselgröße	Brush size
+Relief	Emboss
+Höhe (px)	Height (px)
+Konturen finden	Find edges
+Mosaik	Mosaic
+Vergröberungsfilter	Pixelate filters
+Zellengröße (px)	Cell size (px)
+Strudel	Twirl
+Verzerrungsfilter	Distort filters
+Bildgröße	Image size
+Aktuell: {0} × {1} px · {2} MP	Current: {0} × {1} px · {2} MP
+Pixel	Pixels
+Prozent	Percent
+Proportionen beibehalten	Constrain proportions
+Auflösung (Pixel/Zoll)	Resolution (pixels/inch)
+Neu: {0} × {1} px · Druckgröße {2} × {3} cm	New: {0} × {1} px · print size {2} × {3} cm
+KI-Hochskalierung (Real-ESRGAN)	AI upscaling (Real-ESRGAN)
+Interpolation	Interpolation
+ – Modell laden …	 – load the model …
+KI-Hochskalierung wirkt nur beim Vergrößern; beim Verkleinern wird Lanczos verwendet.	AI upscaling only works when enlarging; Lanczos is used when reducing.
+Transparent	Transparent
+Vordergrund	Foreground
+Weiß	White
+Arbeitsfläche	Canvas size
+Anker	Anchor
+Farbe für erweiterte Arbeitsfläche	Color for the extended canvas
+Gilt für die unterste Ebene	Applies to the bottom layer
+Lokale KI-Modelle	On-device AI models
+Die Modelle laufen vollständig auf diesem Gerät; Bilder verlassen es nicht. Heruntergeladen wird nur das Modell selbst.	The models run entirely on this device; your images never leave it. Only the model itself is downloaded.
+Lizenz: {0}	License: {0}
+Bereit	Ready
+Laden	Download
+Bildkomprimierung	Image compression
+LZW und ZIP verlieren keine Bildinformationen; ZIP ist meist etwas kleiner, LZW wird von mehr Programmen gelesen.	LZW and ZIP lose no image information; ZIP is usually a little smaller, LZW is read by more programs.
+Ebenen speichern	Save layers
+Photoshop öffnet die Datei mit allen Ebenen; andere Programme sehen das zusammengefügte Bild.	Photoshop opens the file with all layers; other programs see the flattened image.
+Speichern …	Save …
+Größe und Auflösung	Size and resolution
+Auflösung (dpi)	Resolution (dpi)
+= {0} × {1} Pixel	= {0} × {1} pixels
+Der Rahmen bekommt dieses Seitenverhältnis; nach dem Freistellen wird genau auf diese Größe umgerechnet.	The frame gets this aspect ratio; after cropping, the image is resampled to exactly this size.
+Bild drehen	Rotate image
+Gegen UZS	Counter-clockwise
+Die Arbeitsfläche wächst mit; freie Ecken der Hintergrundebene bekommen die Hintergrundfarbe.	The canvas grows with it; empty corners of the background layer get the background color.
+Drehen	Rotate
+Senkrecht	Vertical
+Waagerecht	Horizontal
+Position (px)	Position (px)
+Spalten	Columns
+Zeilen	Rows
+Rand (px)	Margin (px)
+Abstand (px)	Gutter (px)
+Drittelregel: 3 × 3 ohne Rand	Rule of thirds: 3 × 3 without margin
+Willkommen bei photographics	Welcome to photographics
+Ebenenbasierte Bildbearbeitung für professionelle Workflows unterwegs. Ein kurzer Überblick über das Wichtigste.	Layer-based photo editing for professional workflows on the go. A short overview of the essentials.
+Stift und Finger	Pen and fingers
+Gemacht fürs Tablet mit Stift – Tastatur und Maus funktionieren genauso.	Made for tablets with a pen – keyboard and mouse work just as well.
+Der Stift malt, Finger zoomen und verschieben. Der Stift-Modus schaltet sich beim ersten Stiftkontakt ein.	The pen paints, fingers zoom and pan. Pen mode switches on the first time the pen touches the display.
+Mit zwei Fingern kurz tippen macht rückgängig, mit drei Fingern wiederholt.	A quick two-finger tap undoes, a three-finger tap redoes.
+Radier-Ende radiert, die Seitentaste nimmt Farbe auf. Größe und Deckkraft regelst du am Bildrand mit dem Daumen.	The eraser end erases, the side button picks a color. Adjust size and opacity at the edge of the image with your thumb.
+Ebenen wie gewohnt	Layers as you know them
+Alles bleibt veränderbar, bis du es anders willst.	Everything stays editable until you decide otherwise.
+Pixel-, Text- und Smartobjekt-Ebenen, Gruppen, Masken, Schnittmasken und alle 27 Mischmodi.	Pixel, text and smart object layers, groups, masks, clipping masks and all 27 blend modes.
+Korrekturen als Einstellungsebenen, Farbtabellen und Film-Looks – nicht-destruktiv.	Adjustments as adjustment layers, color lookups and film looks – non-destructive.
+Retusche mit Bereichsreparatur, Reparatur-Pinsel, Kopierstempel und Ausbessern.	Retouching with spot healing, healing brush, clone stamp and patch.
+Zwischen Schreibtisch und unterwegs	Between the desk and the road
+Deine Dateien kommen so zurück, wie sie gegangen sind.	Your files come back the way they left.
+PSD, PSB, TIFF und GIMP-Dateien öffnen und mit allen Ebenen wieder speichern.	Open PSD, PSB, TIFF and GIMP files and save them again with all layers.
+Farbprofile bleiben erhalten; Umwandeln, Zuweisen und eigene ICC-Profile.	Color profiles are kept; convert, assign and use your own ICC profiles.
+Farbproof für Druckerei und Fotodrucker, mit Farbumfang-Warnung.	Soft proofing for print shops and photo printers, with gamut warning.
+KI auf dem Gerät – wenn du willst	On-device AI – if you want it
+Optional und komplett lokal: Deine Bilder verlassen das Tablet nicht.	Optional and fully local: your images never leave the tablet.
+Objekte entfernen und Auswahlen füllen.	Remove objects and fill selections.
+Bilder hochskalieren.	Upscale images.
+Die Modelle werden erst geladen, wenn du sie zum ersten Mal brauchst.	The models are only downloaded when you first need them.
+Überspringen	Skip
+Los geht’s	Let’s go
+Weiter	Next
+Ebeneneigenschaften	Layer properties
+Neue Einstellungsebene	New adjustment layer
+Neue Gruppe	New group
+Duplizieren	Duplicate
+Nach oben	Move up
+Nach unten	Move down
+Auf darunterliegende reduzieren	Merge down
+Maske hinzufügen	Add mask
+Fläche	Fill
+Auf-/Zuklappen	Expand/collapse
+Maske von Ebene lösen	Unlink mask from layer
+Maske mit Ebene verbinden	Link mask to layer
+Transparenz fixiert	Transparency locked
+Sichtbarkeit	Visibility
+Mehr	More
+Umbenennen …	Rename …
+Schnittmaske zurückwandeln (Strg+Alt+G)	Release clipping mask (Ctrl+Alt+G)
+Schnittmaske erstellen (Strg+Alt+G)	Create clipping mask (Ctrl+Alt+G)
+Transparenz freigeben	Unlock transparency
+In Gruppe verschieben	Move into group
+In Smartobjekt konvertieren	Convert to smart object
+Text bearbeiten	Edit text
+Ebene rastern	Rasterize layer
+Einstellungen bearbeiten	Edit adjustment
+Maske hinzufügen (alles zeigen)	Add mask (reveal all)
+Maske aus Auswahl	Mask from selection
+Maske deaktivieren	Disable mask
+Maske aktivieren	Enable mask
+Maske anwenden	Apply mask
+Maske löschen	Delete mask
+Nur auf Ebene darunter	Clip to layer below
+Punkt antippen/ziehen; neue Punkte durch Tippen auf die Kurve, entfernen durch Ziehen aus dem Feld.	Tap/drag a point; add points by tapping the curve, remove them by dragging out of the field.
+Diese Einstellung hat keine Regler.	This adjustment has no controls.
+Fertig	Done
+Eigene LUTs	Custom LUTs
+LUT-Datei laden (.cube, .3dl) …	Load LUT file (.cube, .3dl) …
+Die Stärke regelst du über die Deckkraft der Einstellungsebene.	Set the strength with the opacity of the adjustment layer.
+Schrift	Font
+Zeilenabstand	Line spacing
+Laufweite	Tracking
+Fett	Bold
+Kursiv	Italic
+Zentriert	Center
+In Profil umwandeln	Convert to profile
+Profil zuweisen	Assign profile
+Aktuell: {0}	Current: {0}
+Die Farben bleiben erhalten, die Pixelwerte werden in das Zielprofil umgerechnet.	Colors are preserved; the pixel values are converted to the destination profile.
+Die Pixelwerte bleiben unverändert – die Farben werden im neuen Profil anders dargestellt.	The pixel values stay the same – the colors look different in the new profile.
+Zielprofil	Destination profile
+Priorität	Intent
+Tiefenkompensierung verwenden	Use black point compensation
+Umwandeln	Convert
+Zuweisen	Assign
+Darstellung	Appearance
+Arbeitsbereich	Workspace
+Farbmanagement	Color management
+Über	About
+Design	Theme
+Tiefschwarz im dunklen Design	Pure black in dark theme
+Schwarze Flächen – spart Strom auf OLED-Displays	Black surfaces – saves power on OLED displays
+Farben der App	App colors
+Akzentfarben passend zum Hintergrundbild des Tablets	Accent colors matching the tablet's wallpaper
+Erst ab Android 12 verfügbar	Only available from Android 12
+Das ganze Farbschema wird aus dieser Farbe abgeleitet	The whole color scheme is derived from this color
+Eigene Farbe …	Custom color …
+Hintergrund der Arbeitsfläche	Canvas background
+Neutrale Grautöne verfälschen die Farbwahrnehmung beim Retuschieren am wenigsten.	Neutral grays distort color perception least while retouching.
+Vorlagen	Presets
+Werkzeugleiste	Toolbar
+Position	Position
+Beschriftungen	Labels
+Ohne Beschriftung ist die Leiste schmaler	Without labels the toolbar is narrower
+Ebenen-Panel	Layers panel
+{0} dp	{0} dp
+Werkzeugoptionen und Schnellregler	Tool options and quick sliders
+Optionsleiste	Options bar
+Größe/Deckkraft	Size/opacity
+Die Schnellregler am Bildrand lassen sich mit dem Daumen der freien Hand bedienen.	The quick sliders at the edge of the image can be operated with the thumb of your free hand.
+Farbproof anzeigen	Show proof colors
+Strg+Y – simuliert die gewählte Ausgabe auf dem Bildschirm	Ctrl+Y – simulates the chosen output on screen
+Strg+⇧+Y – markiert Farben, die sich nicht drucken lassen	Ctrl+⇧+Y – marks colors that can't be printed
+Zu simulierende Bedingung	Condition to simulate
+Eigene ICC-Profile	Custom ICC profiles
+Noch keine Profile – z. B. das Profil Ihrer Druckerei (FOGRA, PSO) oder Ihres Fotodruckers hinzufügen.	No profiles yet – add, for example, the profile of your print shop (FOGRA, PSO) or your photo printer.
+ICC-Profil hinzufügen …	Add ICC profile …
+Tiefenkompensierung	Black point compensation
+Schwarzpunkt des Dokuments auf den des Ausgabegeräts abbilden	Map the document's black point to that of the output device
+Anzeigeoptionen	Display options
+Papierfarbe simulieren	Simulate paper color
+Zeigt Papierweiß und die Schwärze der Druckfarbe (absolut farbmetrisch)	Shows paper white and the black of the ink (absolute colorimetric)
+Warnfarbe	Warning color
+Farbe für nicht druckbare Bereiche	Color for areas that can't be printed
+Eigene Warnfarbe	Custom warning color
+Die Druckbedingungen werden aus den Normfarbwerten (ISO 12647) berechnet – relativ farbmetrisch mit 	The print conditions are calculated from the standard color values (ISO 12647) – relative colorimetric with 
+Tiefenkompensierung. Das ist eine gute Näherung für die Bildschirmkontrolle; für verbindliche Proofs 	black point compensation. This is a good approximation for checking on screen; for binding proofs, 
+das ICC-Profil der Druckerei verwenden. Export und gespeicherte Dateien bleiben unverändert.	use your print shop's ICC profile. Exports and saved files stay unchanged.
+Profil neuer Dokumente; CMYK-, Graustufen- und Lab-Dateien werden beim Öffnen in diesen Farbraum umgerechnet.	Profile for new documents; CMYK, grayscale and Lab files are converted to this color space when opened.
+Richtlinie beim Öffnen	Policy when opening
+Konvertierungsoptionen	Conversion options
+Priorität beim Umwandeln (Öffnen, Platzieren, CMYK-Import über Richtlinie)	Intent for conversions (opening, placing, CMYK import via policy)
+Erhält Zeichnung in den Tiefen bei Profilen mit unterschiedlichem Schwarz	Keeps shadow detail between profiles with different blacks
+Export (PNG/JPEG)	Export (PNG/JPEG)
+Dokumentprofil einbetten	Embed document profile
+Farben bleiben exakt; Programme mit Farbmanagement zeigen sie richtig an	Colors stay exact; color-managed programs display them correctly
+In sRGB umwandeln	Convert to sRGB
+Für Web, soziale Netzwerke und Geräte ohne Farbmanagement	For the web, social networks and devices without color management
+Eigene Profile für Proof, Zuweisen und Umwandeln – z. B. vom Drucker, der Druckerei oder einem kalibrierten Bildschirm.	Your own profiles for proofing, assigning and converting – e.g. from your printer, your print shop or a calibrated display.
+Profil entfernen	Remove profile
+Ausgabe	Output
+Bildschirm	Display
+Eingabe	Input
+Farbraum	Color space
+Abstrakt	Abstract
+Geräteverknüpfung	Device link
+Version {0}	Version {0}
+Ebenenbasierter Fotoeditor für Android, gemacht für professionelle Workflows unterwegs. Freie Software: Sie dürfen das Programm 	Layer-based photo editor for Android, designed for professional workflows on the go. Free software: you may redistribute and modify the program 
+unter den Bedingungen der GNU General Public License, Version 3 oder neuer, weitergeben und verändern. 	under the terms of the GNU General Public License, version 3 or later. 
+Es wird OHNE JEDE GEWÄHRLEISTUNG bereitgestellt.	It comes WITHOUT ANY WARRANTY.
+Lizenztext (GPL-3.0)	License text (GPL-3.0)
+Quellcode, Fehler melden, Feedback	Source code, bug reports, feedback
+Verwendete Komponenten	Components used
+AndroidX, Jetpack Compose, Material Icons	AndroidX, Jetpack Compose, Material Icons
+Apache 2.0	Apache 2.0
+Kotlin, kotlinx.coroutines	Kotlin, kotlinx.coroutines
+ONNX Runtime	ONNX Runtime
+KI-Modell MI-GAN (wird bei Bedarf geladen)	AI model MI-GAN (downloaded when needed)
+KI-Modell LaMa (wird bei Bedarf geladen)	AI model LaMa (downloaded when needed)
+KI-Modelle Real-ESRGAN (werden bei Bedarf geladen)	AI models Real-ESRGAN (downloaded when needed)
+BSD 3-Clause	BSD 3-Clause
+Adobe und Photoshop sind eingetragene Marken von Adobe Inc. photographics ist ein unabhängiges Projekt 	Adobe and Photoshop are registered trademarks of Adobe Inc. photographics is an independent project 
+und steht in keiner Verbindung zu Adobe.	and is not affiliated with Adobe.
+Foto	Photo
+Kleinbild 3:2 · 24 MP	35 mm 3:2 · 24 MP
+Kleinbild 3:2 · 45 MP	35 mm 3:2 · 45 MP
+Mittelformat 4:3	Medium format 4:3
+Micro Four Thirds 4:3	Micro Four Thirds 4:3
+Smartphone 4:3	Smartphone 4:3
+Großformat 5:4	Large format 5:4
+Quadrat 1:1	Square 1:1
+Panorama 3:1	Panorama 3:1
+Druck · 300 dpi	Print · 300 dpi
+Postkarte 10 × 15	Postcard 10 × 15
+Abzug 13 × 18	Print 13 × 18
+Abzug 20 × 30	Print 20 × 30
+Poster 30 × 45	Poster 30 × 45
+US Letter	US Letter
+Bildschirm & Video	Screen & video
+Full HD	Full HD
+Tablet 16:10	Tablet 16:10
+Smartphone 20:9	Smartphone 20:9
+Social Media	Social media
+Hochformat 4:5	Portrait 4:5
+Quadrat	Square
+Story / Reel 9:16	Story / Reel 9:16
+Video-Vorschau 16:9	Video thumbnail 16:9
+Pin 2:3	Pin 2:3
+Profil-Banner 4:1	Profile banner 4:1
+Ebenenbasierte Bildbearbeitung für professionelle Workflows unterwegs	Layer-based photo editing for professional workflows on the go
+Aus Galerie	From gallery
+Weiter bearbeiten	Continue editing
+Eigene Größe …	Custom size …
+{0} × {1} cm	{0} × {1} cm
+Aus der Liste entfernen	Remove from list
+Farbfelder	Swatches
+Neue Bibliothek …	New library …
+Vordergrundfarbe	Foreground color
+Name der Bibliothek	Library name
+Anlegen	Create
+Eingebaute Bibliothek – neue Farben landen in „Eigene Farbfelder“.	Built-in library – new colors go to “Custom swatches”.
+Als Vordergrundfarbe	As foreground color
+Als Hintergrundfarbe	As background color
+Entfernen	Remove
+Antippen: Vordergrundfarbe · lange drücken: weitere Aktionen	Tap: foreground color · long press: more actions
+Importieren …	Import …
+Exportieren …	Export …
+Photoshop-Farbfelder (.aco)	Photoshop swatches (.aco)
+Adobe Swatch Exchange (.ase)	Adobe Swatch Exchange (.ase)
+GIMP-Palette (.gpl)	GIMP palette (.gpl)
+Bibliothek löschen	Delete library
+Import: Photoshop (.aco, .act), Illustrator/InDesign (.ase), GIMP (.gpl)	Import: Photoshop (.aco, .act), Illustrator/InDesign (.ase), GIMP (.gpl)
+Bereich	Spot
+Reparatur	Healing
+Stempel	Stamp
+Radierer	Eraser
+Weich	Blur
+Scharf	Sharpen
+Bewegen	Move
+Zuschnitt	Crop
+Schärfe	Sharpness
+Licht	Light
+Hintergrundfarbe	Background color
+Farben tauschen (X)	Swap colors (X)
+Standardfarben (D)	Default colors (D)
+1 : 1 (Quadrat)	1 : 1 (square)
+3 : 2 (Kleinbild)	3 : 2 (35 mm)
+Größe und Auflösung …	Size and resolution …
+Querformat	Landscape
+Hochformat	Portrait
+Perspektivisch	Perspective
+Gerade ausrichten	Straighten
+Ecken auf die Kanten eines rechteckigen Motivs ziehen	Drag the corners onto the edges of a rectangular subject
+Pixel löschen	Delete pixels
+Linie entlang des Horizonts ziehen	Draw a line along the horizon
+Pinseleinstellungen (F5)	Brush settings (F5)
+Ebene	Layer
+Maske	Mask
+Ins Bild tippen …	Tap the image …
+Quelle setzen	Set source
+Alle Ebenen	All layers
+Modell: {0}	Model: {0}
+Auswahl auf eine saubere Stelle ziehen	Drag the selection onto a clean area
+Fehler mit der Auswahl umranden	Draw a selection around the flaw
+Pupille antippen · Suchradius = Pinselgröße ({0} px)	Tap the pupil · search radius = brush size ({0} px)
+Text wird bearbeitet	Editing text
+Ins Bild tippen für neuen Text · auf Text tippen zum Bearbeiten	Tap the image for new text · tap text to edit it
+Ebene wird vorbereitet …	Preparing layer …
+Belichtung	Exposure
+Entsättigen	Desaturate
+Sättigen	Saturate
+Neu	New
+Hinzu	Add
+Weg	Subtract
+Weiche Kante	Feather
+Alles	All
+Umkehren	Invert
+Kante verbessern	Refine edge
+Füllen	Fill
+Aufheben	Deselect
+In Hintergrundfarbe	With background color
+Tippen, um eine Farbe aufzunehmen · Alt: Hintergrundfarbe	Tap to pick a color · Alt: background color
+Helligkeit/Kontrast	Brightness/Contrast
+Tonwertkorrektur	Levels
+Gradationskurven	Curves
+Dynamik	Vibrance
+Farbton/Sättigung	Hue/Saturation
+Farbbalance	Color Balance
+Schwarzweiß	Black & White
+Fotofilter	Photo Filter
+Tontrennung	Posterize
+Farbtabelle (LUT)	Color Lookup (LUT)
+Kontrast	Contrast
+Tiefen	Shadows
+Mitteltöne (Gamma)	Midtones (gamma)
+Lichter	Highlights
+Ausgabe Schwarz	Output black
+Ausgabe Weiß	Output white
+Tiefen (Ausgabe bei 64)	Shadows (output at 64)
+Mitteltöne (Ausgabe bei 128)	Midtones (output at 128)
+Lichter (Ausgabe bei 192)	Highlights (output at 192)
+Versatz	Offset
+Gammakorrektur	Gamma correction
+Färben	Colorize
+Mitteltöne Cyan ↔ Rot	Midtones cyan ↔ red
+Mitteltöne Magenta ↔ Grün	Midtones magenta ↔ green
+Mitteltöne Gelb ↔ Blau	Midtones yellow ↔ blue
+Tiefen Cyan ↔ Rot	Shadows cyan ↔ red
+Tiefen Gelb ↔ Blau	Shadows yellow ↔ blue
+Lichter Cyan ↔ Rot	Highlights cyan ↔ red
+Lichter Gelb ↔ Blau	Highlights yellow ↔ blue
+Luminanz erhalten	Preserve luminosity
+Rottöne	Reds
+Gelbtöne	Yellows
+Grüntöne	Greens
+Cyantöne	Cyans
+Blautöne	Blues
+Magentatöne	Magentas
+Tönung Farbton	Tint hue
+Tönung Sättigung	Tint saturation
+Filterfarbe	Filter color
+Dichte	Density
+Stufen	Levels
+Weiche Gradation, warme Hauttöne, cremige Lichter – klassischer Porträtfilm	Soft gradation, warm skin tones, creamy highlights – classic portrait film
+Feinkörnig, kräftige Farben und satte Rottöne – Landschaft und Reise	Fine grain, vivid colors and rich reds – landscape and travel
+Pastellig, kühle Grün- und Cyantöne, offene Schatten – Hochzeit und Mode	Pastel, cool greens and cyans, open shadows – weddings and fashion
+Goldgelber Grundton, kräftig und sonnig – Alltags- und Urlaubsfilm	Golden base tone, punchy and sunny – everyday and holiday film
+Für Glühlampenlicht abgestimmt: bei Tag kühl, blaugrüne Schatten, warme Lichter – Nacht und Stadt	Balanced for tungsten light: cool by day, teal shadows, warm highlights – night and city
+Sehr satte Farben, tiefe Schwärzen, hoher Kontrast – Landschaft	Very saturated colors, deep blacks, high contrast – landscape
+Sauber und ausgewogen, moderater Kontrast – vielseitiger Diafilm	Clean and balanced, moderate contrast – versatile slide film
+Warmer Grundton, leuchtende Rottöne, tiefblauer Himmel – Reportage der 60er	Warm base tone, glowing reds, deep blue sky – 1960s reportage
+Kräftiger Kontrast, leicht rotempfindlich – Reportage und Straße	Strong contrast, slightly red-sensitive – reportage and street
+Weiche Gradation, viel Zeichnung in Schatten und Lichtern – Porträt	Soft gradation, lots of detail in shadows and highlights – portrait
+Helles Laub, dunkler Himmel, leuchtende Haut – traumartig	Bright foliage, dark sky, glowing skin – dreamlike
+Klassisch mit kühl-violettem Ton in den Schatten	Classic, with a cool violet tone in the shadows
+Kopierfilm-Charakter: weich auslaufende Lichter, blaugrüne Schatten, warme Haut	Print film character: soft highlight roll-off, teal shadows, warm skin
+Verblasst, cyanfarbene Schatten, warme Lichter, wenig Kontrast	Faded, cyan shadows, warm highlights, low contrast
+Farbstich und ausgeblichene Schwärzen wie bei überlagertem Material	Color cast and faded blacks like expired stock
+Porträt 400 (Farbnegativ)	Portrait 400 (color negative)
+Farbnegativ 100 brillant	Color negative 100 vivid
+Farbnegativ 400 kühl	Color negative 400 cool
+Farbnegativ 200 warm	Color negative 200 warm
+Kunstlicht 800 (Kinofilm)	Tungsten 800 (motion picture)
+Diafilm 50 brillant	Slide film 50 vivid
+Diafilm 100 neutral	Slide film 100 neutral
+Diafilm 64 klassisch	Slide film 64 classic
+Schwarzweiß 400 klassisch	Black & white 400 classic
+Schwarzweiß 400 weich	Black & white 400 soft
+Schwarzweiß Infrarot	Black & white infrared
+Schwarzweiß Selen getont	Black & white selenium toned
+Kinokopie	Print film
+Sofortbild	Instant film
+Abgelaufener Film	Expired film
+Relativ farbmetrisch	Relative colorimetric
+Absolut farbmetrisch	Absolute colorimetric
+Datei zu kurz für ein ICC-Profil	File too short for an ICC profile
+Keine ICC-Profil-Signatur	No ICC profile signature
+Profilverbindungsraum „{0}“ wird nicht unterstützt	Profile connection space “{0}” is not supported
+Farbraum „{0}“ wird nicht unterstützt	Color space “{0}” is not supported
+Unbenanntes Profil	Untitled profile
+Unbekannte Kurvenart {0}	Unknown curve type {0}
+Unbekannte Kurve „{0}“	Unknown curve “{0}”
+Profil „{0}“ kann nicht als Quelle dienen	Profile “{0}” can't be used as a source
+Profil „{0}“ kann nicht als Ziel dienen	Profile “{0}” can't be used as a destination
+Tabellenart „{0}“ wird nicht unterstützt	Table type “{0}” is not supported
+Profilmatrix ist nicht invertierbar	Profile matrix is not invertible
+Standard für Web und die meisten Bildschirme	Standard for the web and most displays
+Display P3	Display P3
+Größerer Farbraum moderner Tablets und Handys	Wider gamut of modern tablets and phones
+Adobe RGB (1998)	Adobe RGB (1998)
+Druckvorstufe, deckt CMYK besser ab	Prepress, covers CMYK better
+ProPhoto RGB	ProPhoto RGB
+Sehr groß – mit 8 Bit Gefahr von Abrissen	Very large – risk of banding with 8 bits
+Graustufen Gamma 2.2	Grayscale gamma 2.2
+Erzeugt von Photographics aus Normdaten, frei verwendbar	Created by photographics from standard data, free to use
+Erzeugt von Photographics	Created by photographics
+Weiche Lichter, warme Mitteltöne, leicht angehobene Schatten	Soft highlights, warm midtones, slightly lifted shadows
+Kühle Farbstimmung, klare Lichter	Cool color mood, clear highlights
+Kinolook: Hauttöne orange, Schatten blaugrün	Cinema look: orange skin tones, teal shadows
+Entsättigt, hoher Kontrast, silbrig	Desaturated, high contrast, silvery
+Ausgebleichte Schwärzen, sanfter Kontrast	Faded blacks, gentle contrast
+Kräftige S-Kurve, satte Farben	Strong S-curve, rich colors
+Warmer Monochrom-Ton	Warm monochrome tone
+Dunkler Himmel, helle Haut (wie Rotfilter vor dem Objektiv)	Dark sky, bright skin (like a red filter on the lens)
+Farbverschobene Diafilm-Entwicklung	Color-shifted slide film development
+„Day for Night“: dunkel, blau, entsättigt	“Day for night”: dark, blue, desaturated
+Film warm	Warm film
+Kühl	Cool
+Teal & Orange	Teal & Orange
+Bleach Bypass	Bleach Bypass
+Matt	Matte
+Kontrastreich	High contrast
+Sepia	Sepia
+Schwarzweiß Rotfilter	Black & white red filter
+Cross-Process	Cross-Process
+Nacht	Night
+Photographics	photographics
+Graustufen	Grayscale
+ASE-Datei beschädigt	ASE file damaged
+ASEF	ASEF
+${i * 10} % Schwarz	${i * 10} % Schwarz
+Hauttöne	Skin tones
+Material	Material
+Grau	Gray
+Gelb	Yellow
+Gelbgrün	Yellow green
+Frühlingsgrün	Spring green
+Cyan	Cyan
+Azur	Azure
+Rosa	Pink
+Dunkelrot	Dark red
+Braun	Brown
+Dunkelgrün	Dark green
+Marine	Navy
+Weinrot	Wine red
+Pastellrot	Pastel red
+Pastellorange	Pastel orange
+Pastellgelb	Pastel yellow
+Pastellgrün	Pastel green
+Pastellcyan	Pastel cyan
+Pastellblau	Pastel blue
+Pastellmagenta	Pastel magenta
+Sehr hell	Very light
+Hell rosig	Light rosy
+Hell warm	Light warm
+Mittel hell	Medium light
+Mittel rosig	Medium rosy
+Mittel	Medium
+Dunkel warm	Dark warm
+Sehr dunkel	Very dark
+Tief	Deep
+Wangenrot	Blush
+Red	Red
+Pink	Pink
+Purple	Purple
+Deep Purple	Deep Purple
+Blue	Blue
+Light Blue	Light Blue
+Teal	Teal
+Green	Green
+Light Green	Light Green
+Lime	Lime
+Yellow	Yellow
+Amber	Amber
+Deep Orange	Deep Orange
+Brown	Brown
+Grey	Grey
+Blue Grey	Blue Grey
+Offsetdruck gestrichen	Offset printing, coated
+ISO Coated v2 / FOGRA39 (Bilderdruckpapier)	ISO Coated v2 / FOGRA39 (coated paper)
+Offsetdruck ungestrichen	Offset printing, uncoated
+PSO Uncoated / FOGRA52 (Naturpapier)	PSO Uncoated / FOGRA52 (uncoated paper)
+Zeitungsdruck	Newsprint
+ISO Newspaper 26 (IFRA26)	ISO Newspaper 26 (IFRA26)
+Dot Gain 15 %	Dot Gain 15 %
+Farbenblindheit – Protanopie	Color blindness – protanopia
+Rotschwäche	Red-blind
+Farbenblindheit – Deuteranopie	Color blindness – deuteranopia
+Grünschwäche	Green-blind
+Ebene 1	Layer 1
+Pixelebene	Pixel layer
+Textebene (gerastert angezeigt)	Text layer (shown rasterized)
+Smartobjekt (gerastert angezeigt)	Smart object (shown rasterized)
+Einstellungsebene (nicht gerendert)	Adjustment layer (not rendered)
+Füllebene (gerastert angezeigt)	Fill layer (shown rasterized)
+{0} Kopie	{0} copy
+Ebene {0}	Layer {0}
+Gruppe {0}	Group {0}
+Ebene gruppieren	Group layer
+Ebene duplizieren	Duplicate layer
+Ebene löschen	Delete layer
+Ebene verschieben	Move layer
+Auf eine Ebene reduzieren	Merge down
+Auf Hintergrundebene reduzieren	Flatten image
+Ebenenmaske hinzufügen	Add layer mask
+Ebenenmaske löschen	Delete layer mask
+Ebenenmaske anwenden	Apply layer mask
+Maske verschieben	Move mask
+Perspektivisch freistellen	Perspective crop
+Maske lösen	Unlink mask
+Maske verbinden	Link mask
+Schnittmaske erstellen	Create clipping mask
+Schnittmaske zurückwandeln	Release clipping mask
+{0} ändern	Change {0}
+Text erstellen	Create text
+Freistellen (gedreht)	Crop (rotated)
+90° im UZS drehen	Rotate 90° clockwise
+90° gegen UZS drehen	Rotate 90° counter-clockwise
+Textfarbe	Text color
+Profil	Profile
+Fläche füllen	Fill area
+Rote Augen entfernen	Remove red eye
+Platzieren	Place
+Weißabgleich	White balance
+Tilt-Shift	Tilt-shift
+Objektivkorrektur	Lens correction
+Pixelwiederholung (harte Kanten)	Nearest neighbor (hard edges)
+Bilinear	Bilinear
+Bikubisch (glatter)	Bicubic (smoother)
+Lanczos (schärfer)	Lanczos (sharper)
+Unerwartetes Dateiende bei Offset {0} (benötigt {1} Bytes)	Unexpected end of file at offset {0} (needs {1} bytes)
+Ungültiger Offset {0}	Invalid offset {0}
+Ungültige Unicode-Länge {0}	Invalid Unicode length {0}
+Objekt-Arrays werden nicht unterstützt	Object arrays are not supported
+Unbekannter Descriptor-Typ {0}	Unknown descriptor type {0}
+Wert kann nicht geschrieben werden: {0}	Value can't be written: {0}
+Abgeflachte Kante und Relief	Bevel and emboss
+Glanz	Satin
+Verlaufsüberlagerung	Gradient overlay
+Musterüberlagerung	Pattern overlay
+Indizierte Farben	Indexed color
+Unbekannt ({0})	Unknown ({0})
+Keine Photoshop-Datei (Signatur fehlt)	Not a Photoshop file (signature missing)
+Unbekannte PSD-Version {0}	Unknown PSD version {0}
+Ungültige Bildgröße {0}x{1}	Invalid image size {0}x{1}
+Nicht unterstützte Farbtiefe {0} Bit	Unsupported bit depth {0} bit
+PSB (Großformat) – Zusatzdaten werden beim Speichern als PSD nicht übernommen.	PSB (large document) – additional data is not kept when saving as PSD.
+{0}-Bit-Dokument wurde in 8 Bit pro Kanal umgewandelt.	{0}-bit document was converted to 8 bits per channel.
+Ungültige Signatur im Ebeneneintrag: {0}	Invalid signature in layer record: {0}
+Adobe Photoshop Document Data Block	Adobe Photoshop Document Data Block
+TIFF mit Intel-Bytefolge: Ebeneneffekte, Text- und Einstellungsdaten ({0}) konnten nicht übernommen werden – 	TIFF with Intel byte order: layer effects, text and adjustment data ({0}) could not be kept – 
+Pixel, Masken, Gruppen und Mischmodi schon. In Photoshop mit Bytefolge „Macintosh“ gespeicherte TIFFs behalten alles.	pixels, masks, groups and blend modes were. TIFFs saved in Photoshop with byte order “Macintosh” keep everything.
+Einige Ebeneneffekte konnten nicht gelesen werden; sie bleiben beim Speichern aber erhalten.	Some layer effects could not be read; they are still kept when saving.
+Diese Ebeneneffekte werden nicht dargestellt, bleiben beim Speichern aber erhalten: {0}.	These layer effects are not displayed but are kept when saving: {0}.
+Vektormasken werden nicht dargestellt.	Vector masks are not displayed.
+Unbekannte Kompression {0}	Unknown compression {0}
+ZIP-Daten beschädigt	ZIP data damaged
+{0}-Dokument wurde mit dem eingebetteten Profil „{1}“ in „{2}“ umgewandelt.	{0} document was converted to “{2}” using the embedded profile “{1}”.
+Lab-Dokument wurde in „{0}“ umgewandelt.	Lab document was converted to “{0}”.
+Farbmodus {0} wurde ohne Farbprofil in RGB umgewandelt (Farben können abweichen).	Color mode {0} was converted to RGB without a color profile (colors may differ).
+Dokument zu groß für PSD (über 4 GB Ebenendaten)	Document too large for PSD (more than 4 GB of layer data)
+Hindurchwirken	Pass Through
+Normal	Normal
+Sprenkeln	Dissolve
+Abdunkeln	Darken
+Multiplizieren	Multiply
+Farbig nachbelichten	Color Burn
+Linear nachbelichten	Linear Burn
+Dunklere Farbe	Darker Color
+Aufhellen	Lighten
+Negativ multiplizieren	Screen
+Farbig abwedeln	Color Dodge
+Linear abwedeln (Addieren)	Linear Dodge (Add)
+Hellere Farbe	Lighter Color
+Ineinanderkopieren	Overlay
+Weiches Licht	Soft Light
+Hartes Licht	Hard Light
+Strahlendes Licht	Vivid Light
+Lineares Licht	Linear Light
+Lichtpunkt	Pin Light
+Hart mischen	Hard Mix
+Differenz	Difference
+Ausschluss	Exclusion
+Subtrahieren	Subtract
+Dividieren	Divide
+Luminanz	Luminosity
+Bildbreite fehlt	Image width missing
+Bildhöhe fehlt	Image height missing
+Ungültige Bildgröße {0}×{1}	Invalid image size {0}×{1}
+{0}-Bit-Bild wurde in 8 Bit pro Kanal umgewandelt.	{0}-bit image was converted to 8 bits per channel.
+Photoshop-Ebenen konnten nicht gelesen werden ({0}) – das zusammengefügte Bild wird verwendet.	Photoshop layers could not be read ({0}) – the flattened image is used.
+Mehrseitiges TIFF: nur die erste Seite wurde geöffnet.	Multi-page TIFF: only the first page was opened.
+Unterschiedliche Bittiefen je Kanal werden nicht unterstützt	Different bit depths per channel are not supported
+Nicht unterstützte Bittiefe {0}	Unsupported bit depth {0}
+Gleitkomma mit {0} Bit wird nicht unterstützt	{0}-bit floating point is not supported
+JPEG-komprimierte TIFFs werden noch nicht unterstützt – bitte als LZW oder ZIP speichern	JPEG-compressed TIFFs are not supported yet – please save as LZW or ZIP
+Fax-komprimierte (CCITT) TIFFs werden nicht unterstützt	Fax-compressed (CCITT) TIFFs are not supported
+Nicht unterstützte TIFF-Kompression {0}	Unsupported TIFF compression {0}
+Palette mit {0} Bit wird nicht unterstützt	{0}-bit palettes are not supported
+Farbpalette fehlt	Color palette missing
+Nur CMYK-Separationen werden unterstützt	Only CMYK separations are supported
+YCbCr-TIFFs werden noch nicht unterstützt	YCbCr TIFFs are not supported yet
+Nicht unterstützter Farbraum (Photometric {0})	Unsupported color space (Photometric {0})
+Zu wenige Kanäle ({0}) für den Farbraum	Too few channels ({0}) for the color space
+Bilddaten fehlen	Image data missing
+Ungültiger IFD-Offset {0}	Invalid IFD offset {0}
+Beschädigtes IFD	Damaged IFD
+Beschädigter Eintrag {0}	Damaged entry {0}
+Ebenendaten außerhalb der Datei	Layer data outside the file
+Dokument zu groß für TIFF (über 4 GB)	Document too large for TIFF (more than 4 GB)
+Hart rund	Hard Round
+Weich rund	Soft Round
+Bleistift	Pencil
+Tusche	Ink
+Kalligrafie	Calligraphy
+Marker	Marker
+Sprenkel	Speckle
+Kreide	Chalk
+Laub	Foliage
+Retusche weich	Soft retouch
+Verblassend	Fading
+Unbekannte Genauigkeit {0}	Unknown precision {0}
+Keine GIMP-Datei	Not a GIMP file
+Unbekannte Version {0}	Unknown version {0}
+Neuere XCF-Version ({0}) als bekannt – es wird versucht, sie zu lesen.	Newer XCF version ({0}) than known – trying to read it anyway.
+XCF mit {0} Bit{1} wurde in 8 Bit umgerechnet.	XCF with {0} bit{1} was converted to 8 bits.
+ (linear)	 (linear)
+Textebenen wurden als Pixel übernommen.	Text layers were imported as pixels.
+GIMP mischt Ebenen linear, Photographics wie Photoshop – Mischmodi und Deckkraft können leicht anders wirken.	GIMP blends layers linearly, photographics like Photoshop – blend modes and opacity may look slightly different.
+Unerwartete Pixelgröße {0}	Unexpected pixel size {0}
+Beschädigte Ebenendaten	Damaged layer data
+Nicht unterstützte Kompression {0}	Unsupported compression {0}
+RLE-Daten beschädigt	RLE data damaged
+GIMP-Mischmodus {0} (z. B. Körnung extrahieren/zusammenführen) gibt es hier nicht – als „Normal“ übernommen.	GIMP blend mode {0} (e.g. grain extract/merge) doesn't exist here – imported as “Normal”.
+Einstellungsebenen gibt es in GIMP nicht – sie wurden weggelassen.	Adjustment layers don't exist in GIMP – they were left out.
+Schnittmasken gibt es in GIMP nicht – die Ebenen wirken dort auf alles darunter.	Clipping masks don't exist in GIMP – the layers affect everything below them there.
+Looks	Looks
+Film	Film
+0 % Schwarz	0 % black
+10 % Schwarz	10 % black
+20 % Schwarz	20 % black
+30 % Schwarz	30 % black
+40 % Schwarz	40 % black
+50 % Schwarz	50 % black
+60 % Schwarz	60 % black
+70 % Schwarz	70 % black
+80 % Schwarz	80 % black
+90 % Schwarz	90 % black
+100 % Schwarz	100 % black
+Systemsprache	System language
+Sprache	Language
+Die Sprache wird beim nächsten Start der App übernommen.	The language changes the next time the app starts.
+KI-Entfernen	AI Remove
+KI-Modelle	AI models
+TIFF-Optionen	TIFF options
+RGB-Arbeitsfarbraum	RGB working space
+ICC-Profilbibliothek	ICC profile library
+Verflüssigen	Liquify
+Vorwärts	Forward warp
+Zusammenziehen	Pucker
+Aufblasen	Bloat
+Strudel rechts	Twirl clockwise
+Strudel links	Twirl counter-clockwise
+KI	AI
+verzerrt	distorted
+Kachelspeicher voll ({0} MB)	Tile memory full ({0} MB)
+Mitteltöne	Midtones
+Schwamm (sättigen)	Sponge (saturate)
+Schwamm (entsättigen)	Sponge (desaturate)
+Stiftdruck	Pen pressure
+Verblassen	Fade
+Strichrichtung	Stroke direction
+Dahinter auftragen	Behind
+Rechteck	Rectangle
+Ellipse	Ellipse
+Lasso	Lasso
+Perzeptiv	Perceptual
+Zauberstab	Magic Wand
+Objekt	Object
+Verlauf	Gradient
+Linear	Linear
+Radial	Radial
+Gespiegelt	Reflected
+Vorder- → Hintergrund	Foreground → Background
+Vordergrund → Transparent	Foreground → Transparent
+Linie im Bild ziehen · Umschalt rastet auf 45° ein	Drag a line in the image · Shift snaps to 45°
+Toleranz	Tolerance
+Benachbart	Contiguous
+Rechteck um das Objekt ziehen	Drag a rectangle around the object
+Zauberstab braucht eine Pixelebene oder „Alle Ebenen“.	The magic wand needs a pixel layer or “All layers”.
+Kein Objekt im Rechteck gefunden.	No object found in the rectangle.
+Objektauswahl	Object Selection
+Verlauf nur auf Pixelebenen oder Masken.	Gradients work only on pixel layers or masks.
+Zu viele Weiterleitungen	Too many redirects
+Server unterstützt keine Teil-Downloads	Server does not support partial downloads
+Verbindung unterbrochen	Connection interrupted
+Abgebrochen	Cancelled
+Apache 2.0 (Samsung AI, OpenCV)	Apache 2.0 (Samsung AI, OpenCV)
+RGB	RGB
+OkHttp, Okio	OkHttp, Okio
+Automatisch auswählen	Auto-select
+Angetippte Ebene ziehen · Strg: aktive Ebene · zwei Finger: Ansicht	Drag the tapped layer · Ctrl: active layer · two fingers: view
+Aktive Ebene ziehen · Strg: angetippte Ebene · zwei Finger: Ansicht	Drag the active layer · Ctrl: tapped layer · two fingers: view

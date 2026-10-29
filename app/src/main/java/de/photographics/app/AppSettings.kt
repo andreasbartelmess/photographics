@@ -1,5 +1,6 @@
 package de.photographics.app
 
+import de.photographics.core.tr
 import android.content.Context
 import de.photographics.core.color.IccProfiles
 import de.photographics.core.color.ProofCondition
@@ -9,44 +10,56 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-enum class ThemeMode(val label: String) { SYSTEM("System"), LIGHT("Hell"), DARK("Dunkel") }
+/** Sprache der Oberfläche; Sprachnamen bleiben in ihrer eigenen Sprache. */
+enum class Language(val label: String) {
+    SYSTEM(tr("Systemsprache")), DE("Deutsch"), EN("English");
 
-enum class ColorSource(val label: String) { DYNAMIC("Hintergrundbild (Material You)"), SEED("Eigene Akzentfarbe") }
+    /** Sprache, die beim Start gilt: Deutsch auf deutschen Geräten, sonst Englisch. */
+    fun resolve(): de.photographics.core.I18n.Lang = when (this) {
+        DE -> de.photographics.core.I18n.Lang.DE
+        EN -> de.photographics.core.I18n.Lang.EN
+        SYSTEM -> if (java.util.Locale.getDefault().language == "de") de.photographics.core.I18n.Lang.DE else de.photographics.core.I18n.Lang.EN
+    }
+}
+
+enum class ThemeMode(val label: String) { SYSTEM(tr("System")), LIGHT(tr("Hell")), DARK(tr("Dunkel")) }
+
+enum class ColorSource(val label: String) { DYNAMIC(tr("Hintergrundbild (Material You)")), SEED(tr("Eigene Akzentfarbe")) }
 
 /** Hintergrund rund um das Bild – wie *Voreinstellungen → Benutzeroberfläche* in Photoshop. */
 enum class CanvasBg(val label: String, val color: Int?) {
-    AUTO("Standard", null),
-    BLACK("Schwarz", 0xFF000000.toInt()),
-    DARK("Dunkelgrau", 0xFF282828.toInt()),
-    MEDIUM("Mittelgrau", 0xFF535353.toInt()),
-    LIGHT("Hellgrau", 0xFFB8B8B8.toInt()),
-    CUSTOM("Eigene Farbe", null),
+    AUTO(tr("Standard"), null),
+    BLACK(tr("Schwarz"), 0xFF000000.toInt()),
+    DARK(tr("Dunkelgrau"), 0xFF282828.toInt()),
+    MEDIUM(tr("Mittelgrau"), 0xFF535353.toInt()),
+    LIGHT(tr("Hellgrau"), 0xFFB8B8B8.toInt()),
+    CUSTOM(tr("Eigene Farbe"), null),
 }
 
-enum class Side(val label: String) { LEFT("Links"), RIGHT("Rechts") }
-enum class BarPosition(val label: String) { TOP("Oben"), BOTTOM("Unten") }
-enum class SliderPlacement(val label: String) { LEFT("Links"), RIGHT("Rechts"), HIDDEN("Aus") }
+enum class Side(val label: String) { LEFT(tr("Links")), RIGHT(tr("Rechts")) }
+enum class BarPosition(val label: String) { TOP(tr("Oben")), BOTTOM(tr("Unten")) }
+enum class SliderPlacement(val label: String) { LEFT(tr("Links")), RIGHT(tr("Rechts")), HIDDEN(tr("Aus")) }
 
 /** Umgang mit Dateien, deren Profil vom Arbeitsfarbraum abweicht (Photoshop: Farbmanagement-Richtlinien). */
 enum class ProfilePolicy(val label: String, val description: String) {
-    KEEP("Eingebettetes Profil beibehalten", "Farben bleiben exakt, das Dokument behält sein Profil"),
-    CONVERT("In Arbeitsfarbraum umwandeln", "Beim Öffnen in den Arbeitsfarbraum umrechnen"),
+    KEEP(tr("Eingebettetes Profil beibehalten"), tr("Farben bleiben exakt, das Dokument behält sein Profil")),
+    CONVERT(tr("In Arbeitsfarbraum umwandeln"), tr("Beim Öffnen in den Arbeitsfarbraum umrechnen")),
 }
 
 /** Vordefinierte Akzentfarben (Ausgangsfarbe für das Material-3-Farbschema). */
 val SEED_PRESETS = listOf(
-    "Indigo" to 0xFF4A5C92.toInt(),
-    "Blau" to 0xFF1E88E5.toInt(),
-    "Petrol" to 0xFF00796B.toInt(),
-    "Grün" to 0xFF43A047.toInt(),
-    "Oliv" to 0xFF827717.toInt(),
-    "Bernstein" to 0xFFFFA000.toInt(),
-    "Orange" to 0xFFF4511E.toInt(),
-    "Rot" to 0xFFD32F2F.toInt(),
-    "Magenta" to 0xFFC2185B.toInt(),
-    "Violett" to 0xFF7B1FA2.toInt(),
-    "Schiefer" to 0xFF607D8B.toInt(),
-    "Graphit" to 0xFF5F5F5F.toInt(),
+    tr("Indigo") to 0xFF4A5C92.toInt(),
+    tr("Blau") to 0xFF1E88E5.toInt(),
+    tr("Petrol") to 0xFF00796B.toInt(),
+    tr("Grün") to 0xFF43A047.toInt(),
+    tr("Oliv") to 0xFF827717.toInt(),
+    tr("Bernstein") to 0xFFFFA000.toInt(),
+    tr("Orange") to 0xFFF4511E.toInt(),
+    tr("Rot") to 0xFFD32F2F.toInt(),
+    tr("Magenta") to 0xFFC2185B.toInt(),
+    tr("Violett") to 0xFF7B1FA2.toInt(),
+    tr("Schiefer") to 0xFF607D8B.toInt(),
+    tr("Graphit") to 0xFF5F5F5F.toInt(),
 )
 
 data class AppSettings(
@@ -90,12 +103,14 @@ data class AppSettings(
     val tiffLayers: Boolean = true,
     /** Einführung beim ersten Start gesehen. */
     val introSeen: Boolean = false,
+    /** Sprache der Oberfläche (gilt ab dem nächsten Start). */
+    val language: Language = Language.SYSTEM,
 ) {
     /** Vordefinierte Arbeitsbereiche. */
     enum class Preset(val label: String, val description: String) {
-        STANDARD("Standard", "Werkzeuge links, Ebenen rechts"),
-        LEFT_HANDED("Linkshänder", "Werkzeuge und Schnellregler rechts, Ebenen links"),
-        MINIMAL("Minimal", "Schmale Werkzeugleiste, Optionen unten, keine Schnellregler"),
+        STANDARD(tr("Standard"), tr("Werkzeuge links, Ebenen rechts")),
+        LEFT_HANDED(tr("Linkshänder"), tr("Werkzeuge und Schnellregler rechts, Ebenen links")),
+        MINIMAL(tr("Minimal"), tr("Schmale Werkzeugleiste, Optionen unten, keine Schnellregler")),
     }
 
     fun withPreset(p: Preset): AppSettings = when (p) {
@@ -156,6 +171,7 @@ class SettingsStore(context: Context) {
             tiffCompression = enumOf("tiffCompression", d.tiffCompression),
             tiffLayers = prefs.getBoolean("tiffLayers", d.tiffLayers),
             introSeen = prefs.getBoolean("introSeen", d.introSeen),
+            language = enumOf("language", d.language),
         )
     }
 
@@ -191,6 +207,7 @@ class SettingsStore(context: Context) {
             .putString("tiffCompression", s.tiffCompression.name)
             .putBoolean("tiffLayers", s.tiffLayers)
             .putBoolean("introSeen", s.introSeen)
+            .putString("language", s.language.name)
             .apply()
     }
 }

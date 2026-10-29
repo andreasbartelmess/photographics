@@ -1,5 +1,6 @@
 package de.photographics.app.ui
 
+import de.photographics.core.tr
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -63,42 +64,42 @@ private data class Preset(val label: String, val w: Int, val h: Int, val dpi: Fl
 
 /** Vorgaben nach Einsatzzweck, wie im „Neues Dokument“-Dialog von Photoshop. */
 private val PRESET_GROUPS = listOf(
-    "Foto" to listOf(
-        Preset("Kleinbild 3:2 · 24 MP", 6000, 4000, 300f),
-        Preset("Kleinbild 3:2 · 45 MP", 8256, 5504, 300f),
-        Preset("Mittelformat 4:3", 8256, 6192, 300f),
-        Preset("Micro Four Thirds 4:3", 5184, 3888, 300f),
-        Preset("Smartphone 4:3", 4032, 3024, 300f),
-        Preset("Großformat 5:4", 5000, 4000, 300f),
-        Preset("Quadrat 1:1", 4000, 4000, 300f),
-        Preset("Panorama 3:1", 9000, 3000, 300f),
+    tr("Foto") to listOf(
+        Preset(tr("Kleinbild 3:2 · 24 MP"), 6000, 4000, 300f),
+        Preset(tr("Kleinbild 3:2 · 45 MP"), 8256, 5504, 300f),
+        Preset(tr("Mittelformat 4:3"), 8256, 6192, 300f),
+        Preset(tr("Micro Four Thirds 4:3"), 5184, 3888, 300f),
+        Preset(tr("Smartphone 4:3"), 4032, 3024, 300f),
+        Preset(tr("Großformat 5:4"), 5000, 4000, 300f),
+        Preset(tr("Quadrat 1:1"), 4000, 4000, 300f),
+        Preset(tr("Panorama 3:1"), 9000, 3000, 300f),
     ),
-    "Druck · 300 dpi" to listOf(
+    tr("Druck · 300 dpi") to listOf(
         Preset("A5", 1748, 2480, 300f, print = true),
         Preset("A4", 2480, 3508, 300f, print = true),
         Preset("A3", 3508, 4961, 300f, print = true),
-        Preset("Postkarte 10 × 15", 1181, 1772, 300f, print = true),
-        Preset("Abzug 13 × 18", 1535, 2126, 300f, print = true),
-        Preset("Abzug 20 × 30", 2362, 3543, 300f, print = true),
-        Preset("Poster 30 × 45", 3543, 5315, 300f, print = true),
-        Preset("US Letter", 2550, 3300, 300f, print = true),
+        Preset(tr("Postkarte 10 × 15"), 1181, 1772, 300f, print = true),
+        Preset(tr("Abzug 13 × 18"), 1535, 2126, 300f, print = true),
+        Preset(tr("Abzug 20 × 30"), 2362, 3543, 300f, print = true),
+        Preset(tr("Poster 30 × 45"), 3543, 5315, 300f, print = true),
+        Preset(tr("US Letter"), 2550, 3300, 300f, print = true),
     ),
-    "Bildschirm & Video" to listOf(
-        Preset("Full HD", 1920, 1080),
+    tr("Bildschirm & Video") to listOf(
+        Preset(tr("Full HD"), 1920, 1080),
         Preset("4K UHD", 3840, 2160),
         Preset("DCI 4K", 4096, 2160),
         Preset("5K", 5120, 2880),
         Preset("QHD", 2560, 1440),
-        Preset("Tablet 16:10", 2560, 1600),
-        Preset("Smartphone 20:9", 1080, 2400),
+        Preset(tr("Tablet 16:10"), 2560, 1600),
+        Preset(tr("Smartphone 20:9"), 1080, 2400),
     ),
-    "Social Media" to listOf(
-        Preset("Hochformat 4:5", 1080, 1350),
-        Preset("Quadrat", 1080, 1080),
-        Preset("Story / Reel 9:16", 1080, 1920),
-        Preset("Video-Vorschau 16:9", 1280, 720),
-        Preset("Pin 2:3", 1000, 1500),
-        Preset("Profil-Banner 4:1", 1584, 396),
+    tr("Social Media") to listOf(
+        Preset(tr("Hochformat 4:5"), 1080, 1350),
+        Preset(tr("Quadrat"), 1080, 1080),
+        Preset(tr("Story / Reel 9:16"), 1080, 1920),
+        Preset(tr("Video-Vorschau 16:9"), 1280, 720),
+        Preset(tr("Pin 2:3"), 1000, 1500),
+        Preset(tr("Profil-Banner 4:1"), 1584, 396),
     ),
 )
 
@@ -130,23 +131,23 @@ fun StartScreen(
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
                         Wordmark(MaterialTheme.typography.headlineMedium)
-                        Text("Ebenenbasierte Bildbearbeitung für professionelle Workflows unterwegs", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(tr("Ebenenbasierte Bildbearbeitung für professionelle Workflows unterwegs"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    Button(onClick = onOpen) { Icon(Icons.Filled.FolderOpen, null); Spacer(Modifier.width(8.dp)); Text("Öffnen") }
-                    FilledTonalButton(onClick = onGallery) { Icon(Icons.Filled.PhotoLibrary, null); Spacer(Modifier.width(8.dp)); Text("Aus Galerie") }
+                    Button(onClick = onOpen) { Icon(Icons.Filled.FolderOpen, null); Spacer(Modifier.width(8.dp)); Text(tr("Öffnen")) }
+                    FilledTonalButton(onClick = onGallery) { Icon(Icons.Filled.PhotoLibrary, null); Spacer(Modifier.width(8.dp)); Text(tr("Aus Galerie")) }
                     if (hasDocument) OutlinedButton(onClick = onContinue) {
-                        Text("Weiter bearbeiten"); Spacer(Modifier.width(8.dp)); Icon(Icons.AutoMirrored.Filled.ArrowForward, null)
+                        Text(tr("Weiter bearbeiten")); Spacer(Modifier.width(8.dp)); Icon(Icons.AutoMirrored.Filled.ArrowForward, null)
                     }
                 }
             }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
-                    Text("Neues Dokument", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                    OutlinedButton(onClick = onCustomNew) { Icon(Icons.Filled.Add, null); Spacer(Modifier.width(8.dp)); Text("Eigene Größe …") }
+                    Text(tr("Neues Dokument"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    OutlinedButton(onClick = onCustomNew) { Icon(Icons.Filled.Add, null); Spacer(Modifier.width(8.dp)); Text(tr("Eigene Größe …")) }
                 }
             }
             // Je Gruppe eine Reihe gleich großer Karten (seitlich scrollbar): keine halb gefüllten Zeilen
@@ -161,7 +162,7 @@ fun StartScreen(
                 }
             }
             if (recent.isNotEmpty()) {
-                item(span = { GridItemSpan(maxLineSpan) }) { SectionTitle("Zuletzt verwendet") }
+                item(span = { GridItemSpan(maxLineSpan) }) { SectionTitle(tr("Zuletzt verwendet")) }
                 items(recent, key = { it.uri.toString() }) { e -> RecentCard(e, loadThumb, { onOpenRecent(e) }, { onRemoveRecent(e) }) }
             }
         }
@@ -190,7 +191,7 @@ private fun PresetCard(p: Preset, onClick: () -> Unit) {
             Spacer(Modifier.height(10.dp))
             Text(p.label, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                if (p.print) "${cm(p.w, p.dpi)} × ${cm(p.h, p.dpi)} cm" else "${p.w} × ${p.h} px",
+                if (p.print) tr("{0} × {1} cm", cm(p.w, p.dpi), cm(p.h, p.dpi)) else tr("{0} × {1} px", p.w, p.h),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
             )
         }
@@ -210,7 +211,7 @@ private fun RecentCard(e: RecentFiles.Entry, loadThumb: (RecentFiles.Entry) -> a
         Box(Modifier.fillMaxWidth().aspectRatio(4f / 3f).background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
             thumb?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
             IconButton(onClick = onRemove, modifier = Modifier.align(Alignment.TopEnd)) {
-                Icon(Icons.Filled.Close, "Aus der Liste entfernen", tint = MaterialTheme.colorScheme.onSurface,
+                Icon(Icons.Filled.Close, tr("Aus der Liste entfernen"), tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.8f)).padding(4.dp))
             }
         }

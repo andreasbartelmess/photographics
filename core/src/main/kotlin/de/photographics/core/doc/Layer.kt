@@ -1,5 +1,6 @@
 package de.photographics.core.doc
 
+import de.photographics.core.tr
 import de.photographics.core.adjust.Adjustment
 import de.photographics.core.adjust.RgbMap
 import de.photographics.core.image.Affine
@@ -12,11 +13,11 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /** Herkunft/Art einer Ebene. Spezialebenen aus Photoshop werden als Pixel angezeigt und ihre Daten beim Speichern erhalten. */
 enum class LayerKind(val label: String) {
-    PIXEL("Pixelebene"),
-    TEXT("Textebene (gerastert angezeigt)"),
-    SMART_OBJECT("Smartobjekt (gerastert angezeigt)"),
-    ADJUSTMENT("Einstellungsebene (nicht gerendert)"),
-    FILL("Füllebene (gerastert angezeigt)"),
+    PIXEL(tr("Pixelebene")),
+    TEXT(tr("Textebene (gerastert angezeigt)")),
+    SMART_OBJECT(tr("Smartobjekt (gerastert angezeigt)")),
+    ADJUSTMENT(tr("Einstellungsebene (nicht gerendert)")),
+    FILL(tr("Füllebene (gerastert angezeigt)")),
 }
 
 /** Ebenenmaske: Graustufen 0 (verdeckt) .. 255 (sichtbar). */
@@ -53,6 +54,19 @@ sealed class Layer(var name: String) {
 
     /** Unbekannte PSD-Zusatzblöcke (Effekte, Text-Engine-Daten, ...), werden unverändert zurückgeschrieben. */
     var preservedBlocks: List<PsdTaggedBlock> = emptyList()
+
+    /**
+     * Ebeneneffekte aus den erhaltenen PSD-Blöcken (lmfx/lfx2), nur zur Anzeige. Weil sie aus
+     * [preservedBlocks] gelesen werden, überstehen sie Kopieren, Rückgängig und Speichern von selbst.
+     */
+    val effects: LayerEffects?
+        get() {
+            val b = preservedBlocks
+            if (effectsFor !== b) { effectsCache = de.photographics.core.psd.PsdEffects.parse(b); effectsFor = b }
+            return effectsCache
+        }
+    @Volatile private var effectsFor: List<PsdTaggedBlock>? = null
+    @Volatile private var effectsCache: LayerEffects? = null
 
     internal var parentGroup: GroupLayer? = null
     val parent: GroupLayer? get() = parentGroup
@@ -101,7 +115,7 @@ class PixelLayer(name: String, var pixels: TileGrid) : RasterLayer(name) {
     override val raster: TileGrid get() = pixels
 
     override fun deepCopy(): PixelLayer =
-        PixelLayer("$name Kopie", pixels.copy()).also { copyPropsTo(it) }
+        PixelLayer(tr("{0} Kopie", name), pixels.copy()).also { copyPropsTo(it) }
 }
 
 /** Nicht-destruktive Korrektur, die alles darunter (innerhalb der Gruppe) verändert. */
@@ -116,7 +130,7 @@ class AdjustmentLayer(name: String, var adjustment: Adjustment) : Layer(name) {
         return compiled!!
     }
 
-    override fun deepCopy(): AdjustmentLayer = AdjustmentLayer("$name Kopie", adjustment).also { copyPropsTo(it) }
+    override fun deepCopy(): AdjustmentLayer = AdjustmentLayer(tr("{0} Kopie", name), adjustment).also { copyPropsTo(it) }
 }
 
 /**
@@ -152,7 +166,7 @@ class TextLayer(name: String, style: TextStyle, transform: Affine, width: Int, h
     fun bounds(): IntRect = raster.contentBounds().takeIf { !it.isEmpty } ?: IntRect.EMPTY
 
     override fun deepCopy(): TextLayer =
-        TextLayer("$name Kopie", style, transform, docWidth, docHeight).also { copyPropsTo(it) }
+        TextLayer(tr("{0} Kopie", name), style, transform, docWidth, docHeight).also { copyPropsTo(it) }
 }
 
 /**
@@ -247,7 +261,7 @@ class SmartLayer(name: String, val source: TileGrid, transform: Affine, width: I
             ?: Resample.renderAffine(source, transform, docWidth, docHeight, fast = fastPreview)).also { cache = it }
 
     override fun deepCopy(): SmartLayer =
-        SmartLayer("$name Kopie", source, transform, docWidth, docHeight).also { copyPropsTo(it); it.warp = warp }
+        SmartLayer(tr("{0} Kopie", name), source, transform, docWidth, docHeight).also { copyPropsTo(it); it.warp = warp }
 
     companion object {
         fun mapQuad(q: DoubleArray, m: Affine) = DoubleArray(8) { i -> if (i % 2 == 0) m.mapX(q[i], q[i + 1]) else m.mapY(q[i - 1], q[i]) }
@@ -272,7 +286,7 @@ class GroupLayer(name: String) : Layer(name) {
     }
 
     override fun deepCopy(): GroupLayer {
-        val g = GroupLayer("$name Kopie")
+        val g = GroupLayer(tr("{0} Kopie", name))
         copyPropsTo(g)
         g.expanded = expanded
         for (c in children) g.add(c.deepCopy().also { it.name = c.name })

@@ -1,5 +1,6 @@
 package de.photographics.app.ui
 
+import de.photographics.core.tr
 import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -70,6 +71,7 @@ import de.photographics.app.SEED_PRESETS
 import de.photographics.app.Side
 import de.photographics.app.SliderPlacement
 import de.photographics.app.ThemeMode
+import de.photographics.app.Language
 import de.photographics.core.color.ProofCondition
 import de.photographics.core.color.IccProfiles
 import de.photographics.core.color.RenderingIntent
@@ -81,7 +83,7 @@ import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.TextButton
 import kotlin.math.roundToInt
 
-enum class SettingsTab(val label: String) { APPEARANCE("Darstellung"), WORKSPACE("Arbeitsbereich"), COLOR("Farbmanagement"), PROOF("Farbproof"), ABOUT("Über") }
+enum class SettingsTab(val label: String) { APPEARANCE(tr("Darstellung")), WORKSPACE(tr("Arbeitsbereich")), COLOR(tr("Farbmanagement")), PROOF(tr("Farbproof")), ABOUT(tr("Über")) }
 
 /** Voreinstellungen: Farben der App, Arbeitsbereich und Farbproof – Änderungen wirken sofort. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -109,8 +111,8 @@ fun SettingsDialog(
         ) {
             Column {
                 Row(Modifier.padding(start = 24.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Einstellungen", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-                    IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, "Schließen") }
+                    Text(tr("Einstellungen"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                    IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, tr("Schließen")) }
                 }
                 PrimaryScrollableTabRow(selectedTabIndex = tab, containerColor = Color.Transparent, edgePadding = 16.dp) {
                     for (t in SettingsTab.entries) Tab(selected = tab == t.ordinal, onClick = { tab = t.ordinal }, text = { Text(t.label) })
@@ -139,18 +141,23 @@ fun SettingsDialog(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Appearance(s: AppSettings, onChange: ((AppSettings) -> AppSettings) -> Unit, onPickSeed: () -> Unit, onPickCanvas: () -> Unit) {
-    Section("Design")
-    Segmented(ThemeMode.entries, s.themeMode, { it.label }) { m -> onChange { it.copy(themeMode = m) } }
-    SwitchRow("Tiefschwarz im dunklen Design", "Schwarze Flächen – spart Strom auf OLED-Displays", s.pureBlack) { v -> onChange { it.copy(pureBlack = v) } }
+    Section(tr("Sprache"))
+    Segmented(Language.entries, s.language, { it.label }) { l -> onChange { it.copy(language = l) } }
+    Text(tr("Die Sprache wird beim nächsten Start der App übernommen."), style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
 
-    Section("Farben der App")
+    Section(tr("Design"))
+    Segmented(ThemeMode.entries, s.themeMode, { it.label }) { m -> onChange { it.copy(themeMode = m) } }
+    SwitchRow(tr("Tiefschwarz im dunklen Design"), tr("Schwarze Flächen – spart Strom auf OLED-Displays"), s.pureBlack) { v -> onChange { it.copy(pureBlack = v) } }
+
+    Section(tr("Farben der App"))
     val dynamicAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     RadioRow(
         ColorSource.DYNAMIC.label,
-        if (dynamicAvailable) "Akzentfarben passend zum Hintergrundbild des Tablets" else "Erst ab Android 12 verfügbar",
+        if (dynamicAvailable) tr("Akzentfarben passend zum Hintergrundbild des Tablets") else tr("Erst ab Android 12 verfügbar"),
         selected = s.colorSource == ColorSource.DYNAMIC, enabled = dynamicAvailable,
     ) { onChange { it.copy(colorSource = ColorSource.DYNAMIC) } }
-    RadioRow(ColorSource.SEED.label, "Das ganze Farbschema wird aus dieser Farbe abgeleitet", selected = s.colorSource == ColorSource.SEED) {
+    RadioRow(ColorSource.SEED.label, tr("Das ganze Farbschema wird aus dieser Farbe abgeleitet"), selected = s.colorSource == ColorSource.SEED) {
         onChange { it.copy(colorSource = ColorSource.SEED) }
     }
     FlowRow(Modifier.padding(start = 48.dp, top = 4.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -160,12 +167,12 @@ private fun Appearance(s: AppSettings, onChange: ((AppSettings) -> AppSettings) 
             }
         }
         val custom = SEED_PRESETS.none { it.second == s.seedColor }
-        Swatch(if (custom) Color(s.seedColor) else MaterialTheme.colorScheme.surfaceContainerHighest, "Eigene Farbe …",
+        Swatch(if (custom) Color(s.seedColor) else MaterialTheme.colorScheme.surfaceContainerHighest, tr("Eigene Farbe …"),
             selected = s.colorSource == ColorSource.SEED && custom, icon = !custom, onClick = onPickSeed)
     }
 
-    Section("Hintergrund der Arbeitsfläche")
-    Text("Neutrale Grautöne verfälschen die Farbwahrnehmung beim Retuschieren am wenigsten.",
+    Section(tr("Hintergrund der Arbeitsfläche"))
+    Text(tr("Neutrale Grautöne verfälschen die Farbwahrnehmung beim Retuschieren am wenigsten."),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     FlowRow(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         for (bg in CanvasBg.entries) {
@@ -190,7 +197,7 @@ private fun Appearance(s: AppSettings, onChange: ((AppSettings) -> AppSettings) 
 @Composable
 private fun Workspace(s: AppSettings, onChange: ((AppSettings) -> AppSettings) -> Unit) {
     LayoutSketch(s, Modifier.fillMaxWidth().height(150.dp))
-    Section("Vorlagen")
+    Section(tr("Vorlagen"))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for (p in AppSettings.Preset.entries) {
             OutlinedCard(onClick = { onChange { it.withPreset(p) } }, modifier = Modifier.weight(1f)) {
@@ -201,21 +208,21 @@ private fun Workspace(s: AppSettings, onChange: ((AppSettings) -> AppSettings) -
             }
         }
     }
-    Section("Werkzeugleiste")
-    LabeledSegmented("Position", Side.entries, s.toolbarSide, { it.label }) { v -> onChange { it.copy(toolbarSide = v) } }
-    SwitchRow("Beschriftungen", "Ohne Beschriftung ist die Leiste schmaler", s.toolLabels) { v -> onChange { it.copy(toolLabels = v) } }
-    Section("Ebenen-Panel")
-    LabeledSegmented("Position", Side.entries, s.layersSide, { it.label }) { v -> onChange { it.copy(layersSide = v) } }
+    Section(tr("Werkzeugleiste"))
+    LabeledSegmented(tr("Position"), Side.entries, s.toolbarSide, { it.label }) { v -> onChange { it.copy(toolbarSide = v) } }
+    SwitchRow(tr("Beschriftungen"), tr("Ohne Beschriftung ist die Leiste schmaler"), s.toolLabels) { v -> onChange { it.copy(toolLabels = v) } }
+    Section(tr("Ebenen-Panel"))
+    LabeledSegmented(tr("Position"), Side.entries, s.layersSide, { it.label }) { v -> onChange { it.copy(layersSide = v) } }
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-        Text("Breite", modifier = Modifier.width(120.dp))
+        Text(tr("Breite"), modifier = Modifier.width(120.dp))
         Slider(s.layersWidth.toFloat(), { v -> onChange { it.copy(layersWidth = (v / 10).roundToInt() * 10) } }, valueRange = 260f..520f, modifier = Modifier.weight(1f))
-        Text("${s.layersWidth} dp", style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(64.dp).padding(start = 8.dp))
+        Text(tr("{0} dp", s.layersWidth), style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(64.dp).padding(start = 8.dp))
     }
-    Section("Werkzeugoptionen und Schnellregler")
-    LabeledSegmented("Optionsleiste", BarPosition.entries, s.optionsBar, { it.label }) { v -> onChange { it.copy(optionsBar = v) } }
+    Section(tr("Werkzeugoptionen und Schnellregler"))
+    LabeledSegmented(tr("Optionsleiste"), BarPosition.entries, s.optionsBar, { it.label }) { v -> onChange { it.copy(optionsBar = v) } }
     Spacer(Modifier.height(8.dp))
-    LabeledSegmented("Größe/Deckkraft", SliderPlacement.entries, s.quickSliders, { it.label }) { v -> onChange { it.copy(quickSliders = v) } }
-    Text("Die Schnellregler am Bildrand lassen sich mit dem Daumen der freien Hand bedienen.",
+    LabeledSegmented(tr("Größe/Deckkraft"), SliderPlacement.entries, s.quickSliders, { it.label }) { v -> onChange { it.copy(quickSliders = v) } }
+    Text(tr("Die Schnellregler am Bildrand lassen sich mit dem Daumen der freien Hand bedienen."),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
 }
 
@@ -264,46 +271,46 @@ private fun Proof(
     onChange: ((AppSettings) -> AppSettings) -> Unit, onToggleProof: () -> Unit, onToggleGamut: () -> Unit, onPickWarn: () -> Unit,
     iccLibrary: List<IccEntry>, onImportIcc: () -> Unit,
 ) {
-    SwitchRow("Farbproof anzeigen", "Strg+Y – simuliert die gewählte Ausgabe auf dem Bildschirm", proofOn) { onToggleProof() }
-    SwitchRow("Farbumfang-Warnung", "Strg+⇧+Y – markiert Farben, die sich nicht drucken lassen", gamutWarning) { onToggleGamut() }
-    Section("Zu simulierende Bedingung")
+    SwitchRow(tr("Farbproof anzeigen"), tr("Strg+Y – simuliert die gewählte Ausgabe auf dem Bildschirm"), proofOn) { onToggleProof() }
+    SwitchRow(tr("Farbumfang-Warnung"), tr("Strg+⇧+Y – markiert Farben, die sich nicht drucken lassen"), gamutWarning) { onToggleGamut() }
+    Section(tr("Zu simulierende Bedingung"))
     for (c in ProofCondition.entries) {
         RadioRow(c.label, c.description, selected = s.proofIcc == null && s.proofCondition == c) { onChange { it.copy(proofCondition = c, proofIcc = null) } }
     }
-    Section("Eigene ICC-Profile")
+    Section(tr("Eigene ICC-Profile"))
     val outputs = iccLibrary.filter { it.isOutput || it.isRgb }
     if (outputs.isEmpty()) Text(
-        "Noch keine Profile – z. B. das Profil Ihrer Druckerei (FOGRA, PSO) oder Ihres Fotodruckers hinzufügen.",
+        tr("Noch keine Profile – z. B. das Profil Ihrer Druckerei (FOGRA, PSO) oder Ihres Fotodruckers hinzufügen."),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     for (e in outputs) {
         RadioRow(e.description, "${e.colorSpace} · ${e.fileName}", selected = s.proofIcc == e.fileName) { onChange { it.copy(proofIcc = e.fileName) } }
     }
-    TextButton(onClick = onImportIcc) { Icon(Icons.Filled.Add, null); Text("ICC-Profil hinzufügen …", Modifier.padding(start = 8.dp)) }
+    TextButton(onClick = onImportIcc) { Icon(Icons.Filled.Add, null); Text(tr("ICC-Profil hinzufügen …"), Modifier.padding(start = 8.dp)) }
     if (s.proofIcc != null) {
-        Section("Priorität")
+        Section(tr("Priorität"))
         for (i in RenderingIntent.entries) RadioRow(i.label, null, selected = s.proofIntent == i) { onChange { it.copy(proofIntent = i) } }
-        SwitchRow("Tiefenkompensierung", "Schwarzpunkt des Dokuments auf den des Ausgabegeräts abbilden", s.proofBpc) { v -> onChange { it.copy(proofBpc = v) } }
+        SwitchRow(tr("Tiefenkompensierung"), tr("Schwarzpunkt des Dokuments auf den des Ausgabegeräts abbilden"), s.proofBpc) { v -> onChange { it.copy(proofBpc = v) } }
     }
-    Section("Anzeigeoptionen")
-    SwitchRow("Papierfarbe simulieren", "Zeigt Papierweiß und die Schwärze der Druckfarbe (absolut farbmetrisch)",
+    Section(tr("Anzeigeoptionen"))
+    SwitchRow(tr("Papierfarbe simulieren"), tr("Zeigt Papierweiß und die Schwärze der Druckfarbe (absolut farbmetrisch)"),
         s.proofSimulatePaper, enabled = s.proofIcc != null || s.proofCondition.isPrint) { v -> onChange { it.copy(proofSimulatePaper = v) } }
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 8.dp)) {
         Column(Modifier.weight(1f)) {
-            Text("Warnfarbe")
-            Text("Farbe für nicht druckbare Bereiche", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(tr("Warnfarbe"))
+            Text(tr("Farbe für nicht druckbare Bereiche"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         for (c in listOf(0xFF808080.toInt(), 0xFFFF00FF.toInt(), 0xFF00E676.toInt(), 0xFFFFEB3B.toInt())) {
-            Swatch(Color(c), "Warnfarbe", selected = s.gamutWarningColor == c, modifier = Modifier.padding(start = 8.dp)) {
+            Swatch(Color(c), tr("Warnfarbe"), selected = s.gamutWarningColor == c, modifier = Modifier.padding(start = 8.dp)) {
                 onChange { it.copy(gamutWarningColor = c) }
             }
         }
-        IconButton(onClick = onPickWarn) { Icon(Icons.Filled.Colorize, "Eigene Warnfarbe") }
+        IconButton(onClick = onPickWarn) { Icon(Icons.Filled.Colorize, tr("Eigene Warnfarbe")) }
     }
     Text(
-        "Die Druckbedingungen werden aus den Normfarbwerten (ISO 12647) berechnet – relativ farbmetrisch mit " +
-            "Tiefenkompensierung. Das ist eine gute Näherung für die Bildschirmkontrolle; für verbindliche Proofs " +
-            "das ICC-Profil der Druckerei verwenden. Export und gespeicherte Dateien bleiben unverändert.",
+        tr("Die Druckbedingungen werden aus den Normfarbwerten (ISO 12647) berechnet – relativ farbmetrisch mit ") +
+            tr("Tiefenkompensierung. Das ist eine gute Näherung für die Bildschirmkontrolle; für verbindliche Proofs ") +
+            tr("das ICC-Profil der Druckerei verwenden. Export und gespeicherte Dateien bleiben unverändert."),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp),
     )
 }
@@ -315,33 +322,33 @@ private fun ColorManagement(
     s: AppSettings, onChange: ((AppSettings) -> AppSettings) -> Unit,
     iccLibrary: List<IccEntry>, onImportIcc: () -> Unit, onDeleteIcc: (String) -> Unit,
 ) {
-    Section("RGB-Arbeitsfarbraum")
+    Section(tr("RGB-Arbeitsfarbraum"))
     Text(
-        "Profil neuer Dokumente; CMYK-, Graustufen- und Lab-Dateien werden beim Öffnen in diesen Farbraum umgerechnet.",
+        tr("Profil neuer Dokumente; CMYK-, Graustufen- und Lab-Dateien werden beim Öffnen in diesen Farbraum umgerechnet."),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     for (b in IccProfiles.Builtin.entries) RadioRow(b.label, b.note, selected = s.workingRgb == b) { onChange { it.copy(workingRgb = b) } }
 
-    Section("Richtlinie beim Öffnen")
+    Section(tr("Richtlinie beim Öffnen"))
     for (p in ProfilePolicy.entries) RadioRow(p.label, p.description, selected = s.profilePolicy == p) { onChange { it.copy(profilePolicy = p) } }
 
-    Section("Konvertierungsoptionen")
-    Text("Priorität beim Umwandeln (Öffnen, Platzieren, CMYK-Import über Richtlinie)",
+    Section(tr("Konvertierungsoptionen"))
+    Text(tr("Priorität beim Umwandeln (Öffnen, Platzieren, CMYK-Import über Richtlinie)"),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     for (i in RenderingIntent.entries) RadioRow(i.label, null, selected = s.conversionIntent == i) { onChange { it.copy(conversionIntent = i) } }
-    SwitchRow("Tiefenkompensierung", "Erhält Zeichnung in den Tiefen bei Profilen mit unterschiedlichem Schwarz", s.conversionBpc) { v -> onChange { it.copy(conversionBpc = v) } }
+    SwitchRow(tr("Tiefenkompensierung"), tr("Erhält Zeichnung in den Tiefen bei Profilen mit unterschiedlichem Schwarz"), s.conversionBpc) { v -> onChange { it.copy(conversionBpc = v) } }
 
-    Section("Export (PNG/JPEG)")
-    RadioRow("Dokumentprofil einbetten", "Farben bleiben exakt; Programme mit Farbmanagement zeigen sie richtig an", selected = !s.exportToSrgb) {
+    Section(tr("Export (PNG/JPEG)"))
+    RadioRow(tr("Dokumentprofil einbetten"), tr("Farben bleiben exakt; Programme mit Farbmanagement zeigen sie richtig an"), selected = !s.exportToSrgb) {
         onChange { it.copy(exportToSrgb = false) }
     }
-    RadioRow("In sRGB umwandeln", "Für Web, soziale Netzwerke und Geräte ohne Farbmanagement", selected = s.exportToSrgb) {
+    RadioRow(tr("In sRGB umwandeln"), tr("Für Web, soziale Netzwerke und Geräte ohne Farbmanagement"), selected = s.exportToSrgb) {
         onChange { it.copy(exportToSrgb = true) }
     }
 
-    Section("ICC-Profilbibliothek")
+    Section(tr("ICC-Profilbibliothek"))
     if (iccLibrary.isEmpty()) Text(
-        "Eigene Profile für Proof, Zuweisen und Umwandeln – z. B. vom Drucker, der Druckerei oder einem kalibrierten Bildschirm.",
+        tr("Eigene Profile für Proof, Zuweisen und Umwandeln – z. B. vom Drucker, der Druckerei oder einem kalibrierten Bildschirm."),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     for (e in iccLibrary) {
@@ -350,14 +357,14 @@ private fun ColorManagement(
                 Text(e.description)
                 Text("${e.colorSpace} · ${deviceClassLabel(e.deviceClass)} · ${e.fileName}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            IconButton(onClick = { onDeleteIcc(e.fileName) }) { Icon(Icons.Filled.Delete, "Profil entfernen") }
+            IconButton(onClick = { onDeleteIcc(e.fileName) }) { Icon(Icons.Filled.Delete, tr("Profil entfernen")) }
         }
     }
-    TextButton(onClick = onImportIcc) { Icon(Icons.Filled.Add, null); Text("ICC-Profil hinzufügen …", Modifier.padding(start = 8.dp)) }
+    TextButton(onClick = onImportIcc) { Icon(Icons.Filled.Add, null); Text(tr("ICC-Profil hinzufügen …"), Modifier.padding(start = 8.dp)) }
 }
 
 private fun deviceClassLabel(c: String) = when (c) {
-    "prtr" -> "Ausgabe"; "mntr" -> "Bildschirm"; "scnr" -> "Eingabe"; "spac" -> "Farbraum"; "abst" -> "Abstrakt"; "link" -> "Geräteverknüpfung"; else -> c
+    "prtr" -> tr("Ausgabe"); "mntr" -> tr("Bildschirm"); "scnr" -> tr("Eingabe"); "spac" -> tr("Farbraum"); "abst" -> tr("Abstrakt"); "link" -> tr("Geräteverknüpfung"); else -> c
 }
 
 // ---------------------------------------------------------------- Über
@@ -366,25 +373,26 @@ private fun deviceClassLabel(c: String) = when (c) {
 private fun About() {
     val uri = androidx.compose.ui.platform.LocalUriHandler.current
     Wordmark(MaterialTheme.typography.headlineSmall)
-    Text("Version ${de.photographics.app.BuildConfig.VERSION_NAME}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(tr("Version {0}", de.photographics.app.BuildConfig.VERSION_NAME), color = MaterialTheme.colorScheme.onSurfaceVariant)
     Text(
-        "Ebenenbasierter Fotoeditor für Android, gemacht für professionelle Workflows unterwegs. Freie Software: Sie dürfen das Programm " +
-            "unter den Bedingungen der GNU General Public License, Version 3 oder neuer, weitergeben und verändern. " +
-            "Es wird OHNE JEDE GEWÄHRLEISTUNG bereitgestellt.",
+        tr("Ebenenbasierter Fotoeditor für Android, gemacht für professionelle Workflows unterwegs. Freie Software: Sie dürfen das Programm ") +
+            tr("unter den Bedingungen der GNU General Public License, Version 3 oder neuer, weitergeben und verändern. ") +
+            tr("Es wird OHNE JEDE GEWÄHRLEISTUNG bereitgestellt."),
         style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp),
     )
-    TextButton(onClick = { uri.openUri("https://www.gnu.org/licenses/gpl-3.0.html") }) { Text("Lizenztext (GPL-3.0)") }
+    TextButton(onClick = { uri.openUri("https://www.gnu.org/licenses/gpl-3.0.html") }) { Text(tr("Lizenztext (GPL-3.0)")) }
     val source = de.photographics.app.BuildConfig.SOURCE_URL
-    if (source.isNotEmpty()) TextButton(onClick = { uri.openUri(source) }) { Text("Quellcode, Fehler melden, Feedback") }
+    if (source.isNotEmpty()) TextButton(onClick = { uri.openUri(source) }) { Text(tr("Quellcode, Fehler melden, Feedback")) }
 
-    Section("Verwendete Komponenten")
+    Section(tr("Verwendete Komponenten"))
     for ((name, license) in listOf(
-        "AndroidX, Jetpack Compose, Material Icons" to "Apache 2.0",
-        "Kotlin, kotlinx.coroutines" to "Apache 2.0",
-        "ONNX Runtime" to "MIT",
-        "KI-Modell MI-GAN (wird bei Bedarf geladen)" to "MIT",
-        "KI-Modell LaMa (wird bei Bedarf geladen)" to "Apache 2.0",
-        "KI-Modelle Real-ESRGAN (werden bei Bedarf geladen)" to "BSD 3-Clause",
+        tr("AndroidX, Jetpack Compose, Material Icons") to tr("Apache 2.0"),
+        tr("Kotlin, kotlinx.coroutines") to tr("Apache 2.0"),
+        tr("ONNX Runtime") to "MIT",
+        tr("OkHttp, Okio") to tr("Apache 2.0"),
+        tr("KI-Modell MI-GAN (wird bei Bedarf geladen)") to "MIT",
+        tr("KI-Modell LaMa (wird bei Bedarf geladen)") to tr("Apache 2.0"),
+        tr("KI-Modelle Real-ESRGAN (werden bei Bedarf geladen)") to tr("BSD 3-Clause"),
     )) {
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
             Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
@@ -392,8 +400,8 @@ private fun About() {
         }
     }
     Text(
-        "Adobe und Photoshop sind eingetragene Marken von Adobe Inc. photographics ist ein unabhängiges Projekt " +
-            "und steht in keiner Verbindung zu Adobe.",
+        tr("Adobe und Photoshop sind eingetragene Marken von Adobe Inc. photographics ist ein unabhängiges Projekt ") +
+            tr("und steht in keiner Verbindung zu Adobe."),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 16.dp),
     )
 }

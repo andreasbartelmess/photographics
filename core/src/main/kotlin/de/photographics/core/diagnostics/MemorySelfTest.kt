@@ -74,6 +74,12 @@ object MemorySelfTest {
                 for (i in 0..80) st.addPoint(500f + i * 40f, 800f + i * 25f)
                 ed.endStroke(st)
             }
+            step("Verflüssigen (Strudel, 500 px)") {
+                val st = ed.beginStroke(de.photographics.core.tools.LiquifyTool(de.photographics.core.tools.LiquifyMode.TWIRL_CW, 0.8f),
+                    BrushSettings(size = 500f, hardness = 0.4f, spacing = 0.1f), PaintTarget.PIXELS)!!
+                for (i in 0..40) st.addPoint(w / 2f + i * 20f, h / 2f + i * 10f)
+                ed.endStroke(st)
+            }
             step("Pinsel mit Dynamik (Streuung, Farbe)") {
                 val dyn = BrushSettings(size = 300f, hardness = 0.8f, spacing = 0.4f, sizeJitter = 0.6f, angleJitter = 1f, roundness = 0.5f,
                     scatter = 2f, scatterBothAxes = true, count = 3, fgBgJitter = 1f, hueJitter = 0.2f, opacityJitter = 0.5f,
@@ -95,7 +101,43 @@ object MemorySelfTest {
             step("Bildgröße 140 % (Lanczos)") { ed.resizeImage(nw, nh, ResampleMethod.LANCZOS) }
             step("Arbeitsfläche +400 px") { ed.resizeCanvas(nw + 400, nh + 400, 0.5f, 0.5f) }
             step("Freistellen") { ed.crop(IntRect(100, 100, nw + 300, nh + 300)) }
+            step("Ebene automatisch auswählen") {
+                check(de.photographics.core.doc.LayerPick.at(doc, nw / 2, nh / 2) != null) { "keine Ebene getroffen" }
+            }
+            step("Zauberstab (ganzes Bild)") {
+                val l = doc.activeLayer as de.photographics.core.doc.RasterLayer
+                ed.setSelection(de.photographics.core.selection.MagicWand.select(l.raster, nw / 2, nh / 2, 24, contiguous = false))
+            }
+            step("Objektauswahl (Rechteck)") {
+                ed.setSelection(de.photographics.core.selection.ObjectSelect.select(doc.width, doc.height, IntRect(nw / 4, nh / 4, nw * 3 / 4, nh * 3 / 4),
+                    { r, st -> de.photographics.core.render.Compositor.renderArgbSampled(doc, r, st) }))
+            }
+            step("Verlauf in der Auswahl") {
+                ed.fillGradient(PaintTarget.PIXELS, de.photographics.core.editor.Gradient(de.photographics.core.editor.GradientType.RADIAL,
+                    nw / 2f, nh / 2f, nw.toFloat(), nh.toFloat(), 0xFFFF8000.toInt(), 0x000000FF), 0.8f)
+                ed.deselect()
+            }
+            step("Inhaltsbasiert füllen (großer Bereich)") {
+                ed.setSelection(de.photographics.core.selection.Selection.ellipse(doc.width, doc.height, nw * 0.3f, nh * 0.3f, nw * 0.65f, nh * 0.6f))
+                ed.contentAwareFill()
+                ed.deselect()
+            }
             step("Farbtabelle (LUT) als Ebene") { ed.addAdjustmentLayer(de.photographics.core.adjust.ColorLookupAdj()) }
+            step("Kanalkurven + Histogramm") {
+                val l = ed.addAdjustmentLayer(de.photographics.core.adjust.CurvesAdj(red = listOf(0 to 0, 128 to 160, 255 to 255)))
+                check(de.photographics.core.adjust.Histogram.below(doc, l).sum() > 0) { "Histogramm leer" }
+            }
+            step("Ebeneneffekte rendern (Schatten, Schein, Kontur)") {
+                val l = doc.root.children.filterIsInstance<de.photographics.core.doc.RasterLayer>().last()
+                val m = de.photographics.core.render.BlendMode.MULTIPLY
+                l.preservedBlocks = listOf(de.photographics.core.psd.PsdEffects.toBlock(de.photographics.core.doc.LayerEffects(
+                    dropShadows = listOf(de.photographics.core.doc.LayerEffects.Shadow(0, 0.6f, m, 120.0, true, 25.0, 0.1, 40.0)),
+                    outerGlow = de.photographics.core.doc.LayerEffects.Glow(0xFFFFCC, 0.5f, de.photographics.core.render.BlendMode.SCREEN, 0.0, 30.0),
+                    strokes = listOf(de.photographics.core.doc.LayerEffects.Stroke(0xFF0000, 1f, de.photographics.core.render.BlendMode.NORMAL, 8.0, de.photographics.core.doc.LayerEffects.StrokePosition.OUTSIDE)),
+                )))
+                check(l.effects?.visible == true) { "Effekte nicht gelesen" }
+                de.photographics.core.render.Compositor.renderBands(doc, doc.bounds) { _, _ -> }
+            }
             step("In Adobe RGB umwandeln") {
                 ed.convertToProfile(de.photographics.core.color.IccProfiles.Builtin.ADOBE_RGB.profile, de.photographics.core.color.RenderingIntent.RELATIVE, true)
             }

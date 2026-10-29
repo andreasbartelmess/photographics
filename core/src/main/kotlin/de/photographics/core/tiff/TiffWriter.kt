@@ -1,5 +1,6 @@
 package de.photographics.core.tiff
 
+import de.photographics.core.tr
 import de.photographics.core.doc.Document
 import de.photographics.core.doc.PixelLayer
 import de.photographics.core.image.IntRect
@@ -105,7 +106,7 @@ object TiffWriter {
             // Werte der Streifen-Offsets haben sich geändert, die Länge nicht
             layerTag?.offset = even(sp)
             val total = (layerTag?.offset ?: sp) + layerBlockSize
-            if (total > 0xFFFFFFFFL) throw TiffFormatException("Dokument zu groß für TIFF (über 4 GB)")
+            if (total > 0xFFFFFFFFL) throw TiffFormatException(tr("Dokument zu groß für TIFF (über 4 GB)"))
 
             // 4. Schreiben
             val head = Be()

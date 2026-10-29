@@ -1,5 +1,6 @@
 package de.photographics.app
 
+import de.photographics.core.tr
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Matrix
@@ -21,9 +22,9 @@ object AndroidTextRasterizer : TextRasterizer {
 
     /** Verfügbare Schriftfamilien (Android-Systemschriften). */
     val families = listOf(
-        "sans-serif" to "Sans Serif", "sans-serif-medium" to "Sans Serif Medium", "sans-serif-light" to "Sans Serif Light",
-        "sans-serif-black" to "Sans Serif Black", "sans-serif-condensed" to "Sans Serif Condensed", "serif" to "Serif",
-        "monospace" to "Monospace", "cursive" to "Schreibschrift", "casual" to "Casual", "sans-serif-smallcaps" to "Kapitälchen",
+        "sans-serif" to tr("Sans Serif"), "sans-serif-medium" to tr("Sans Serif Medium"), "sans-serif-light" to tr("Sans Serif Light"),
+        "sans-serif-black" to tr("Sans Serif Black"), "sans-serif-condensed" to tr("Sans Serif Condensed"), "serif" to tr("Serif"),
+        "monospace" to tr("Monospace"), "cursive" to tr("Schreibschrift"), "casual" to tr("Casual"), "sans-serif-smallcaps" to tr("Kapitälchen"),
     )
 
     private fun paint(s: TextStyle) = TextPaint(TextPaint.ANTI_ALIAS_FLAG or TextPaint.SUBPIXEL_TEXT_FLAG).apply {

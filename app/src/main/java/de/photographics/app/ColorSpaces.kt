@@ -1,5 +1,6 @@
 package de.photographics.app
 
+import de.photographics.core.tr
 import android.graphics.ColorSpace
 import de.photographics.core.color.IccProfile
 import de.photographics.core.color.IccProfiles
@@ -22,7 +23,7 @@ object ColorSpaces {
         // Beliebiger RGB-Farbraum (z. B. Kameraprofil): Matrix/TRC-Profil aus Primärfarben und Kurve
         val p = rgb.primaries.map { it.toDouble() }.toDoubleArray()
         val w = rgb.whitePoint.map { it.toDouble() }.toDoubleArray()
-        val bytes = IccProfiles.rgbProfile(cs.name.ifBlank { "Eingebettetes RGB-Profil" }, p, w, IccProfiles.Tone.Function { rgb.eotf.applyAsDouble(it) })
+        val bytes = IccProfiles.rgbProfile(cs.name.ifBlank { tr("Eingebettetes RGB-Profil") }, p, w, IccProfiles.Tone.Function { rgb.eotf.applyAsDouble(it) })
         return IccProfile(bytes)
     }
 

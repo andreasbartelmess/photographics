@@ -1,5 +1,6 @@
 package de.photographics.app.ui
 
+import de.photographics.core.tr
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -82,11 +83,11 @@ fun PanelCard(icon: androidx.compose.ui.graphics.vector.ImageVector, title: Stri
 }
 
 @Composable
-fun PanelActions(onReset: (() -> Unit)?, onCancel: (() -> Unit)?, onApply: () -> Unit, applyLabel: String = "Anwenden") {
+fun PanelActions(onReset: (() -> Unit)?, onCancel: (() -> Unit)?, onApply: () -> Unit, applyLabel: String = tr("Anwenden")) {
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (onReset != null) TextButton(onClick = onReset) { Text("Zurücksetzen") }
+        if (onReset != null) TextButton(onClick = onReset) { Text(tr("Zurücksetzen")) }
         Spacer(Modifier.weight(1f))
-        if (onCancel != null) OutlinedButton(onClick = onCancel) { Text("Abbrechen") }
+        if (onCancel != null) OutlinedButton(onClick = onCancel) { Text(tr("Abbrechen")) }
         Button(onClick = onApply) { Text(applyLabel) }
     }
 }
@@ -141,10 +142,10 @@ fun NewDocumentDialog(onCreate: (Int, Int, Boolean) -> Unit, onDismiss: () -> Un
     var w by remember { mutableStateOf("2000") }
     var h by remember { mutableStateOf("1500") }
     var transparent by remember { mutableStateOf(false) }
-    val presets = listOf("1920×1080" to (1920 to 1080), "3000×2000" to (3000 to 2000), "A4 300 dpi" to (2480 to 3508), "1080×1080" to (1080 to 1080))
+    val presets = listOf("1920×1080" to (1920 to 1080), "3000×2000" to (3000 to 2000), tr("A4 300 dpi") to (2480 to 3508), "1080×1080" to (1080 to 1080))
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Neues Dokument") },
+        title = { Text(tr("Neues Dokument")) },
         text = {
             Column {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -155,12 +156,12 @@ fun NewDocumentDialog(onCreate: (Int, Int, Boolean) -> Unit, onDismiss: () -> Un
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NumberField("Breite", w, { w = it }, Modifier.weight(1f))
-                    NumberField("Höhe", h, { h = it }, Modifier.weight(1f))
+                    NumberField(tr("Breite"), w, { w = it }, Modifier.weight(1f))
+                    NumberField(tr("Höhe"), h, { h = it }, Modifier.weight(1f))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(transparent, { transparent = it })
-                    Text("Transparenter Hintergrund")
+                    Text(tr("Transparenter Hintergrund"))
                 }
             }
         },
@@ -168,9 +169,9 @@ fun NewDocumentDialog(onCreate: (Int, Int, Boolean) -> Unit, onDismiss: () -> Un
             TextButton(onClick = {
                 val ww = w.toIntOrNull()?.coerceIn(1, 30000); val hh = h.toIntOrNull()?.coerceIn(1, 30000)
                 if (ww != null && hh != null) onCreate(ww, hh, transparent)
-            }) { Text("Erstellen") }
+            }) { Text(tr("Erstellen")) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Abbrechen")) } },
     )
 }
 
@@ -191,10 +192,10 @@ fun RenameDialog(initial: String, onRename: (String) -> Unit, onDismiss: () -> U
     var name by remember { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Ebene umbenennen") },
+        title = { Text(tr("Ebene umbenennen")) },
         text = { OutlinedTextField(name, { name = it }, singleLine = true) },
         confirmButton = { TextButton(onClick = { if (name.isNotBlank()) onRename(name.trim()) }) { Text("OK") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Abbrechen")) } },
     )
 }
 
@@ -202,7 +203,7 @@ fun RenameDialog(initial: String, onRename: (String) -> Unit, onDismiss: () -> U
 fun WarningsDialog(warnings: List<String>, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Hinweise zum Import") },
+        title = { Text(tr("Hinweise zum Import")) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 for (w in warnings) Text("• $w", Modifier.padding(vertical = 2.dp))
@@ -230,14 +231,14 @@ fun ColorPickerDialog(
     ).map { it.toInt() }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Farbe") },
+        title = { Text(tr("Farbe")) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 Box(Modifier.fillMaxWidth().height(48.dp).background(Color(color), RoundedCornerShape(8.dp)))
                 Spacer(Modifier.height(8.dp))
-                LabeledSlider("Farbton", h, 0f..360f) { h = it }
-                LabeledSlider("Sättigung", s, 0f..1f) { s = it }
-                LabeledSlider("Helligkeit", v, 0f..1f) { v = it }
+                LabeledSlider(tr("Farbton"), h, 0f..360f) { h = it }
+                LabeledSlider(tr("Sättigung"), s, 0f..1f) { s = it }
+                LabeledSlider(tr("Helligkeit"), v, 0f..1f) { v = it }
                 OutlinedTextField(
                     value = hex,
                     onValueChange = { t ->
@@ -248,24 +249,24 @@ fun ColorPickerDialog(
                             h = out[0]; s = out[1]; v = out[2]
                         }
                     },
-                    label = { Text("Hex") },
+                    label = { Text(tr("Hex")) },
                     singleLine = true,
                 )
                 val take = { c: Int -> val o = FloatArray(3); android.graphics.Color.colorToHSV(c, o); h = o[0]; s = o[1]; v = o[2] }
                 if (recent.isNotEmpty()) {
-                    Text("Zuletzt verwendet", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+                    Text(tr("Zuletzt verwendet"), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         for (c in recent) Swatch(c) { take(c) }
                     }
                 }
-                Text(palette?.name ?: "Schnellfarben", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+                Text(palette?.name ?: tr("Schnellfarben"), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     for (c in palette?.swatches?.map { it.color } ?: swatches) Swatch(c) { take(c) }
                 }
             }
         },
         confirmButton = { TextButton(onClick = { onPick(color) }) { Text("OK") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Abbrechen")) } },
     )
 }
 
@@ -288,46 +289,46 @@ fun LabeledSlider(label: String, value: Float, range: ClosedFloatingPointRange<F
 @Composable
 fun ShortcutsDialog(onDismiss: () -> Unit) {
     val gestures = listOf(
-        "Stift" to "malt mit Druckstärke; Radier-Ende = Radiergummi; Seitentaste = Pipette",
-        "Stift schwebend" to "zeigt die Pinselgröße vorab an",
-        "1 Finger" to "im Stift-Modus verschieben, sonst Werkzeug",
-        "2 Finger ziehen/spreizen" to "verschieben und zoomen",
-        "2 Finger tippen" to "Rückgängig",
-        "3 Finger tippen" to "Wiederholen",
-        "Regler am linken Rand" to "Pinselgröße und Deckkraft",
-        "Maus" to "Rad = Zoom, Rechts-/Mittelklick = verschieben",
+        tr("Stift") to tr("malt mit Druckstärke; Radier-Ende = Radiergummi; Seitentaste = Pipette"),
+        tr("Stift schwebend") to tr("zeigt die Pinselgröße vorab an"),
+        tr("1 Finger") to tr("im Stift-Modus verschieben, sonst Werkzeug"),
+        tr("2 Finger ziehen/spreizen") to tr("verschieben und zoomen"),
+        tr("2 Finger tippen") to tr("Rückgängig"),
+        tr("3 Finger tippen") to tr("Wiederholen"),
+        tr("Regler am linken Rand") to tr("Pinselgröße und Deckkraft"),
+        tr("Maus") to tr("Rad = Zoom, Rechts-/Mittelklick = verschieben"),
     )
     val keys = listOf(
-        "V / M / C" to "Verschieben / Auswahl / Freistellen",
-        "B / E / I" to "Pinsel / Radiergummi / Pipette",
-        "S / J / ⇧J" to "Kopierstempel / Bereichsreparatur / Reparatur-Pinsel",
-        "R / ⇧R / O / ⇧O" to "Weich- / Scharfzeichner / Abwedler / Nachbelichter",
-        "[  ]" to "Pinsel kleiner / größer",
-        "1 … 0" to "Deckkraft 10 … 100 %",
-        "Leertaste halten" to "Ansicht verschieben",
-        "Strg+Z / Strg+⇧Z" to "Rückgängig / Wiederholen",
-        "Strg+Y / Strg+⇧Y" to "Farbproof / Farbumfang-Warnung",
-        "Strg+S / Strg+O / Strg+N" to "Speichern / Öffnen / Neu",
-        "Strg+A / Strg+D / Strg+⇧I" to "Alles / Aufheben / Auswahl umkehren",
-        "Strg+J / Strg+E" to "Ebene durch Kopie / Auf eine Ebene reduzieren",
-        "Strg+L / Strg+U / Strg+I" to "Tonwert / Farbton/Sättigung / Umkehren",
-        "Strg+0 / Strg+1 / Strg± " to "Einpassen / 100 % / Zoom",
-        "Tab / F / Entf" to "Panels / Vollbild / Auswahl löschen",
-        "X / D" to "Vorder- und Hintergrundfarbe tauschen / Schwarz-Weiß",
-        "F5" to "Pinseleinstellungen",
-        "Strg+Alt+G" to "Schnittmaske erstellen / zurückwandeln",
-        "Strg+R / Strg+; / Strg+⇧+;" to "Lineale / Hilfslinien / Ausrichten ein-aus",
-        "Alt+Entf / Strg+Entf" to "Mit Vordergrund- / Hintergrundfarbe füllen",
+        "V / M / C" to tr("Verschieben / Auswahl / Freistellen"),
+        "B / E / I" to tr("Pinsel / Radiergummi / Pipette"),
+        "S / J / ⇧J" to tr("Kopierstempel / Bereichsreparatur / Reparatur-Pinsel"),
+        "R / ⇧R / O / ⇧O" to tr("Weich- / Scharfzeichner / Abwedler / Nachbelichter"),
+        "[  ]" to tr("Pinsel kleiner / größer"),
+        "1 … 0" to tr("Deckkraft 10 … 100 %"),
+        tr("Leertaste halten") to tr("Ansicht verschieben"),
+        tr("Strg+Z / Strg+⇧Z") to tr("Rückgängig / Wiederholen"),
+        tr("Strg+Y / Strg+⇧Y") to tr("Farbproof / Farbumfang-Warnung"),
+        tr("Strg+S / Strg+O / Strg+N") to tr("Speichern / Öffnen / Neu"),
+        tr("Strg+A / Strg+D / Strg+⇧I") to tr("Alles / Aufheben / Auswahl umkehren"),
+        tr("Strg+J / Strg+E") to tr("Ebene durch Kopie / Auf eine Ebene reduzieren"),
+        tr("Strg+L / Strg+U / Strg+I") to tr("Tonwert / Farbton/Sättigung / Umkehren"),
+        tr("Strg+0 / Strg+1 / Strg± ") to tr("Einpassen / 100 % / Zoom"),
+        tr("Tab / F / Entf") to tr("Panels / Vollbild / Auswahl löschen"),
+        "X / D" to tr("Vorder- und Hintergrundfarbe tauschen / Schwarz-Weiß"),
+        "F5" to tr("Pinseleinstellungen"),
+        tr("Strg+Alt+G") to tr("Schnittmaske erstellen / zurückwandeln"),
+        tr("Strg+R / Strg+; / Strg+⇧+;") to tr("Lineale / Hilfslinien / Ausrichten ein-aus"),
+        tr("Alt+Entf / Strg+Entf") to tr("Mit Vordergrund- / Hintergrundfarbe füllen"),
     )
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Gesten & Tastaturkürzel") },
+        title = { Text(tr("Gesten & Tastaturkürzel")) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text("Gesten", style = MaterialTheme.typography.titleSmall)
+                Text(tr("Gesten"), style = MaterialTheme.typography.titleSmall)
                 for ((k, v) in gestures) ShortcutRow(k, v)
                 Spacer(Modifier.height(12.dp))
-                Text("Tastatur", style = MaterialTheme.typography.titleSmall)
+                Text(tr("Tastatur"), style = MaterialTheme.typography.titleSmall)
                 for ((k, v) in keys) ShortcutRow(k, v)
             }
         },

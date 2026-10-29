@@ -174,7 +174,7 @@ footer a:hover { color: var(--ink); }
 <header class="hero" id="top">
   <img src="img/alpen-abend.jpg" alt="Schneebedeckte Gipfel im letzten Abendlicht unter dunklen Wolken" fetchpriority="high">
   <div class="wrap">
-    <span class="status">Vorschau · Version 0.2 · für Android 8.1 und neuer</span>
+    <span class="status">Vorschau · Version 0.3 · für Android 8.1 und neuer</span>
     <h1>Ein Fotoeditor mit Ebenen für Android-Tablets</h1>
     <p class="lead">photographics öffnet PSD-, TIFF- und GIMP-Dateien mit allen Ebenen und speichert sie auch wieder so. Retuschiert wird mit dem Stift, Farbprofile bleiben erhalten. Kostenlos, quelloffen und ohne Konto.</p>
     <div class="ctas">
@@ -197,9 +197,9 @@ footer a:hover { color: var(--ink); }
       <p>Werkzeuge links, Ebenen rechts, das Bild in der Mitte. Korrekturen liegen als eigene Ebenen über dem Foto und bleiben bis zum Schluss änderbar; Masken begrenzen sie auf einzelne Bereiche.</p>
       <ul>
         <li>Pixel-, Text- und Smartobjekt-Ebenen, Gruppen</li>
-        <li>12 Einstellungsebenen, darunter Kurven, Tonwert, Farbbalance und Schwarzweiß</li>
+        <li>12 Einstellungsebenen, darunter Kurven je Farbkanal mit Histogramm, Tonwert, Farbbalance und Schwarzweiß</li>
         <li>Alle 27 Mischmodi aus Photoshop</li>
-        <li>Ebenenmasken und Schnittmasken</li>
+        <li>Ebenenmasken und Schnittmasken, Ebeneneffekte aus Photoshop werden angezeigt</li>
         <li>Transformieren mit Neigen, Verzerren und Perspektive, verlustfrei als Smartobjekt</li>
       </ul>
     </div>
@@ -217,8 +217,8 @@ footer a:hover { color: var(--ink); }
       <h2>Retusche mit dem Stift</h2>
       <p>Der Druck des Stifts steuert Größe, Deckkraft und Fluss. Die Hand kann auf dem Display liegen, ohne mitzumalen. Mit zwei Fingern wird gezoomt, ein kurzes Tippen mit zwei Fingern macht den letzten Schritt rückgängig.</p>
       <ul>
-        <li>Bereichsreparatur, Reparatur-Pinsel, Ausbessern und Kopierstempel</li>
-        <li>Abwedeln, Nachbelichten, Schwamm und Wischfinger</li>
+        <li>Bereichsreparatur, Reparatur-Pinsel, Ausbessern, Kopierstempel und inhaltsbasiertes Füllen</li>
+        <li>Abwedeln, Nachbelichten, Schwamm, Wischfinger und Verflüssigen</li>
         <li>Pinsel mit eigenen Spitzen, Streuung und Glättung</li>
         <li>Retusche auf einer leeren Ebene, das Original bleibt unberührt</li>
       </ul>
@@ -276,7 +276,10 @@ footer a:hover { color: var(--ink); }
       <div><h3>Hilfslinien</h3><p>Lineale, Hilfslinienlayouts und intelligente Hilfslinien, die in PSD und XCF erhalten bleiben.</p></div>
       <div><h3>Farbfelder</h3><p>Farbfelder aus Photoshop, Illustrator und GIMP laden und speichern (.aco, .ase, .gpl).</p></div>
       <div><h3>Tastatur und Maus</h3><p>Mit Tastatur-Cover, Chromebook oder Samsung DeX gelten die gewohnten Kürzel aus Photoshop.</p></div>
-      <div><h3>Große Dateien</h3><p>Bilddaten liegen außerhalb des Speicherlimits für Apps, Filter rechnen auf allen Kernen.</p></div>
+      <div><h3>Große Dateien</h3><p>Bilddaten liegen außerhalb des Speicherlimits für Apps, Filter rechnen auf allen Kernen, Verschieben und Transformieren laufen über die GPU.</p></div>
+      <div><h3>Auswählen</h3><p>Zauberstab, Objektauswahl per Rechteck und Lasso. Das Verschieben-Werkzeug wählt auf Wunsch die angetippte Ebene.</p></div>
+      <div><h3>Verläufe</h3><p>Linear, radial und gespiegelt, auf Ebenen oder direkt in Masken, zum Beispiel für einen Verlaufsfilter am Himmel.</p></div>
+      <div><h3>Deutsch und Englisch</h3><p>Die Oberfläche folgt der Systemsprache und lässt sich in den Einstellungen umstellen.</p></div>
     </div>
   </div>
 </section>
@@ -285,25 +288,26 @@ footer a:hover { color: var(--ink); }
   <div class="wrap">
     <header>
       <h2>Roadmap</h2>
-      <p>Was als Nächstes kommen soll. Die Reihenfolge kann sich ändern, feste Termine gibt es nicht. Vorschläge sind willkommen.</p>
+      <p>Was als Nächstes kommen soll. Die Reihenfolge kann sich ändern, feste Termine gibt es nicht. Vorschläge sind willkommen. Neu in 0.3: GPU-Vorschau, Ebeneneffekte, englische Oberfläche, Verflüssigen, Verlauf, Zauberstab, Objektauswahl und Kurven je Kanal.</p>
     </header>
     <div class="stages">
       <div>
         <h3>Als Nächstes</h3>
         <ul>
-          <li>Verschieben und Transformieren über die GPU, damit große Dateien flüssiger laufen</li>
-          <li>Ebeneneffekte anzeigen: Schlagschatten, Kontur, Schein</li>
-          <li>Oberfläche auf Englisch</li>
+          <li>Automatisches Sichern und Wiederherstellen nach Abstürzen</li>
+          <li>Eigene Schriften (TTF, OTF)</li>
+          <li>Protokoll mit Schnappschüssen</li>
+          <li>Motiv und Himmel per KI auswählen, Auswahlkante für Haare</li>
         </ul>
       </div>
       <div>
         <h3>Danach</h3>
         <ul>
-          <li>Verflüssigen</li>
-          <li>Verlaufswerkzeug, Zauberstab und Objektauswahl</li>
-          <li>Kurven je Farbkanal mit Histogramm</li>
-          <li>Eigene Schriften (TTF, OTF)</li>
-          <li>Automatisches Sichern und Wiederherstellen nach Abstürzen</li>
+          <li>RAW-Entwicklung, zuerst DNG</li>
+          <li>Frequenztrennung als Retusche-Hilfe</li>
+          <li>Ebeneneffekte bearbeiten und neu anlegen</li>
+          <li>Stapelexport in mehreren Größen und Formaten</li>
+          <li>Zeichenstift und Pfade</li>
         </ul>
       </div>
       <div>
@@ -312,6 +316,7 @@ footer a:hover { color: var(--ink); }
           <li>Bearbeitung mit 16 Bit pro Kanal</li>
           <li>CMYK-Dokumente und CMYK-Export</li>
           <li>Anzeige über das Farbprofil des Bildschirms</li>
+          <li>Vollständiges Zusammensetzen auf der GPU</li>
           <li>Versionen für Linux (GNOME) und iPad</li>
         </ul>
       </div>

@@ -1,5 +1,6 @@
 package de.photographics.core.tiff
 
+import de.photographics.core.tr
 import de.photographics.core.color.IccProfile
 import de.photographics.core.color.IccProfiles
 import de.photographics.core.doc.Document
@@ -49,9 +50,9 @@ object TiffReader {
     fun read(buffer: ByteBuffer, workingRgb: IccProfile = IccProfiles.sRGB, layers: Boolean = true): Document {
         val f = TiffFile(buffer)
         val ifd = f.ifd(f.firstIfd)
-        val w = ifd.int(T_WIDTH) ?: throw TiffFormatException("Bildbreite fehlt")
-        val h = ifd.int(T_HEIGHT) ?: throw TiffFormatException("Bildhöhe fehlt")
-        if (w <= 0 || h <= 0 || w.toLong() * h > 1_000_000_000L) throw TiffFormatException("Ungültige Bildgröße $w×$h")
+        val w = ifd.int(T_WIDTH) ?: throw TiffFormatException(tr("Bildbreite fehlt"))
+        val h = ifd.int(T_HEIGHT) ?: throw TiffFormatException(tr("Bildhöhe fehlt"))
+        if (w <= 0 || h <= 0 || w.toLong() * h > 1_000_000_000L) throw TiffFormatException(tr("Ungültige Bildgröße {0}×{1}", w, h))
         val img = ImageInfo(f, ifd, w, h)
 
         val doc = Document(w, h)
@@ -63,7 +64,7 @@ object TiffReader {
         val icc = ifd.bytes(T_ICC)
         if (img.mode == PsdColorMode.INDEXED) doc.colorProfile = icc?.let { runCatching { IccProfile(it) }.getOrNull() }?.takeIf { it.isRgb } ?: IccProfiles.sRGB
         else PsdReader.setUpColor(doc, header, icc, workingRgb)
-        if (img.bps != 8 && img.mode != PsdColorMode.INDEXED && img.bps > 1) doc.importWarnings += "${img.bps}-Bit-Bild wurde in 8 Bit pro Kanal umgewandelt."
+        if (img.bps != 8 && img.mode != PsdColorMode.INDEXED && img.bps > 1) doc.importWarnings += tr("{0}-Bit-Bild wurde in 8 Bit pro Kanal umgewandelt.", img.bps)
 
         // Photoshop-Ebenen
         var hasLayers = false
@@ -73,7 +74,7 @@ object TiffReader {
                 hasLayers = PsdReader.readEmbeddedLayers(doc, header, slice, f.le, img.colorData)
             }.onFailure {
                 doc.root.children.toList().forEach { l -> doc.root.remove(l) }
-                doc.importWarnings += "Photoshop-Ebenen konnten nicht gelesen werden (${it.message}) – das zusammengefügte Bild wird verwendet."
+                doc.importWarnings += tr("Photoshop-Ebenen konnten nicht gelesen werden ({0}) – das zusammengefügte Bild wird verwendet.", it.message)
             }
         }
         if (!hasLayers) {
@@ -81,7 +82,7 @@ object TiffReader {
             doc.root.add(bg)
             doc.activeLayer = bg
         }
-        if (f.pageCount() > 1) doc.importWarnings += "Mehrseitiges TIFF: nur die erste Seite wurde geöffnet."
+        if (f.pageCount() > 1) doc.importWarnings += tr("Mehrseitiges TIFF: nur die erste Seite wurde geöffnet.")
         applyOrientation(doc, ifd.int(T_ORIENTATION) ?: 1)
         return doc
     }
@@ -108,22 +109,22 @@ object TiffReader {
         val premultiplied: Boolean
 
         init {
-            if (bpsAll.any { it.toInt() != bps }) throw TiffFormatException("Unterschiedliche Bittiefen je Kanal werden nicht unterstützt")
-            if (bps !in setOf(1, 2, 4, 8, 16, 32)) throw TiffFormatException("Nicht unterstützte Bittiefe $bps")
-            if (sampleFormat == 3 && bps != 32) throw TiffFormatException("Gleitkomma mit $bps Bit wird nicht unterstützt")
+            if (bpsAll.any { it.toInt() != bps }) throw TiffFormatException(tr("Unterschiedliche Bittiefen je Kanal werden nicht unterstützt"))
+            if (bps !in setOf(1, 2, 4, 8, 16, 32)) throw TiffFormatException(tr("Nicht unterstützte Bittiefe {0}", bps))
+            if (sampleFormat == 3 && bps != 32) throw TiffFormatException(tr("Gleitkomma mit {0} Bit wird nicht unterstützt", bps))
             when (compression) {
                 1, 5, 8, 32946, 32773 -> {}
-                6, 7 -> throw TiffFormatException("JPEG-komprimierte TIFFs werden noch nicht unterstützt – bitte als LZW oder ZIP speichern")
-                2, 3, 4 -> throw TiffFormatException("Fax-komprimierte (CCITT) TIFFs werden nicht unterstützt")
-                else -> throw TiffFormatException("Nicht unterstützte TIFF-Kompression $compression")
+                6, 7 -> throw TiffFormatException(tr("JPEG-komprimierte TIFFs werden noch nicht unterstützt – bitte als LZW oder ZIP speichern"))
+                2, 3, 4 -> throw TiffFormatException(tr("Fax-komprimierte (CCITT) TIFFs werden nicht unterstützt"))
+                else -> throw TiffFormatException(tr("Nicht unterstützte TIFF-Kompression {0}", compression))
             }
             when (photometric) {
                 0, 1 -> { base = 1; mode = PsdColorMode.GRAYSCALE }
                 2 -> { base = 3; mode = PsdColorMode.RGB }
                 3 -> {
-                    if (bps > 8) throw TiffFormatException("Palette mit $bps Bit wird nicht unterstützt")
+                    if (bps > 8) throw TiffFormatException(tr("Palette mit {0} Bit wird nicht unterstützt", bps))
                     base = 1; mode = PsdColorMode.INDEXED
-                    val map = ifd.ints(T_COLORMAP) ?: throw TiffFormatException("Farbpalette fehlt")
+                    val map = ifd.ints(T_COLORMAP) ?: throw TiffFormatException(tr("Farbpalette fehlt"))
                     val n = map.size / 3
                     colorData = ByteArray(768).also { cd ->
                         for (i in 0 until minOf(n, 256)) {
@@ -132,14 +133,14 @@ object TiffReader {
                     }
                 }
                 5 -> {
-                    if ((ifd.int(T_INKSET) ?: 1) != 1 || spp - extra.size < 4) throw TiffFormatException("Nur CMYK-Separationen werden unterstützt")
+                    if ((ifd.int(T_INKSET) ?: 1) != 1 || spp - extra.size < 4) throw TiffFormatException(tr("Nur CMYK-Separationen werden unterstützt"))
                     base = 4; mode = PsdColorMode.CMYK
                 }
                 8, 9 -> { base = 3; mode = PsdColorMode.LAB }
-                6 -> throw TiffFormatException("YCbCr-TIFFs werden noch nicht unterstützt")
-                else -> throw TiffFormatException("Nicht unterstützter Farbraum (Photometric $photometric)")
+                6 -> throw TiffFormatException(tr("YCbCr-TIFFs werden noch nicht unterstützt"))
+                else -> throw TiffFormatException(tr("Nicht unterstützter Farbraum (Photometric {0})", photometric))
             }
-            if (spp < base) throw TiffFormatException("Zu wenige Kanäle ($spp) für den Farbraum")
+            if (spp < base) throw TiffFormatException(tr("Zu wenige Kanäle ({0}) für den Farbraum", spp))
             val ai = extra.indexOfFirst { it == 1L || it == 2L }
             alphaIndex = if (ai >= 0 && base + ai < spp) base + ai else -1
             premultiplied = ai >= 0 && extra[ai] == 1L
@@ -221,7 +222,7 @@ object TiffReader {
         private val tiled = img.ifd.entries.containsKey(T_TILE_OFFSETS)
         private val tileW = img.ifd.int(T_TILE_W) ?: img.w
         private val tileH = img.ifd.int(T_TILE_H) ?: img.h
-        private val offsets = img.ifd.ints(if (tiled) T_TILE_OFFSETS else T_STRIP_OFFSETS) ?: throw TiffFormatException("Bilddaten fehlen")
+        private val offsets = img.ifd.ints(if (tiled) T_TILE_OFFSETS else T_STRIP_OFFSETS) ?: throw TiffFormatException(tr("Bilddaten fehlen"))
         private val counts = img.ifd.ints(if (tiled) T_TILE_COUNTS else T_STRIP_COUNTS)
         private val rowsPerStrip = (img.ifd.long(T_ROWS_PER_STRIP) ?: img.h.toLong()).coerceIn(1, img.h.toLong()).toInt()
         private val planes = if (img.planar) img.spp else 1
@@ -405,11 +406,11 @@ object TiffReader {
         fun u64(p: Long) = buf.getLong(p.toInt())
 
         fun ifd(pos: Long): Ifd {
-            if (pos < 8 || pos + 2 > size) throw TiffFormatException("Ungültiger IFD-Offset $pos")
+            if (pos < 8 || pos + 2 > size) throw TiffFormatException(tr("Ungültiger IFD-Offset {0}", pos))
             val n = if (big) u64(pos) else u16(pos).toLong()
             val entrySize = if (big) 20 else 12
             val first = pos + if (big) 8 else 2
-            if (n < 0 || first + n * entrySize > size) throw TiffFormatException("Beschädigtes IFD")
+            if (n < 0 || first + n * entrySize > size) throw TiffFormatException(tr("Beschädigtes IFD"))
             val map = HashMap<Int, Entry>()
             for (i in 0 until n) {
                 val p = first + i * entrySize
@@ -435,7 +436,7 @@ object TiffReader {
 
         fun values(e: Entry): LongArray {
             val sz = typeSize(e.type)
-            if (e.count > 50_000_000 || e.dataPos < 0 || e.dataPos + e.count * sz > size) throw TiffFormatException("Beschädigter Eintrag ${e.tag}")
+            if (e.count > 50_000_000 || e.dataPos < 0 || e.dataPos + e.count * sz > size) throw TiffFormatException(tr("Beschädigter Eintrag {0}", e.tag))
             return LongArray(e.count.toInt()) { i ->
                 val p = e.dataPos + i * sz
                 when (e.type) {
@@ -452,7 +453,7 @@ object TiffReader {
         }
 
         fun slice(pos: Long, len: Int): ByteBuffer {
-            if (pos < 0 || pos + len > size) throw TiffFormatException("Ebenendaten außerhalb der Datei")
+            if (pos < 0 || pos + len > size) throw TiffFormatException(tr("Ebenendaten außerhalb der Datei"))
             return buf.duplicate().order(ByteOrder.BIG_ENDIAN).apply { position(pos.toInt()); limit(pos.toInt() + len) }.slice()
         }
 
@@ -527,7 +528,7 @@ object TiffReader {
                     n += r
                 }
             } catch (e: java.util.zip.DataFormatException) {
-                throw TiffFormatException("ZIP-Daten beschädigt")
+                throw TiffFormatException(tr("ZIP-Daten beschädigt"))
             }
             if (inf.finished() || n == 0) inf.end()
             return if (n == 0) -1 else n

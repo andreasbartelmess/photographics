@@ -1,5 +1,6 @@
 package de.photographics.app
 
+import de.photographics.core.tr
 import android.content.ContentResolver
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -37,7 +38,7 @@ object ImageIO {
         cr.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
             if (c.moveToFirst()) c.getString(0)?.let { return it }
         }
-        return uri.lastPathSegment?.substringAfterLast('/') ?: "Unbenannt"
+        return uri.lastPathSegment?.substringAfterLast('/') ?: tr("Unbenannt")
     }
 
     /**
@@ -54,7 +55,7 @@ object ImageIO {
             }
         }
         val tmp = File(cache, "import.tmp")
-        (cr.openInputStream(uri) ?: throw IOException("Datei kann nicht geöffnet werden")).use { inp ->
+        (cr.openInputStream(uri) ?: throw IOException(tr("Datei kann nicht geöffnet werden"))).use { inp ->
             tmp.outputStream().use { inp.copyTo(it, 1 shl 16) }
         }
         try {
@@ -88,7 +89,7 @@ object ImageIO {
         val (grid, profile) = decodeRaster(buf)
         val doc = Document(grid.width, grid.height)
         doc.colorProfile = profile
-        val layer = PixelLayer("Hintergrund", grid)
+        val layer = PixelLayer(tr("Hintergrund"), grid)
         doc.root.add(layer)
         doc.activeLayer = layer
         return Loaded(doc, name, false)
@@ -121,7 +122,7 @@ object ImageIO {
     fun decodeRaster(buf: ByteBuffer): Pair<TileGrid, IccProfile> {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeStream(stream(buf), null, bounds)
-        if (bounds.outWidth <= 0) throw IOException("Unbekanntes Bildformat")
+        if (bounds.outWidth <= 0) throw IOException(tr("Unbekanntes Bildformat"))
         var sample = 1
         while (bounds.outWidth / sample > MAX_IMPORT_EDGE || bounds.outHeight / sample > MAX_IMPORT_EDGE) sample *= 2
         val opts = BitmapFactory.Options().apply {
@@ -129,7 +130,7 @@ object ImageIO {
             inPreferredConfig = Bitmap.Config.ARGB_8888
             inMutable = false
         }
-        var bmp = BitmapFactory.decodeStream(stream(buf), null, opts) ?: throw IOException("Bild konnte nicht dekodiert werden")
+        var bmp = BitmapFactory.decodeStream(stream(buf), null, opts) ?: throw IOException(tr("Bild konnte nicht dekodiert werden"))
         val orientation = runCatching {
             ExifInterface(stream(buf)).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
         }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
@@ -180,7 +181,7 @@ object ImageIO {
     /** Speichert gestreamt; große Kanaldaten werden in [tmpDir] zwischengelagert. */
     fun savePsd(cr: ContentResolver, uri: Uri, doc: Document, tmpDir: File) {
         tmpDir.mkdirs()
-        (cr.openOutputStream(uri, "wt") ?: throw IOException("Speichern nicht möglich")).buffered(1 shl 16).use { out ->
+        (cr.openOutputStream(uri, "wt") ?: throw IOException(tr("Speichern nicht möglich"))).buffered(1 shl 16).use { out ->
             PsdWriter.write(doc, out, tmpDir)
         }
     }
@@ -188,7 +189,7 @@ object ImageIO {
     /** Als GIMP-Datei (XCF) speichern; liefert Hinweise auf nicht übertragbare Ebenen. */
     fun saveXcf(cr: ContentResolver, uri: Uri, doc: Document, tmpDir: File): List<String> {
         tmpDir.mkdirs()
-        return (cr.openOutputStream(uri, "wt") ?: throw IOException("Speichern nicht möglich")).buffered(1 shl 16).use { out ->
+        return (cr.openOutputStream(uri, "wt") ?: throw IOException(tr("Speichern nicht möglich"))).buffered(1 shl 16).use { out ->
             de.photographics.core.xcf.XcfWriter.write(doc, out, tmpDir)
         }
     }
@@ -196,7 +197,7 @@ object ImageIO {
     /** TIFF mit Ebenen (Photoshop-Format) gestreamt speichern; Zwischendaten in [tmpDir]. */
     fun saveTiff(cr: ContentResolver, uri: Uri, doc: Document, tmpDir: File, compression: TiffWriter.Compression, layers: Boolean) {
         tmpDir.mkdirs()
-        (cr.openOutputStream(uri, "wt") ?: throw IOException("Speichern nicht möglich")).buffered(1 shl 16).use { out ->
+        (cr.openOutputStream(uri, "wt") ?: throw IOException(tr("Speichern nicht möglich"))).buffered(1 shl 16).use { out ->
             TiffWriter.write(doc, out, tmpDir, compression, layers)
         }
     }
@@ -232,8 +233,8 @@ object ImageIO {
         try {
             cr.openOutputStream(uri, "wt")?.use { out ->
                 val fmt = if (format == ExportFormat.PNG) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
-                if (!bmp.compress(fmt, quality, out)) throw IOException("Export fehlgeschlagen")
-            } ?: throw IOException("Export nicht möglich")
+                if (!bmp.compress(fmt, quality, out)) throw IOException(tr("Export fehlgeschlagen"))
+            } ?: throw IOException(tr("Export nicht möglich"))
         } finally {
             bmp.recycle()
         }

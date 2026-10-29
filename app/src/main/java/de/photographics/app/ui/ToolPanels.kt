@@ -1,5 +1,6 @@
 package de.photographics.app.ui
 
+import de.photographics.core.tr
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -35,6 +36,8 @@ import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AutoFixNormal
 import androidx.compose.material.icons.filled.Gesture
+import androidx.compose.material.icons.filled.Waves
+import androidx.compose.material.icons.filled.Gradient
 import androidx.compose.material.icons.filled.RemoveRedEye
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Transform
@@ -107,33 +110,35 @@ val Tool.icon: ImageVector
         Tool.PATCH -> Icons.Filled.AutoFixNormal
         Tool.RED_EYE -> Icons.Filled.RemoveRedEye
         Tool.AI_REMOVE -> Icons.Filled.AutoAwesome
+        Tool.LIQUIFY -> Icons.Filled.Waves
+        Tool.GRADIENT -> Icons.Filled.Gradient
     }
 
 /** Kurzname für Segmented Buttons. */
 private val Tool.shortLabel: String
     get() = when (this) {
-        Tool.SPOT_HEAL -> "Bereich"
-        Tool.HEAL -> "Reparatur"
-        Tool.CLONE -> "Stempel"
-        Tool.ERASER -> "Radierer"
-        Tool.BLUR -> "Weich"
-        Tool.SHARPEN -> "Scharf"
-        Tool.AI_REMOVE -> "KI"
-        Tool.RED_EYE -> "Rote Augen"
-        Tool.TRANSFORM -> "Transformieren"
+        Tool.SPOT_HEAL -> tr("Bereich")
+        Tool.HEAL -> tr("Reparatur")
+        Tool.CLONE -> tr("Stempel")
+        Tool.ERASER -> tr("Radierer")
+        Tool.BLUR -> tr("Weich")
+        Tool.SHARPEN -> tr("Scharf")
+        Tool.AI_REMOVE -> tr("KI")
+        Tool.RED_EYE -> tr("Rote Augen")
+        Tool.TRANSFORM -> tr("Transformieren")
         else -> label
     }
 
 /** Werkzeuggruppen der Navigation Rail; Varianten wählt man in der Optionsleiste. */
 enum class ToolGroup(val label: String, val tools: List<Tool>) {
-    MOVE("Bewegen", listOf(Tool.MOVE, Tool.TRANSFORM)),
-    SELECT("Auswahl", listOf(Tool.SELECT)),
-    CROP("Zuschnitt", listOf(Tool.CROP)),
-    PAINT("Malen", listOf(Tool.BRUSH, Tool.ERASER, Tool.EYEDROPPER)),
-    RETOUCH("Retusche", listOf(Tool.SPOT_HEAL, Tool.AI_REMOVE, Tool.HEAL, Tool.CLONE, Tool.PATCH, Tool.RED_EYE)),
-    FOCUS("Schärfe", listOf(Tool.BLUR, Tool.SHARPEN, Tool.SMUDGE)),
-    LIGHT("Licht", listOf(Tool.DODGE, Tool.BURN, Tool.SPONGE)),
-    TEXT("Text", listOf(Tool.TEXT));
+    MOVE(tr("Bewegen"), listOf(Tool.MOVE, Tool.TRANSFORM)),
+    SELECT(tr("Auswahl"), listOf(Tool.SELECT)),
+    CROP(tr("Zuschnitt"), listOf(Tool.CROP)),
+    PAINT(tr("Malen"), listOf(Tool.BRUSH, Tool.ERASER, Tool.GRADIENT, Tool.EYEDROPPER)),
+    RETOUCH(tr("Retusche"), listOf(Tool.SPOT_HEAL, Tool.AI_REMOVE, Tool.HEAL, Tool.CLONE, Tool.PATCH, Tool.RED_EYE)),
+    FOCUS(tr("Schärfe"), listOf(Tool.BLUR, Tool.SHARPEN, Tool.SMUDGE, Tool.LIQUIFY)),
+    LIGHT(tr("Licht"), listOf(Tool.DODGE, Tool.BURN, Tool.SPONGE)),
+    TEXT(tr("Text"), listOf(Tool.TEXT));
 
     val icon: ImageVector get() = tools.first().icon
 }
@@ -162,7 +167,7 @@ fun ToolRail(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 ColorSwatchPair(state.color, state.bgColor, onColorClick, onBgColorClick, onSwapColors, onResetColors,
                     Modifier.padding(top = 8.dp))
-                IconButton(onClick = onSwatches) { Icon(Icons.Filled.Palette, "Farbfelder") }
+                IconButton(onClick = onSwatches) { Icon(Icons.Filled.Palette, tr("Farbfelder")) }
             }
         },
     ) {
@@ -194,20 +199,20 @@ fun ColorSwatchPair(
     Box(modifier.size(64.dp)) {
         Box(
             Modifier.offset(26.dp, 26.dp).size(34.dp).background(Color(bg), shape).border(1.5.dp, outline, shape)
-                .clickable(onClickLabel = "Hintergrundfarbe", onClick = onBg),
+                .clickable(onClickLabel = tr("Hintergrundfarbe"), onClick = onBg),
         )
         Box(
             Modifier.offset(4.dp, 4.dp).size(34.dp).background(Color(fg), shape).border(1.5.dp, outline, shape)
                 .border(3.dp, MaterialTheme.colorScheme.surfaceContainer, shape)
-                .clickable(onClickLabel = "Vordergrundfarbe", onClick = onFg),
+                .clickable(onClickLabel = tr("Vordergrundfarbe"), onClick = onFg),
         )
         Icon(
-            Icons.Filled.SwapHoriz, "Farben tauschen (X)",
+            Icons.Filled.SwapHoriz, tr("Farben tauschen (X)"),
             Modifier.offset(42.dp, 2.dp).size(20.dp).clickable(onClick = onSwap),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         // Standardfarben: kleines schwarzes Feld über einem weißen
-        Box(Modifier.offset(2.dp, 44.dp).size(20.dp).clickable(onClickLabel = "Standardfarben (D)", onClick = onReset)) {
+        Box(Modifier.offset(2.dp, 44.dp).size(20.dp).clickable(onClickLabel = tr("Standardfarben (D)"), onClick = onReset)) {
             Box(Modifier.offset(7.dp, 7.dp).size(10.dp).background(Color.White).border(1.dp, outline))
             Box(Modifier.offset(2.dp, 2.dp).size(10.dp).background(Color.Black).border(1.dp, outline))
         }
@@ -216,10 +221,10 @@ fun ColorSwatchPair(
 
 /** Vorgaben fürs Freistellen (Photoshop: Seitenverhältnis, Überlagerung, Gerade ausrichten, Beschnittene Pixel löschen). */
 val CROP_ASPECTS = listOf(
-    de.photographics.app.CropAspect("Original", 0.0, 0.0),
-    de.photographics.app.CropAspect("1 : 1 (Quadrat)", 1.0, 1.0),
+    de.photographics.app.CropAspect(tr("Original"), 0.0, 0.0),
+    de.photographics.app.CropAspect(tr("1 : 1 (Quadrat)"), 1.0, 1.0),
     de.photographics.app.CropAspect("5 : 4 (8 × 10)", 5.0, 4.0),
-    de.photographics.app.CropAspect("3 : 2 (Kleinbild)", 3.0, 2.0),
+    de.photographics.app.CropAspect(tr("3 : 2 (Kleinbild)"), 3.0, 2.0),
     de.photographics.app.CropAspect("4 : 3", 4.0, 3.0),
     de.photographics.app.CropAspect("7 : 5", 7.0, 5.0),
     de.photographics.app.CropAspect("16 : 9", 16.0, 9.0),
@@ -231,18 +236,18 @@ private fun CropOptions(state: EditorUiState, vm: EditorViewModel, onTargetSize:
     var aspectMenu by remember { mutableStateOf(false) }
     var overlayMenu by remember { mutableStateOf(false) }
     Box {
-        AssistChip(onClick = { aspectMenu = true }, label = { Text(state.cropAspect?.label ?: "Frei") })
+        AssistChip(onClick = { aspectMenu = true }, label = { Text(state.cropAspect?.label ?: tr("Frei")) })
         DropdownMenu(aspectMenu, { aspectMenu = false }) {
-            DropdownMenuItem(text = { Text("Frei") }, onClick = { vm.setCropAspect(null); aspectMenu = false })
+            DropdownMenuItem(text = { Text(tr("Frei")) }, onClick = { vm.setCropAspect(null); aspectMenu = false })
             for (a in CROP_ASPECTS) DropdownMenuItem(text = { Text(a.label) }, onClick = {
                 aspectMenu = false
-                vm.setCropAspect(if (a.label == "Original") a.copy(w = maxOf(state.docWidth, state.docHeight).toDouble(), h = minOf(state.docWidth, state.docHeight).toDouble()) else a)
+                vm.setCropAspect(if (a.label == tr("Original")) a.copy(w = maxOf(state.docWidth, state.docHeight).toDouble(), h = minOf(state.docWidth, state.docHeight).toDouble()) else a)
             })
-            DropdownMenuItem(text = { Text("Größe und Auflösung …") }, onClick = { aspectMenu = false; onTargetSize() })
+            DropdownMenuItem(text = { Text(tr("Größe und Auflösung …")) }, onClick = { aspectMenu = false; onTargetSize() })
         }
     }
     if (state.cropAspect != null) IconButton(onClick = vm::toggleCropOrientation) {
-        Icon(Icons.Filled.ScreenRotation, if (state.cropPortrait) "Querformat" else "Hochformat")
+        Icon(Icons.Filled.ScreenRotation, if (state.cropPortrait) tr("Querformat") else tr("Hochformat"))
     }
     Box {
         AssistChip(onClick = { overlayMenu = true }, label = { Text(state.cropOverlay.label) }, leadingIcon = { Icon(Icons.Filled.GridOn, null, Modifier.size(18.dp)) })
@@ -250,12 +255,12 @@ private fun CropOptions(state: EditorUiState, vm: EditorViewModel, onTargetSize:
             for (o in de.photographics.app.CropOverlay.entries) DropdownMenuItem(text = { Text(o.label) }, onClick = { vm.setCropOverlay(o); overlayMenu = false })
         }
     }
-    OptionSlider("Drehen", "${"%.1f".format(state.cropAngle)}°", state.cropAngle, -45f..45f) { vm.setCropAngle(it) }
-    ToggleChip("Perspektivisch", state.cropQuad != null) { vm.setCropPerspective(state.cropQuad == null) }
-    if (state.cropQuad == null) ToggleChip("Gerade ausrichten", state.cropStraighten) { vm.setCropStraighten(!state.cropStraighten) }
-    if (state.cropQuad != null) Hint("Ecken auf die Kanten eines rechteckigen Motivs ziehen")
-    ToggleChip("Pixel löschen", state.cropDeleteCropped) { vm.setCropDeleteCropped(!state.cropDeleteCropped) }
-    if (state.cropStraighten) Hint("Linie entlang des Horizonts ziehen")
+    OptionSlider(tr("Drehen"), "${"%.1f".format(state.cropAngle)}°", state.cropAngle, -45f..45f) { vm.setCropAngle(it) }
+    ToggleChip(tr("Perspektivisch"), state.cropQuad != null) { vm.setCropPerspective(state.cropQuad == null) }
+    if (state.cropQuad == null) ToggleChip(tr("Gerade ausrichten"), state.cropStraighten) { vm.setCropStraighten(!state.cropStraighten) }
+    if (state.cropQuad != null) Hint(tr("Ecken auf die Kanten eines rechteckigen Motivs ziehen"))
+    ToggleChip(tr("Pixel löschen"), state.cropDeleteCropped) { vm.setCropDeleteCropped(!state.cropDeleteCropped) }
+    if (state.cropStraighten) Hint(tr("Linie entlang des Horizonts ziehen"))
 }
 
 /** Schwebende Optionsleiste (Material „Floating Toolbar“) für das aktive Werkzeug. */
@@ -295,17 +300,17 @@ fun ToolOptionsBar(state: EditorUiState, vm: EditorViewModel, onFeatherClick: ()
             val b = state.brush
             if (state.tool.isPaintTool || state.tool == Tool.RED_EYE) {
                 Divider()
-                OptionSlider("Größe", "${b.size.roundToInt()} px", kotlin.math.sqrt((b.size - 1f) / 499f), 0f..1f) {
+                OptionSlider(tr("Größe"), tr("{0} px", b.size.roundToInt()), kotlin.math.sqrt((b.size - 1f) / 499f), 0f..1f) {
                     vm.updateBrush(b.copy(size = 1f + 499f * it * it))
                 }
-                OptionSlider("Härte", "${(b.hardness * 100).roundToInt()} %", b.hardness, 0f..1f) { vm.updateBrush(b.copy(hardness = it)) }
-                OptionSlider("Deckkraft", "${(b.opacity * 100).roundToInt()} %", b.opacity, 0.01f..1f) { vm.updateBrush(b.copy(opacity = it)) }
+                OptionSlider(tr("Härte"), "${(b.hardness * 100).roundToInt()} %", b.hardness, 0f..1f) { vm.updateBrush(b.copy(hardness = it)) }
+                OptionSlider(tr("Deckkraft"), "${(b.opacity * 100).roundToInt()} %", b.opacity, 0.01f..1f) { vm.updateBrush(b.copy(opacity = it)) }
                 if (state.tool in setOf(Tool.BRUSH, Tool.ERASER, Tool.CLONE)) {
-                    OptionSlider("Fluss", "${(b.flow * 100).roundToInt()} %", b.flow, 0.01f..1f) { vm.updateBrush(b.copy(flow = it)) }
+                    OptionSlider(tr("Fluss"), "${(b.flow * 100).roundToInt()} %", b.flow, 0.01f..1f) { vm.updateBrush(b.copy(flow = it)) }
                 }
-                OptionSlider("Glättung", "${(b.smoothing * 100).roundToInt()} %", b.smoothing, 0f..0.9f) { vm.updateBrush(b.copy(smoothing = it)) }
+                OptionSlider(tr("Glättung"), "${(b.smoothing * 100).roundToInt()} %", b.smoothing, 0f..0.9f) { vm.updateBrush(b.copy(smoothing = it)) }
                 if (state.tool in setOf(Tool.BRUSH, Tool.ERASER, Tool.CLONE)) {
-                    IconButton(onClick = onBrushSettings) { Icon(Icons.Filled.Tune, "Pinseleinstellungen (F5)") }
+                    IconButton(onClick = onBrushSettings) { Icon(Icons.Filled.Tune, tr("Pinseleinstellungen (F5)")) }
                 }
             }
 
@@ -314,83 +319,108 @@ fun ToolOptionsBar(state: EditorUiState, vm: EditorViewModel, onFeatherClick: ()
                     val hasMask = state.layers.firstOrNull { it.id == state.activeLayerId }?.hasMask == true
                     if (hasMask) {
                         Segmented(
-                            listOf("Ebene" to PaintTarget.PIXELS, "Maske" to PaintTarget.MASK),
+                            listOf(tr("Ebene") to PaintTarget.PIXELS, tr("Maske") to PaintTarget.MASK),
                             state.paintTarget,
                         ) { vm.setPaintTarget(it) }
                     }
                 }
                 Tool.CLONE, Tool.HEAL -> {
                     Divider()
-                    ToggleChip(if (state.settingCloneSource) "Ins Bild tippen …" else "Quelle setzen", state.settingCloneSource) { vm.startSettingCloneSource() }
-                    ToggleChip("Alle Ebenen", state.sampleAllLayers) { vm.setSampleAll(!state.sampleAllLayers) }
+                    ToggleChip(if (state.settingCloneSource) tr("Ins Bild tippen …") else tr("Quelle setzen"), state.settingCloneSource) { vm.startSettingCloneSource() }
+                    ToggleChip(tr("Alle Ebenen"), state.sampleAllLayers) { vm.setSampleAll(!state.sampleAllLayers) }
                 }
-                Tool.SPOT_HEAL -> { Divider(); ToggleChip("Alle Ebenen", state.sampleAllLayers) { vm.setSampleAll(!state.sampleAllLayers) } }
+                Tool.SPOT_HEAL -> { Divider(); ToggleChip(tr("Alle Ebenen"), state.sampleAllLayers) { vm.setSampleAll(!state.sampleAllLayers) } }
                 Tool.AI_REMOVE -> {
                     Divider()
-                    AssistChip(onClick = onManageAi, label = { Text("Modell: ${state.aiInpaintModel.title}") },
+                    AssistChip(onClick = onManageAi, label = { Text(tr("Modell: {0}", state.aiInpaintModel.title)) },
                         leadingIcon = { Icon(Icons.Filled.AutoAwesome, null, Modifier.size(18.dp)) })
-                    ToggleChip("Alle Ebenen", state.sampleAllLayers) { vm.setSampleAll(!state.sampleAllLayers) }
+                    ToggleChip(tr("Alle Ebenen"), state.sampleAllLayers) { vm.setSampleAll(!state.sampleAllLayers) }
                 }
-                Tool.SMUDGE -> OptionSlider("Stärke", "${(state.toolStrength * 100).roundToInt()} %", state.toolStrength, 0.05f..1f) { vm.setToolStrength(it) }
+                Tool.GRADIENT -> {
+                    if (state.layers.firstOrNull { it.id == state.activeLayerId }?.hasMask == true)
+                        Segmented(listOf(tr("Ebene") to PaintTarget.PIXELS, tr("Maske") to PaintTarget.MASK), state.paintTarget) { vm.setPaintTarget(it) }
+                    Segmented(de.photographics.core.editor.GradientType.entries.map { it.label to it }, state.gradientType) { vm.setGradientType(it) }
+                    Segmented(listOf(tr("Vorder- → Hintergrund") to false, tr("Vordergrund → Transparent") to true), state.gradientToTransparent) { vm.setGradientToTransparent(it) }
+                    OptionSlider(tr("Deckkraft"), "${(state.gradientOpacity * 100).roundToInt()} %", state.gradientOpacity, 0.01f..1f) { vm.setGradientOpacity(it) }
+                    Hint(tr("Linie im Bild ziehen · Umschalt rastet auf 45° ein"))
+                }
+                Tool.SMUDGE -> OptionSlider(tr("Stärke"), "${(state.toolStrength * 100).roundToInt()} %", state.toolStrength, 0.05f..1f) { vm.setToolStrength(it) }
+                Tool.LIQUIFY -> {
+                    Segmented(de.photographics.core.tools.LiquifyMode.entries.map { it.label to it }, state.liquifyMode) { vm.setLiquifyMode(it) }
+                    OptionSlider(tr("Stärke"), "${(state.toolStrength * 100).roundToInt()} %", state.toolStrength, 0.05f..1f) { vm.setToolStrength(it) }
+                }
                 Tool.PATCH -> {
                     Divider()
-                    Segmented(SelectionShape.entries.map { it.label to it }, state.selectionShape) { vm.setSelectionShape(it) }
-                    Hint(if (state.hasSelection) "Auswahl auf eine saubere Stelle ziehen" else "Fehler mit der Auswahl umranden")
+                    Segmented(SelectionShape.entries.filter { it.isShape }.map { it.label to it }, state.selectionShape) { vm.setSelectionShape(it) }
+                    Hint(if (state.hasSelection) tr("Auswahl auf eine saubere Stelle ziehen") else tr("Fehler mit der Auswahl umranden"))
                 }
-                Tool.RED_EYE -> Hint("Pupille antippen · Suchradius = Pinselgröße (${state.brush.size.roundToInt()} px)")
-                Tool.TEXT -> Hint(if (state.textEdit != null) "Text wird bearbeitet" else "Ins Bild tippen für neuen Text · auf Text tippen zum Bearbeiten")
+                Tool.RED_EYE -> Hint(tr("Pupille antippen · Suchradius = Pinselgröße ({0} px)", state.brush.size.roundToInt()))
+                Tool.TEXT -> Hint(if (state.textEdit != null) tr("Text wird bearbeitet") else tr("Ins Bild tippen für neuen Text · auf Text tippen zum Bearbeiten"))
                 Tool.TRANSFORM -> {
                     val t = state.transform
                     if (t != null) {
                         Segmented(de.photographics.app.TransformMode.entries.map { it.label to it }, state.transformMode) { vm.setTransformMode(it) }
                         if (t.quad == null) Text("${(t.affine.scaleX * 100).roundToInt()} % × ${(t.affine.scaleY * 100).roundToInt()} % · ${t.affine.rotationDegrees.roundToInt()}°",
                             style = MaterialTheme.typography.bodyMedium)
-                        else Text("verzerrt", style = MaterialTheme.typography.bodyMedium)
-                        TextButton(onClick = { vm.cancelTransform() }) { Text("Abbrechen") }
-                        Button(onClick = { vm.applyTransform() }) { Text("Anwenden") }
-                    } else Hint("Ebene wird vorbereitet …")
+                        else Text(tr("verzerrt"), style = MaterialTheme.typography.bodyMedium)
+                        TextButton(onClick = { vm.cancelTransform() }) { Text(tr("Abbrechen")) }
+                        Button(onClick = { vm.applyTransform() }) { Text(tr("Anwenden")) }
+                    } else Hint(tr("Ebene wird vorbereitet …"))
                 }
                 Tool.BLUR, Tool.SHARPEN ->
-                    OptionSlider("Stärke", "${(state.toolStrength * 100).roundToInt()} %", state.toolStrength, 0.05f..1f) { vm.setToolStrength(it) }
+                    OptionSlider(tr("Stärke"), "${(state.toolStrength * 100).roundToInt()} %", state.toolStrength, 0.05f..1f) { vm.setToolStrength(it) }
                 Tool.DODGE, Tool.BURN -> {
                     Segmented(ToneRange.entries.map { it.label to it }, state.toneRange) { vm.setToneRange(it) }
-                    OptionSlider("Belichtung", "${(state.toolStrength * 100).roundToInt()} %", state.toolStrength, 0.05f..1f) { vm.setToolStrength(it) }
+                    OptionSlider(tr("Belichtung"), "${(state.toolStrength * 100).roundToInt()} %", state.toolStrength, 0.05f..1f) { vm.setToolStrength(it) }
                 }
                 Tool.SPONGE -> {
-                    Segmented(listOf("Entsättigen" to false, "Sättigen" to true), state.spongeSaturate) { vm.setSpongeSaturate(it) }
-                    OptionSlider("Fluss", "${(state.toolStrength * 100).roundToInt()} %", state.toolStrength, 0.05f..1f) { vm.setToolStrength(it) }
+                    Segmented(listOf(tr("Entsättigen") to false, tr("Sättigen") to true), state.spongeSaturate) { vm.setSpongeSaturate(it) }
+                    OptionSlider(tr("Fluss"), "${(state.toolStrength * 100).roundToInt()} %", state.toolStrength, 0.05f..1f) { vm.setToolStrength(it) }
                 }
                 Tool.SELECT -> {
                     Divider()
                     Segmented(SelectionShape.entries.map { it.label to it }, state.selectionShape) { vm.setSelectionShape(it) }
                     Segmented(
-                        listOf("Neu" to SelectionOp.REPLACE, "Hinzu" to SelectionOp.ADD, "Weg" to SelectionOp.SUBTRACT),
+                        listOf(tr("Neu") to SelectionOp.REPLACE, tr("Hinzu") to SelectionOp.ADD, tr("Weg") to SelectionOp.SUBTRACT),
                         state.selectionOp,
                     ) { vm.setSelectionOp(it) }
-                    OptionSlider("Weiche Kante", "${state.featherRadius.roundToInt()} px", state.featherRadius, 0f..100f) { vm.setFeather(it) }
+                    when (state.selectionShape) {
+                        SelectionShape.WAND -> {
+                            OptionSlider(tr("Toleranz"), "${state.wandTolerance}", state.wandTolerance.toFloat(), 0f..255f) { vm.setWandTolerance(it.roundToInt()) }
+                            ToggleChip(tr("Benachbart"), state.wandContiguous) { vm.setWandContiguous(!state.wandContiguous) }
+                            ToggleChip(tr("Alle Ebenen"), state.sampleAllLayers) { vm.setSampleAll(!state.sampleAllLayers) }
+                        }
+                        SelectionShape.OBJECT -> Hint(tr("Rechteck um das Objekt ziehen"))
+                        else -> {}
+                    }
+                    OptionSlider(tr("Weiche Kante"), tr("{0} px", state.featherRadius.roundToInt()), state.featherRadius, 0f..100f) { vm.setFeather(it) }
                     Divider()
-                    AssistChip(onClick = { vm.selectAll() }, label = { Text("Alles") })
-                    AssistChip(onClick = { vm.invertSelection() }, label = { Text("Umkehren") }, enabled = state.hasSelection)
-                    AssistChip(onClick = onFeatherClick, label = { Text("Kante verbessern") }, enabled = state.hasSelection)
-                    AssistChip(onClick = { vm.clearSelected() }, label = { Text("Löschen") }, enabled = state.hasSelection)
-                    AssistChip(onClick = { vm.fillSelected() }, label = { Text("Füllen") })
-                    AssistChip(onClick = { vm.layerViaCopy() }, label = { Text("Ebene durch Kopie") })
-                    AssistChip(onClick = { vm.deselect() }, label = { Text("Aufheben") }, enabled = state.hasSelection)
+                    AssistChip(onClick = { vm.selectAll() }, label = { Text(tr("Alles")) })
+                    AssistChip(onClick = { vm.invertSelection() }, label = { Text(tr("Umkehren")) }, enabled = state.hasSelection)
+                    AssistChip(onClick = onFeatherClick, label = { Text(tr("Kante verbessern")) }, enabled = state.hasSelection)
+                    AssistChip(onClick = { vm.clearSelected() }, label = { Text(tr("Löschen")) }, enabled = state.hasSelection)
+                    AssistChip(onClick = { vm.fillSelected() }, label = { Text(tr("Füllen")) })
+                    AssistChip(onClick = { vm.layerViaCopy() }, label = { Text(tr("Ebene durch Kopie")) })
+                    AssistChip(onClick = { vm.deselect() }, label = { Text(tr("Aufheben")) }, enabled = state.hasSelection)
                 }
                 Tool.CROP -> {
                     CropOptions(state, vm, onTargetSize)
                     val r = state.cropRect
-                    if (r != null) Text(state.cropTarget?.let { "${it.width} × ${it.height} px" } ?: "${r.width} × ${r.height} px", style = MaterialTheme.typography.bodyMedium)
-                    TextButton(onClick = { vm.cancelCrop() }) { Text("Abbrechen") }
-                    Button(onClick = { vm.applyCrop() }) { Text("Freistellen") }
+                    if (r != null) Text(state.cropTarget?.let { tr("{0} × {1} px", it.width, it.height) } ?: tr("{0} × {1} px", r.width, r.height), style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = { vm.cancelCrop() }) { Text(tr("Abbrechen")) }
+                    Button(onClick = { vm.applyCrop() }) { Text(tr("Freistellen")) }
                 }
-                Tool.MOVE -> Hint("Aktive Ebene ziehen · zwei Finger: Ansicht")
+                Tool.MOVE -> {
+                    ToggleChip(tr("Automatisch auswählen"), state.autoSelectLayer) { vm.setAutoSelectLayer(!state.autoSelectLayer) }
+                    Hint(if (state.autoSelectLayer) tr("Angetippte Ebene ziehen · Strg: aktive Ebene · zwei Finger: Ansicht")
+                        else tr("Aktive Ebene ziehen · Strg: angetippte Ebene · zwei Finger: Ansicht"))
+                }
                 Tool.EYEDROPPER -> {
                     FilterChip(
                         selected = state.eyedropperToBg, onClick = { vm.setEyedropperToBg(!state.eyedropperToBg) },
-                        label = { Text("In Hintergrundfarbe") },
+                        label = { Text(tr("In Hintergrundfarbe")) },
                     )
-                    Hint("Tippen, um eine Farbe aufzunehmen · Alt: Hintergrundfarbe")
+                    Hint(tr("Tippen, um eine Farbe aufzunehmen · Alt: Hintergrundfarbe"))
                 }
             }
         }

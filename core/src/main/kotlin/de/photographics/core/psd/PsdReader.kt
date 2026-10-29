@@ -1,5 +1,6 @@
 package de.photographics.core.psd
 
+import de.photographics.core.tr
 import de.photographics.core.doc.AdjustmentLayer
 import de.photographics.core.doc.Document
 import de.photographics.core.doc.SmartLayer
@@ -31,7 +32,7 @@ object PsdReader {
     /** Ressourcen-IDs, die beim Speichern unverändert übernommen werden dürfen. */
     // 1039 (ICC-Profil) wird nicht durchgereicht, sondern als Dokumentprofil gelesen und neu geschrieben
     // 1032 (Raster und Hilfslinien) wird gelesen und beim Speichern neu erzeugt
-    private val PRESERVED_RESOURCES = setOf(1028, 1058, 1059, 1060)
+    private val PRESERVED_RESOURCES = setOf(1028, 1037, 1049, 1058, 1059, 1060)
 
     /** Schlüssel, die in PSB eine 8-Byte-Länge haben. */
     private val PSB_LONG_KEYS = setOf(
@@ -140,19 +141,19 @@ object PsdReader {
 
     private fun read(buffer: java.nio.ByteBuffer, workingRgb: IccProfile, layers: Boolean): Document {
         val r = BinaryReader(buffer)
-        if (r.ascii(4) != "8BPS") throw PsdFormatException("Keine Photoshop-Datei (Signatur fehlt)")
+        if (r.ascii(4) != "8BPS") throw PsdFormatException(tr("Keine Photoshop-Datei (Signatur fehlt)"))
         val version = r.u16()
-        if (version != 1 && version != 2) throw PsdFormatException("Unbekannte PSD-Version $version")
+        if (version != 1 && version != 2) throw PsdFormatException(tr("Unbekannte PSD-Version {0}", version))
         r.skip(6)
         val channels = r.u16(); val height = r.i32(); val width = r.i32()
         val depth = r.u16(); val mode = r.u16()
         val h = Header(version, channels, width, height, depth, mode)
-        if (h.width <= 0 || h.height <= 0) throw PsdFormatException("Ungültige Bildgröße ${h.width}x${h.height}")
-        if (h.depth !in setOf(1, 8, 16, 32)) throw PsdFormatException("Nicht unterstützte Farbtiefe ${h.depth} Bit")
+        if (h.width <= 0 || h.height <= 0) throw PsdFormatException(tr("Ungültige Bildgröße {0}x{1}", h.width, h.height))
+        if (h.depth !in setOf(1, 8, 16, 32)) throw PsdFormatException(tr("Nicht unterstützte Farbtiefe {0} Bit", h.depth))
 
         val doc = Document(h.width, h.height)
-        if (h.big) doc.importWarnings += "PSB (Großformat) – Zusatzdaten werden beim Speichern als PSD nicht übernommen."
-        if (h.depth != 8) doc.importWarnings += "${h.depth}-Bit-Dokument wurde in 8 Bit pro Kanal umgewandelt."
+        if (h.big) doc.importWarnings += tr("PSB (Großformat) – Zusatzdaten werden beim Speichern als PSD nicht übernommen.")
+        if (h.depth != 8) doc.importWarnings += tr("{0}-Bit-Dokument wurde in 8 Bit pro Kanal umgewandelt.", h.depth)
 
         // Farbmodusdaten (Palette bei indizierten Farben)
         val cmLen = r.u32()
@@ -277,7 +278,7 @@ object PsdReader {
         val nch = r.u16()
         val channels = List(nch) { ChannelInfo(r.i16(), r.len(h.big)) }
         val sig = r.sig()
-        if (sig != "8BIM" && sig != "8B64") throw PsdFormatException("Ungültige Signatur im Ebeneneintrag: $sig")
+        if (sig != "8BIM" && sig != "8B64") throw PsdFormatException(tr("Ungültige Signatur im Ebeneneintrag: {0}", sig))
         val blendKey = r.sig()
         val opacity = r.u8(); val clipping = r.u8(); val flags = r.u8(); r.u8()
         val extraLen = r.u32().toInt()
@@ -352,7 +353,7 @@ object PsdReader {
     internal fun readEmbeddedLayers(doc: Document, h: Header, data: java.nio.ByteBuffer, le: Boolean, colorData: ByteArray): Boolean {
         droppedLeKeys.clear()
         val r = BinaryReader(data, 0, data.limit(), le)
-        val magic = "Adobe Photoshop Document Data Block"
+        val magic = tr("Adobe Photoshop Document Data Block")
         if (r.peekAscii(magic.length) != magic) return false
         r.skip(magic.length + 1L)
         var records: List<LayerRecord> = emptyList()
@@ -374,8 +375,8 @@ object PsdReader {
         if (records.isEmpty()) return false
         buildLayers(doc, records, h, colorData, -1)
         if (droppedLeKeys.isNotEmpty()) doc.importWarnings +=
-            "TIFF mit Intel-Bytefolge: Ebeneneffekte, Text- und Einstellungsdaten (${droppedLeKeys.sorted().joinToString()}) konnten nicht übernommen werden – " +
-                "Pixel, Masken, Gruppen und Mischmodi schon. In Photoshop mit Bytefolge „Macintosh“ gespeicherte TIFFs behalten alles."
+            tr("TIFF mit Intel-Bytefolge: Ebeneneffekte, Text- und Einstellungsdaten ({0}) konnten nicht übernommen werden – ", droppedLeKeys.sorted().joinToString()) +
+                tr("Pixel, Masken, Gruppen und Mischmodi schon. In Photoshop mit Bytefolge „Macintosh“ gespeicherte TIFFs behalten alles.")
         return doc.root.children.isNotEmpty()
     }
 
@@ -431,6 +432,7 @@ object PsdReader {
         stack.addLast(doc.root)
         val recordLayers = arrayOfNulls<Layer>(records.size)
         var sawEffects = false; var sawVector = false
+        val unsupportedEffects = linkedSetOf<String>()
         val kinds = mutableSetOf<LayerKind>()
 
         for ((idx, rec) in records.withIndex()) {
@@ -510,7 +512,11 @@ object PsdReader {
             }
             if (layer is AdjustmentLayer || layer is TextLayer) layer.kind = LayerKind.PIXEL
             if (layer.kind != LayerKind.PIXEL) kinds += layer.kind
-            if (rec.blocks.any { it.key == "lfx2" || it.key == "lrFX" || it.key == "lmfx" }) sawEffects = true
+            if (rec.blocks.any { it.key == "lfx2" || it.key == "lrFX" || it.key == "lmfx" }) {
+                // Dargestellt: Schatten, Schein, Kontur, Farbüberlagerung; die übrigen nennt die Warnung
+                val fx = PsdEffects.parse(rec.blocks)
+                if (fx == null) sawEffects = true else unsupportedEffects += fx.unsupported
+            }
             if (rec.blocks.any { it.key == "vmsk" || it.key == "vsms" }) sawVector = true
             if (!h.big) layer.preservedBlocks = rec.blocks.filter { b ->
                 b.key !in CONSUMED_KEYS && b.key != PsdTextSmart.TEXT_KEY && b.key != PsdTextSmart.SMART_KEY &&
@@ -552,8 +558,10 @@ object PsdReader {
             for (c in g.children.toList()) stack.last().add(c)
         }
 
-        if (sawEffects) doc.importWarnings += "Ebeneneffekte (Schatten, Konturen ...) werden nicht dargestellt, bleiben beim Speichern aber erhalten."
-        if (sawVector) doc.importWarnings += "Vektormasken werden nicht dargestellt."
+        if (sawEffects) doc.importWarnings += tr("Einige Ebeneneffekte konnten nicht gelesen werden; sie bleiben beim Speichern aber erhalten.")
+        if (unsupportedEffects.isNotEmpty()) doc.importWarnings +=
+            tr("Diese Ebeneneffekte werden nicht dargestellt, bleiben beim Speichern aber erhalten: {0}.", unsupportedEffects.joinToString(", ") { tr(it) })
+        if (sawVector) doc.importWarnings += tr("Vektormasken werden nicht dargestellt.")
         for (k in kinds) doc.importWarnings += "Enthält ${k.label}."
 
         // Aktive Ebene aus der Datei, sonst die oberste sichtbare Pixelebene
@@ -592,7 +600,7 @@ object PsdReader {
                 r.pos = end
                 if (compression == 3) unpredict(raw, w, h, depth)
             }
-            else -> throw PsdFormatException("Unbekannte Kompression $compression")
+            else -> throw PsdFormatException(tr("Unbekannte Kompression {0}", compression))
         }
         return to8Bit(raw, w, h, depth, gamma)
     }
@@ -616,7 +624,7 @@ object PsdReader {
                 o += n
             }
         } catch (e: java.util.zip.DataFormatException) {
-            throw PsdFormatException("ZIP-Daten beschädigt")
+            throw PsdFormatException(tr("ZIP-Daten beschädigt"))
         } finally {
             inf.end()
         }
@@ -683,7 +691,7 @@ object PsdReader {
         fun converted(p: IccProfile) {
             h.conv = DeviceToRgb.icc(p, workingRgb)
             doc.colorProfile = workingRgb
-            doc.importWarnings += "$modeName-Dokument wurde mit dem eingebetteten Profil „${p.description}“ in „${workingRgb.description}“ umgewandelt."
+            doc.importWarnings += tr("{0}-Dokument wurde mit dem eingebetteten Profil „{1}“ in „{2}“ umgewandelt.", modeName, p.description, workingRgb.description)
         }
         when (h.mode) {
             PsdColorMode.RGB -> doc.colorProfile = embedded?.takeIf { it.isRgb } ?: IccProfiles.sRGB
@@ -692,7 +700,7 @@ object PsdReader {
                 if (embedded?.isGray == true) runCatching { converted(embedded) }.onFailure { naive(doc, modeName) } else naive(doc, modeName)
             PsdColorMode.LAB -> {
                 h.conv = DeviceToRgb.lab(workingRgb); doc.colorProfile = workingRgb
-                doc.importWarnings += "Lab-Dokument wurde in „${workingRgb.description}“ umgewandelt."
+                doc.importWarnings += tr("Lab-Dokument wurde in „{0}“ umgewandelt.", workingRgb.description)
             }
             else -> naive(doc, modeName)
         }
@@ -700,7 +708,7 @@ object PsdReader {
 
     private fun naive(doc: Document, modeName: String) {
         doc.colorProfile = IccProfiles.sRGB
-        doc.importWarnings += "Farbmodus $modeName wurde ohne Farbprofil in RGB umgewandelt (Farben können abweichen)."
+        doc.importWarnings += tr("Farbmodus {0} wurde ohne Farbprofil in RGB umgewandelt (Farben können abweichen).", modeName)
     }
 
     internal fun planesToArgb(planes: Map<Int, ByteArray>, h: Header, start: Int, n: Int, colorData: ByteArray, alphaId: Int?): IntArray {

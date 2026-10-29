@@ -1,5 +1,6 @@
 package de.photographics.core.psd
 
+import de.photographics.core.tr
 import de.photographics.core.doc.Document
 import de.photographics.core.doc.GroupLayer
 import de.photographics.core.doc.Layer
@@ -171,7 +172,7 @@ object PsdWriter {
         }
         val tailBytes = tail.toByteArray()
         val lmLen = 4 + rawLi + liPad + tailBytes.size
-        if (lmLen > 0xFFFFFFFFL) throw PsdFormatException("Dokument zu groß für PSD (über 4 GB Ebenendaten)")
+        if (lmLen > 0xFFFFFFFFL) throw PsdFormatException(tr("Dokument zu groß für PSD (über 4 GB Ebenendaten)"))
         w.i32(lmLen.toInt()); w.i32((rawLi + liPad).toInt())
         output.write(w.toByteArray())
         if (entries.isNotEmpty()) {

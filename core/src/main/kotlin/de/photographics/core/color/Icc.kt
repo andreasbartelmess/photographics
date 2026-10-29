@@ -1,5 +1,6 @@
 package de.photographics.core.color
 
+import de.photographics.core.tr
 import java.nio.ByteBuffer
 import kotlin.math.abs
 import kotlin.math.cbrt
@@ -7,10 +8,10 @@ import kotlin.math.pow
 
 /** Renderprioritäten wie in Photoshop („Priorität“ im Dialog „In Profil umwandeln“). */
 enum class RenderingIntent(val label: String, val code: Int) {
-    PERCEPTUAL("Perzeptiv", 0),
-    RELATIVE("Relativ farbmetrisch", 1),
-    SATURATION("Sättigung", 2),
-    ABSOLUTE("Absolut farbmetrisch", 3),
+    PERCEPTUAL(tr("Perzeptiv"), 0),
+    RELATIVE(tr("Relativ farbmetrisch"), 1),
+    SATURATION(tr("Sättigung"), 2),
+    ABSOLUTE(tr("Absolut farbmetrisch"), 3),
 }
 
 /** Ungültiges oder nicht unterstütztes ICC-Profil. */
@@ -59,8 +60,8 @@ class IccProfile(val bytes: ByteArray) {
     private val tags = HashMap<String, Pair<Int, Int>>()
 
     init {
-        if (bytes.size < 132) throw IccException("Datei zu kurz für ein ICC-Profil")
-        if (sig(36) != "acsp") throw IccException("Keine ICC-Profil-Signatur")
+        if (bytes.size < 132) throw IccException(tr("Datei zu kurz für ein ICC-Profil"))
+        if (sig(36) != "acsp") throw IccException(tr("Keine ICC-Profil-Signatur"))
         versionMajor = bytes[8].toInt() and 0xFF
         deviceClass = sig(12); colorSpace = sig(16); pcs = sig(20)
         val n = u32(128)
@@ -70,14 +71,14 @@ class IccProfile(val bytes: ByteArray) {
             val off = u32(p + 4); val size = u32(p + 8)
             if (off + size <= bytes.size) tags[sig(p)] = off to size
         }
-        if (pcs != "XYZ " && pcs != "Lab ") throw IccException("Profilverbindungsraum „$pcs“ wird nicht unterstützt")
+        if (pcs != "XYZ " && pcs != "Lab ") throw IccException(tr("Profilverbindungsraum „{0}“ wird nicht unterstützt", pcs))
     }
 
     val channels: Int = when (colorSpace) {
         "RGB ", "Lab ", "XYZ ", "YCbr", "HSV ", "HLS ", "CMY " -> 3
         "GRAY" -> 1
         "CMYK" -> 4
-        else -> colorSpace.trim().removeSuffix("CLR").toIntOrNull(16) ?: throw IccException("Farbraum „$colorSpace“ wird nicht unterstützt")
+        else -> colorSpace.trim().removeSuffix("CLR").toIntOrNull(16) ?: throw IccException(tr("Farbraum „{0}“ wird nicht unterstützt", colorSpace))
     }
 
     val isRgb get() = colorSpace == "RGB "
@@ -85,7 +86,7 @@ class IccProfile(val bytes: ByteArray) {
     val isGray get() = colorSpace == "GRAY"
 
     /** Name aus dem desc-Tag (v2 textDescription oder v4 mluc). */
-    val description: String by lazy { readText("desc") ?: "Unbenanntes Profil" }
+    val description: String by lazy { readText("desc") ?: tr("Unbenanntes Profil") }
 
     /**
      * Medienweiß (XYZ) für absolut farbmetrisch. Wie LittleCMS und Photoshop gilt bei
@@ -148,11 +149,11 @@ class IccProfile(val bytes: ByteArray) {
         }
         "para" -> {
             val type = u16(o + 8)
-            val count = intArrayOf(1, 3, 4, 5, 7).getOrElse(type) { throw IccException("Unbekannte Kurvenart $type") }
+            val count = intArrayOf(1, 3, 4, 5, 7).getOrElse(type) { throw IccException(tr("Unbekannte Kurvenart {0}", type)) }
             val p = DoubleArray(count) { s15(o + 12 + it * 4) }
             Curve.Parametric(type, p) to (12 + count * 4)
         }
-        else -> throw IccException("Unbekannte Kurve „${sig(o)}“")
+        else -> throw IccException(tr("Unbekannte Kurve „{0}“", sig(o)))
     }
 
     private fun curveTag(tag: String): Curve? = tags[tag]?.let { (o, _) -> readCurve(o).first }
@@ -193,7 +194,7 @@ class IccProfile(val bytes: ByteArray) {
             val k = curveTag("kTRC")!!
             return ColorFn { inp, out -> val y = k.eval(inp[0]); out[0] = Pcs.D50[0] * y; out[1] = y; out[2] = Pcs.D50[2] * y }
         }
-        throw IccException("Profil „$description“ kann nicht als Quelle dienen")
+        throw IccException(tr("Profil „{0}“ kann nicht als Quelle dienen", description))
     }
 
     /** PCS-XYZ (relativ, D50) → Gerät (0..1). */
@@ -214,7 +215,7 @@ class IccProfile(val bytes: ByteArray) {
             val k = curveTag("kTRC")!!
             return ColorFn { inp, out -> out[0] = k.inverse(inp[1].coerceIn(0.0, 1.0)) }
         }
-        throw IccException("Profil „$description“ kann nicht als Ziel dienen")
+        throw IccException(tr("Profil „{0}“ kann nicht als Ziel dienen", description))
     }
 
     // ------------------------------------------------------------ Tabellen (mft1, mft2, mAB, mBA)
@@ -299,7 +300,7 @@ class IccProfile(val bytes: ByteArray) {
                     }
                 }
             }
-            else -> throw IccException("Tabellenart „$type“ wird nicht unterstützt")
+            else -> throw IccException(tr("Tabellenart „{0}“ wird nicht unterstützt", type))
         }
     }
 
@@ -392,7 +393,7 @@ class IccProfile(val bytes: ByteArray) {
         fun invert3(m: DoubleArray): DoubleArray {
             val a = m[0]; val b = m[1]; val c = m[2]; val d = m[3]; val e = m[4]; val f = m[5]; val g = m[6]; val h = m[7]; val i = m[8]
             val det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g)
-            if (abs(det) < 1e-12) throw IccException("Profilmatrix ist nicht invertierbar")
+            if (abs(det) < 1e-12) throw IccException(tr("Profilmatrix ist nicht invertierbar"))
             return doubleArrayOf(
                 (e * i - f * h) / det, (c * h - b * i) / det, (b * f - c * e) / det,
                 (f * g - d * i) / det, (a * i - c * g) / det, (c * d - a * f) / det,

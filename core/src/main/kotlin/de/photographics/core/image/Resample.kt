@@ -1,5 +1,6 @@
 package de.photographics.core.image
 
+import de.photographics.core.tr
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -11,10 +12,10 @@ import kotlin.math.sin
 
 /** Interpolationsverfahren für Größenänderungen (wie im Photoshop-Dialog „Bildgröße“). */
 enum class ResampleMethod(val label: String) {
-    NEAREST("Pixelwiederholung (harte Kanten)"),
-    BILINEAR("Bilinear"),
-    BICUBIC("Bikubisch (glatter)"),
-    LANCZOS("Lanczos (schärfer)"),
+    NEAREST(tr("Pixelwiederholung (harte Kanten)")),
+    BILINEAR(tr("Bilinear")),
+    BICUBIC(tr("Bikubisch (glatter)")),
+    LANCZOS(tr("Lanczos (schärfer)")),
 }
 
 /**

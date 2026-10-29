@@ -1,17 +1,18 @@
 package de.photographics.core.tools
 
+import de.photographics.core.tr
 import de.photographics.core.image.Colors
 import de.photographics.core.render.BlendMode
 import kotlin.math.roundToInt
 
 /** Steuerung einer Pinsel-Eigenschaft (Photoshop: „Steuerung“ in den Pinseleinstellungen). */
-enum class DynControl(val label: String) { OFF("Aus"), PRESSURE("Stiftdruck"), FADE("Verblassen") }
+enum class DynControl(val label: String) { OFF(tr("Aus")), PRESSURE(tr("Stiftdruck")), FADE(tr("Verblassen")) }
 
-enum class AngleControl(val label: String) { OFF("Aus"), DIRECTION("Strichrichtung") }
+enum class AngleControl(val label: String) { OFF(tr("Aus")), DIRECTION(tr("Strichrichtung")) }
 
 /** Malmodus des Pinsels: alle Mischmodi plus „Dahinter auftragen“ und „Löschen“. */
 enum class BrushMode(val blend: BlendMode?, private val ownLabel: String? = null) {
-    NORMAL(BlendMode.NORMAL), BEHIND(null, "Dahinter auftragen"), CLEAR(null, "Löschen"),
+    NORMAL(BlendMode.NORMAL), BEHIND(null, tr("Dahinter auftragen")), CLEAR(null, tr("Löschen")),
     DARKEN(BlendMode.DARKEN), MULTIPLY(BlendMode.MULTIPLY), COLOR_BURN(BlendMode.COLOR_BURN), LINEAR_BURN(BlendMode.LINEAR_BURN),
     LIGHTEN(BlendMode.LIGHTEN), SCREEN(BlendMode.SCREEN), COLOR_DODGE(BlendMode.COLOR_DODGE), LINEAR_DODGE(BlendMode.LINEAR_DODGE),
     OVERLAY(BlendMode.OVERLAY), SOFT_LIGHT(BlendMode.SOFT_LIGHT), HARD_LIGHT(BlendMode.HARD_LIGHT), VIVID_LIGHT(BlendMode.VIVID_LIGHT),

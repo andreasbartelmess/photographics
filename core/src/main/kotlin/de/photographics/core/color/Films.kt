@@ -1,5 +1,6 @@
 package de.photographics.core.color
 
+import de.photographics.core.tr
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -84,60 +85,60 @@ internal object Films {
     private fun hue(r: Float, y: Float, g: Float, c: Float, b: Float, m: Float) = floatArrayOf(r, y, g, c, b, m)
 
     val all: List<Pair<Pair<String, String>, FilmModel>> = listOf(
-        ("Porträt 400 (Farbnegativ)" to "Weiche Gradation, warme Hauttöne, cremige Lichter – klassischer Porträtfilm") to FilmModel(
+        ("Porträt 400 (Farbnegativ)" to tr("Weiche Gradation, warme Hauttöne, cremige Lichter – klassischer Porträtfilm")) to FilmModel(
             contrast = 0.12f, toe = 0.035f, shoulder = 0.965f, gamma = f3(0.97f, 1f, 1.04f), saturation = 0.9f,
             hueSaturation = hue(0.95f, 0.95f, 0.82f, 0.85f, 0.88f, 0.9f), shadowTint = f3(0f, 0.01f, 0.025f), highlightTint = f3(0.03f, 0.015f, -0.02f),
         ),
-        ("Farbnegativ 100 brillant" to "Feinkörnig, kräftige Farben und satte Rottöne – Landschaft und Reise") to FilmModel(
+        ("Farbnegativ 100 brillant" to tr("Feinkörnig, kräftige Farben und satte Rottöne – Landschaft und Reise")) to FilmModel(
             contrast = 0.32f, toe = 0.015f, shoulder = 0.99f, gamma = f3(0.98f, 1f, 1.01f), saturation = 1.18f,
             hueSaturation = hue(1.15f, 1.05f, 1.05f, 1.05f, 1.1f, 1f),
         ),
-        ("Farbnegativ 400 kühl" to "Pastellig, kühle Grün- und Cyantöne, offene Schatten – Hochzeit und Mode") to FilmModel(
+        ("Farbnegativ 400 kühl" to tr("Pastellig, kühle Grün- und Cyantöne, offene Schatten – Hochzeit und Mode")) to FilmModel(
             contrast = 0.1f, toe = 0.05f, shoulder = 0.955f, gamma = f3(1.03f, 0.99f, 0.97f), saturation = 0.86f,
             hueSaturation = hue(0.9f, 0.85f, 0.95f, 1.05f, 0.9f, 0.85f), shadowTint = f3(-0.01f, 0.02f, 0.03f), highlightTint = f3(0.01f, 0.02f, 0f),
             crosstalk = floatArrayOf(1f, 0f, 0f, 0f, 0.94f, 0.06f, 0f, 0.04f, 0.96f),
         ),
-        ("Farbnegativ 200 warm" to "Goldgelber Grundton, kräftig und sonnig – Alltags- und Urlaubsfilm") to FilmModel(
+        ("Farbnegativ 200 warm" to tr("Goldgelber Grundton, kräftig und sonnig – Alltags- und Urlaubsfilm")) to FilmModel(
             contrast = 0.28f, toe = 0.03f, shoulder = 0.97f, gamma = f3(0.95f, 0.98f, 1.07f), saturation = 1.08f,
             hueSaturation = hue(1.08f, 1.12f, 0.95f, 0.9f, 0.95f, 1f), highlightTint = f3(0.03f, 0.025f, -0.03f),
         ),
-        ("Kunstlicht 800 (Kinofilm)" to "Für Glühlampenlicht abgestimmt: bei Tag kühl, blaugrüne Schatten, warme Lichter – Nacht und Stadt") to FilmModel(
+        ("Kunstlicht 800 (Kinofilm)" to tr("Für Glühlampenlicht abgestimmt: bei Tag kühl, blaugrüne Schatten, warme Lichter – Nacht und Stadt")) to FilmModel(
             contrast = 0.25f, toe = 0.04f, shoulder = 0.96f, gamma = f3(1.14f, 1.01f, 0.86f), saturation = 1.02f,
             shadowTint = f3(-0.02f, 0.01f, 0.04f), highlightTint = f3(0.05f, 0f, -0.02f),
         ),
-        ("Diafilm 50 brillant" to "Sehr satte Farben, tiefe Schwärzen, hoher Kontrast – Landschaft") to FilmModel(
+        ("Diafilm 50 brillant" to tr("Sehr satte Farben, tiefe Schwärzen, hoher Kontrast – Landschaft")) to FilmModel(
             contrast = 0.55f, toe = 0f, shoulder = 1f, gamma = f3(1f, 1f, 1.02f), saturation = 1.35f,
             hueSaturation = hue(1.15f, 1.05f, 1.2f, 1.1f, 1.2f, 1.1f), shadowTint = f3(0.01f, 0f, 0.012f),
         ),
-        ("Diafilm 100 neutral" to "Sauber und ausgewogen, moderater Kontrast – vielseitiger Diafilm") to FilmModel(
+        ("Diafilm 100 neutral" to tr("Sauber und ausgewogen, moderater Kontrast – vielseitiger Diafilm")) to FilmModel(
             contrast = 0.35f, toe = 0.005f, shoulder = 0.995f, saturation = 1.1f, hueSaturation = hue(1.02f, 1f, 1.05f, 1.05f, 1.05f, 1f),
         ),
-        ("Diafilm 64 klassisch" to "Warmer Grundton, leuchtende Rottöne, tiefblauer Himmel – Reportage der 60er") to FilmModel(
+        ("Diafilm 64 klassisch" to tr("Warmer Grundton, leuchtende Rottöne, tiefblauer Himmel – Reportage der 60er")) to FilmModel(
             contrast = 0.45f, toe = 0.01f, shoulder = 0.985f, gamma = f3(0.96f, 1f, 1.03f), saturation = 1.15f,
             hueSaturation = hue(1.22f, 1.05f, 0.95f, 1f, 1.12f, 1f), highlightTint = f3(0.02f, 0.01f, -0.015f),
         ),
-        ("Schwarzweiß 400 klassisch" to "Kräftiger Kontrast, leicht rotempfindlich – Reportage und Straße") to FilmModel(
+        ("Schwarzweiß 400 klassisch" to tr("Kräftiger Kontrast, leicht rotempfindlich – Reportage und Straße")) to FilmModel(
             contrast = 0.5f, toe = 0.02f, shoulder = 0.985f, mono = f3(0.3f, 0.6f, 0.1f),
         ),
-        ("Schwarzweiß 400 weich" to "Weiche Gradation, viel Zeichnung in Schatten und Lichtern – Porträt") to FilmModel(
+        ("Schwarzweiß 400 weich" to tr("Weiche Gradation, viel Zeichnung in Schatten und Lichtern – Porträt")) to FilmModel(
             contrast = 0.18f, toe = 0.05f, shoulder = 0.96f, mono = f3(0.28f, 0.6f, 0.12f),
         ),
-        ("Schwarzweiß Infrarot" to "Helles Laub, dunkler Himmel, leuchtende Haut – traumartig") to FilmModel(
+        ("Schwarzweiß Infrarot" to tr("Helles Laub, dunkler Himmel, leuchtende Haut – traumartig")) to FilmModel(
             contrast = 0.4f, toe = 0.02f, shoulder = 0.99f, mono = f3(0.55f, 0.95f, -0.5f),
         ),
-        ("Schwarzweiß Selen getont" to "Klassisch mit kühl-violettem Ton in den Schatten") to FilmModel(
+        ("Schwarzweiß Selen getont" to tr("Klassisch mit kühl-violettem Ton in den Schatten")) to FilmModel(
             contrast = 0.35f, toe = 0.03f, shoulder = 0.975f, mono = f3(0.3f, 0.59f, 0.11f), monoTone = f3(1f, 0.99f, 1.005f),
             shadowTint = f3(0.02f, -0.012f, 0.028f),
         ),
-        ("Kinokopie" to "Kopierfilm-Charakter: weich auslaufende Lichter, blaugrüne Schatten, warme Haut") to FilmModel(
+        ("Kinokopie" to tr("Kopierfilm-Charakter: weich auslaufende Lichter, blaugrüne Schatten, warme Haut")) to FilmModel(
             contrast = 0.4f, toe = 0.02f, shoulder = 0.93f, gamma = f3(1f, 0.98f, 1.02f), saturation = 0.95f,
             shadowTint = f3(-0.025f, 0.012f, 0.025f), highlightTint = f3(0.03f, 0.012f, -0.02f),
         ),
-        ("Sofortbild" to "Verblasst, cyanfarbene Schatten, warme Lichter, wenig Kontrast") to FilmModel(
+        ("Sofortbild" to tr("Verblasst, cyanfarbene Schatten, warme Lichter, wenig Kontrast")) to FilmModel(
             contrast = 0.08f, toe = 0.09f, shoulder = 0.9f, gamma = f3(0.98f, 1f, 1.02f), saturation = 0.8f,
             shadowTint = f3(0f, 0.03f, 0.05f), highlightTint = f3(0.04f, 0.02f, -0.02f),
         ),
-        ("Abgelaufener Film" to "Farbstich und ausgeblichene Schwärzen wie bei überlagertem Material") to FilmModel(
+        ("Abgelaufener Film" to tr("Farbstich und ausgeblichene Schwärzen wie bei überlagertem Material")) to FilmModel(
             contrast = 0.15f, toe = 0.08f, shoulder = 0.9f, gamma = f3(1.05f, 0.95f, 1.05f), saturation = 0.75f,
             shadowTint = f3(0.03f, -0.01f, 0.04f), highlightTint = f3(0.02f, 0.03f, -0.03f),
         ),

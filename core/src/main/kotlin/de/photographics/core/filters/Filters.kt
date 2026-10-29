@@ -1,5 +1,6 @@
 package de.photographics.core.filters
 
+import de.photographics.core.tr
 import de.photographics.core.image.Blur
 import de.photographics.core.image.Colors
 import de.photographics.core.image.IntRect
@@ -68,7 +69,7 @@ abstract class LutAdjustment : PixelAdjustment() {
 
 /** Helligkeit/Kontrast, beide -100..100 (moderne Photoshop-Kurve, nicht linear abschneidend). */
 class BrightnessContrast(private val brightness: Float, private val contrast: Float) : LutAdjustment() {
-    override val label = "Helligkeit/Kontrast"
+    override val label = tr("Helligkeit/Kontrast")
     override fun channel(v: Float): Float {
         val b = brightness / 100f
         // Helligkeit über Gamma, damit Schwarz und Weiß erhalten bleiben
@@ -85,7 +86,7 @@ class Levels(
     private val inBlack: Int = 0, private val inWhite: Int = 255, private val gamma: Float = 1f,
     private val outBlack: Int = 0, private val outWhite: Int = 255,
 ) : LutAdjustment() {
-    override val label = "Tonwertkorrektur"
+    override val label = tr("Tonwertkorrektur")
     override fun channel(v: Float): Float {
         val lo = inBlack / 255f; val hi = maxOf(inWhite, inBlack + 1) / 255f
         val t = ((v - lo) / (hi - lo)).coerceIn(0f, 1f).pow(1f / gamma.coerceIn(0.1f, 9.99f))
@@ -95,7 +96,7 @@ class Levels(
 
 /** Belichtung in Blendenstufen (-5..5), angewendet im linearen Licht. */
 class Exposure(private val ev: Float, private val gammaCorrection: Float = 1f) : LutAdjustment() {
-    override val label = "Belichtung"
+    override val label = tr("Belichtung")
     override fun channel(v: Float): Float {
         val lin = if (v <= 0.04045f) v / 12.92f else ((v + 0.055f) / 1.055f).pow(2.4f)
         val e = (lin * 2f.pow(ev)).coerceIn(0f, 1f)
@@ -105,13 +106,13 @@ class Exposure(private val ev: Float, private val gammaCorrection: Float = 1f) :
 }
 
 class Invert : LutAdjustment() {
-    override val label = "Umkehren"
+    override val label = tr("Umkehren")
     override fun channel(v: Float) = 1f - v
 }
 
 /** Farbton (-180..180), Sättigung (-100..100), Helligkeit (-100..100). */
 class HueSaturation(private val hue: Float, private val saturation: Float, private val lightness: Float) : PixelAdjustment() {
-    override val label = "Farbton/Sättigung"
+    override val label = tr("Farbton/Sättigung")
     private val hsl = FloatArray(3)
     private val rgb = FloatArray(3)
     override fun map(c: Int): Int {
@@ -129,7 +130,7 @@ class HueSaturation(private val hue: Float, private val saturation: Float, priva
 
 /** Farbtemperatur (-100 kühl .. 100 warm) und Tönung (-100 grün .. 100 magenta). */
 class WhiteBalance(private val temperature: Float, private val tint: Float) : PixelAdjustment() {
-    override val label = "Weißabgleich"
+    override val label = tr("Weißabgleich")
     private val rk = 1f + temperature / 100f * 0.25f
     private val bk = 1f - temperature / 100f * 0.25f
     private val gk = 1f - tint / 100f * 0.2f
@@ -138,7 +139,7 @@ class WhiteBalance(private val temperature: Float, private val tint: Float) : Pi
 
 /** Schwarzweiß mit Luminanzgewichtung (Rec. 709). */
 class Desaturate : PixelAdjustment() {
-    override val label = "Schwarzweiß"
+    override val label = tr("Schwarzweiß")
     override fun map(c: Int): Int {
         val y = (0.2126f * Colors.r(c) + 0.7152f * Colors.g(c) + 0.0722f * Colors.b(c)).roundToInt()
         return Colors.argb(255, y, y, y)
@@ -147,7 +148,7 @@ class Desaturate : PixelAdjustment() {
 
 /** Dynamik: erhöht die Sättigung bevorzugt bei wenig gesättigten Farben (-100..100). */
 class Vibrance(private val amount: Float) : PixelAdjustment() {
-    override val label = "Dynamik"
+    override val label = tr("Dynamik")
     override fun map(c: Int): Int {
         val r = Colors.r(c) / 255f; val g = Colors.g(c) / 255f; val b = Colors.b(c) / 255f
         val mx = maxOf(r, g, b); val avg = (r + g + b) / 3f
@@ -158,14 +159,14 @@ class Vibrance(private val amount: Float) : PixelAdjustment() {
 }
 
 class GaussianBlurFilter(private val radius: Float) : ImageFilter {
-    override val label = "Gaußscher Weichzeichner"
+    override val label = tr("Gaußscher Weichzeichner")
     override val margin get() = (radius * 3).toInt() + 1
     override fun process(px: IntArray, w: Int, h: Int) = Blur.gaussArgb(px, w, h, radius)
 }
 
 /** Unscharf maskieren: Stärke in % (0..500), Radius, Schwellenwert 0..255. */
 class UnsharpMask(private val amount: Float, private val radius: Float, private val threshold: Int) : ImageFilter {
-    override val label = "Unscharf maskieren"
+    override val label = tr("Unscharf maskieren")
     override val margin get() = (radius * 3).toInt() + 1
     override fun process(px: IntArray, w: Int, h: Int): IntArray {
         val bl = Blur.gaussArgb(px, w, h, radius)
@@ -184,7 +185,7 @@ class UnsharpMask(private val amount: Float, private val radius: Float, private 
 
 /** Rauschen reduzieren: kantenerhaltender Weichzeichner (vereinfachter bilateraler Filter, 5x5). */
 class ReduceNoise(private val strength: Float) : ImageFilter {
-    override val label = "Rauschen reduzieren"
+    override val label = tr("Rauschen reduzieren")
     override val margin get() = 2
     override fun process(px: IntArray, w: Int, h: Int): IntArray {
         val sigmaR = 8f + strength * 0.6f

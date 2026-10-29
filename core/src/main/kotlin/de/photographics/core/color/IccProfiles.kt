@@ -1,5 +1,6 @@
 package de.photographics.core.color
 
+import de.photographics.core.tr
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import kotlin.math.pow
@@ -12,10 +13,10 @@ import kotlin.math.roundToInt
 object IccProfiles {
     /** Kurzname, Anzeigename, Primärvalenzen (xy R, G, B), Weißpunkt (xy), Kurve. */
     enum class Builtin(val label: String, val primaries: DoubleArray, val white: DoubleArray, val curve: Tone, val note: String) {
-        SRGB("sRGB IEC61966-2.1", doubleArrayOf(0.64, 0.33, 0.30, 0.60, 0.15, 0.06), D65, Tone.SRGB, "Standard für Web und die meisten Bildschirme"),
-        DISPLAY_P3("Display P3", doubleArrayOf(0.680, 0.320, 0.265, 0.690, 0.150, 0.060), D65, Tone.SRGB, "Größerer Farbraum moderner Tablets und Handys"),
-        ADOBE_RGB("Adobe RGB (1998)", doubleArrayOf(0.64, 0.33, 0.21, 0.71, 0.15, 0.06), D65, Tone.Gamma(563.0 / 256.0), "Druckvorstufe, deckt CMYK besser ab"),
-        PROPHOTO("ProPhoto RGB", doubleArrayOf(0.7347, 0.2653, 0.1596, 0.8404, 0.0366, 0.0001), D50xy, Tone.Gamma(1.8), "Sehr groß – mit 8 Bit Gefahr von Abrissen"),
+        SRGB("sRGB IEC61966-2.1", doubleArrayOf(0.64, 0.33, 0.30, 0.60, 0.15, 0.06), D65, Tone.SRGB, tr("Standard für Web und die meisten Bildschirme")),
+        DISPLAY_P3(tr("Display P3"), doubleArrayOf(0.680, 0.320, 0.265, 0.690, 0.150, 0.060), D65, Tone.SRGB, tr("Größerer Farbraum moderner Tablets und Handys")),
+        ADOBE_RGB(tr("Adobe RGB (1998)"), doubleArrayOf(0.64, 0.33, 0.21, 0.71, 0.15, 0.06), D65, Tone.Gamma(563.0 / 256.0), tr("Druckvorstufe, deckt CMYK besser ab")),
+        PROPHOTO(tr("ProPhoto RGB"), doubleArrayOf(0.7347, 0.2653, 0.1596, 0.8404, 0.0366, 0.0001), D50xy, Tone.Gamma(1.8), tr("Sehr groß – mit 8 Bit Gefahr von Abrissen")),
         ;
 
         val profile: IccProfile by lazy { IccProfile(rgbProfile(label, primaries, white, curve)) }
@@ -34,7 +35,7 @@ object IccProfiles {
     val sRGB: IccProfile get() = Builtin.SRGB.profile
 
     /** Graustufen Gamma 2.2 (D50). */
-    val grayGamma22: IccProfile by lazy { IccProfile(grayProfile("Graustufen Gamma 2.2", 2.2)) }
+    val grayGamma22: IccProfile by lazy { IccProfile(grayProfile(tr("Graustufen Gamma 2.2"), 2.2)) }
 
     /** Eingebautes Profil, das [p] entspricht (gleicher Name), sonst null. */
     fun builtinFor(p: IccProfile): Builtin? = Builtin.entries.firstOrNull { it.profile.bytes.contentEquals(p.bytes) || it.label == p.description }
@@ -78,7 +79,7 @@ object IccProfiles {
         val trc = curveTag(tone)
         val w = xyToXyz(white[0], white[1])
         return build("mntr", "RGB ", listOf(
-            "desc" to descTag(name), "cprt" to textTag("Erzeugt von Photographics aus Normdaten, frei verwendbar"),
+            "desc" to descTag(name), "cprt" to textTag(tr("Erzeugt von Photographics aus Normdaten, frei verwendbar")),
             "wtpt" to xyzTag(w), "rXYZ" to xyzTag(doubleArrayOf(m[0], m[3], m[6])),
             "gXYZ" to xyzTag(doubleArrayOf(m[1], m[4], m[7])), "bXYZ" to xyzTag(doubleArrayOf(m[2], m[5], m[8])),
             "rTRC" to trc, "gTRC" to trc, "bTRC" to trc,
@@ -86,7 +87,7 @@ object IccProfiles {
     }
 
     fun grayProfile(name: String, gamma: Double): ByteArray = build("mntr", "GRAY", listOf(
-        "desc" to descTag(name), "cprt" to textTag("Erzeugt von Photographics"),
+        "desc" to descTag(name), "cprt" to textTag(tr("Erzeugt von Photographics")),
         "wtpt" to xyzTag(Pcs.D50), "kTRC" to curveTag(Tone.Gamma(gamma)),
     ))
 

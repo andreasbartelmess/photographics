@@ -1,5 +1,6 @@
 package de.photographics.core.image
 
+import de.photographics.core.tr
 import java.lang.ref.PhantomReference
 import java.lang.ref.ReferenceQueue
 import java.nio.ByteBuffer
@@ -206,7 +207,7 @@ class SlabTileMemory(
                 place = findFree()
             }
         }
-        val (slab, slot) = place ?: throw OutOfMemoryError("Kachelspeicher voll (${limitBytes shr 20} MB)")
+        val (slab, slot) = place ?: throw OutOfMemoryError(tr("Kachelspeicher voll ({0} MB)", limitBytes shr 20))
         val bb = slab.buf.duplicate()
         val off = slot * Tile.BYTES.toInt()
         bb.position(off); bb.limit(off + Tile.BYTES.toInt())

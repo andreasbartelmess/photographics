@@ -11,6 +11,7 @@ It uses or downloads the following third-party components. All of them are compa
 | Jetpack Compose (ui, material3, material-icons-extended) | Apache License 2.0 |
 | Kotlin standard library, kotlinx.coroutines | Apache License 2.0 |
 | [ONNX Runtime](https://github.com/microsoft/onnxruntime) (onnxruntime-android) | MIT License |
+| [OkHttp](https://github.com/square/okhttp), [Okio](https://github.com/square/okio) | Apache License 2.0 |
 
 Material Symbols / Material Icons are © Google, Apache License 2.0.
 
@@ -22,7 +23,7 @@ The optional AI functions download their models the first time the user starts t
 | Model | Used for | Source | License |
 |---|---|---|---|
 | MI-GAN | AI fill (fast) | [andraniksargsyan/migan](https://huggingface.co/andraniksargsyan/migan), based on [Picsart-AI-Research/MI-GAN](https://github.com/Picsart-AI-Research/MI-GAN) | MIT |
-| LaMa (ONNX export) | AI fill (high quality) | [Carve/LaMa-ONNX](https://huggingface.co/Carve/LaMa-ONNX), based on [advimman/lama](https://github.com/advimman/lama) | Apache License 2.0 |
+| LaMa (ONNX export, 8-bit weights) | AI fill (high quality) | [opencv/inpainting_lama](https://huggingface.co/opencv/inpainting_lama), based on [advimman/lama](https://github.com/advimman/lama) | Apache License 2.0 |
 | Real-ESRGAN general x4v3, Real-ESRGAN x4plus | AI upscaling | ONNX exports by [Qualcomm AI Hub](https://huggingface.co/qualcomm/Real-ESRGAN-x4plus), based on [xinntao/Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) | BSD 3-Clause (original implementation) |
 
 ## Test data

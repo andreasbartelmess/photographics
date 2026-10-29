@@ -1,9 +1,12 @@
 package de.photographics.app.ai
 
+import de.photographics.core.net.Download
+import de.photographics.core.tr
 import android.content.Context
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,11 +14,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.zip.ZipInputStream
 
-enum class AiPurpose(val label: String) { INPAINT("Objekte entfernen"), UPSCALE("Hochskalieren") }
+enum class AiPurpose(val label: String) { INPAINT(tr("Objekte entfernen")), UPSCALE(tr("Hochskalieren")) }
 
 /** Frei lizenzierte Modelle, die bei Bedarf heruntergeladen werden (nicht in der APK enthalten). */
 enum class AiModel(
@@ -31,22 +32,23 @@ enum class AiModel(
     MIGAN(
         "migan", "MI-GAN", AiPurpose.INPAINT,
         "https://huggingface.co/andraniksargsyan/migan/resolve/main/migan_pipeline_v2.onnx",
-        28f, "MIT (Picsart AI Research)", false, "Schnell, gut für kleine bis mittlere Objekte.",
+        28f, tr("MIT (Picsart AI Research)"), false, tr("Schnell, gut für kleine bis mittlere Objekte."),
     ),
     LAMA(
         "lama", "LaMa", AiPurpose.INPAINT,
-        "https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx",
-        208f, "Apache 2.0 (Samsung AI)", false, "Hohe Qualität, auch für große Flächen und Strukturen.",
+        // 8-Bit-Gewichte (OpenCV Zoo): weniger als halb so groß wie fp32, Ergebnis praktisch gleich
+        "https://huggingface.co/opencv/inpainting_lama/resolve/main/inpainting_lama_2025jan.onnx",
+        93f, tr("Apache 2.0 (Samsung AI, OpenCV)"), false, tr("Hohe Qualität, auch für große Flächen und Strukturen."),
     ),
     ESRGAN_GENERAL(
-        "esrgan-general", "Real-ESRGAN General", AiPurpose.UPSCALE,
+        "esrgan-general", tr("Real-ESRGAN General"), AiPurpose.UPSCALE,
         "https://qaihub-public-assets.s3.us-west-2.amazonaws.com/qai-hub-models/models/real_esrgan_general_x4v3/releases/v0.65.0/real_esrgan_general_x4v3-onnx-float.zip",
-        4.5f, "BSD 3-Clause (Tencent ARC)", true, "Schnelle 4×-Vergrößerung für Fotos.",
+        4.5f, tr("BSD 3-Clause (Tencent ARC)"), true, tr("Schnelle 4×-Vergrößerung für Fotos."),
     ),
     ESRGAN_PLUS(
-        "esrgan-x4plus", "Real-ESRGAN x4plus", AiPurpose.UPSCALE,
+        "esrgan-x4plus", tr("Real-ESRGAN x4plus"), AiPurpose.UPSCALE,
         "https://qaihub-public-assets.s3.us-west-2.amazonaws.com/qai-hub-models/models/real_esrgan_x4plus/releases/v0.65.0/real_esrgan_x4plus-onnx-float.zip",
-        62f, "BSD 3-Clause (Tencent ARC)", true, "Beste Detailtreue, deutlich langsamer.",
+        62f, tr("BSD 3-Clause (Tencent ARC)"), true, tr("Beste Detailtreue, deutlich langsamer."),
     ),
 }
 
@@ -79,45 +81,32 @@ class AiModelManager(private val context: Context) {
 
     private fun setStatus(m: AiModel, s: ModelStatus) = _status.update { it + (m to s) }
 
+    /**
+     * Lädt [m] herunter (parallele Teilstücke, Fortsetzung nach Abbruch – siehe [Download]).
+     * Die Teildatei bleibt bei Fehlern liegen, damit ein neuer Versuch dort weitermacht.
+     */
     suspend fun download(m: AiModel) = withContext(Dispatchers.IO) {
         val dir = File(root, m.id)
         val tmp = File(root, "${m.id}.part")
+        val job = Download(m.url, tmp, http = OkHttpHttp)
         try {
-            root.mkdirs()
             setStatus(m, ModelStatus.Downloading(0f))
-            var url = URL(m.url)
-            var conn: HttpURLConnection
-            var redirects = 0
-            while (true) {
-                conn = url.openConnection() as HttpURLConnection
-                conn.instanceFollowRedirects = false
-                conn.connectTimeout = 20_000; conn.readTimeout = 60_000
-                val code = conn.responseCode
-                if (code in 300..399 && redirects < 8) {
-                    url = URL(url, conn.getHeaderField("Location")); conn.disconnect(); redirects++; continue
-                }
-                if (code != 200) throw IOException("Server antwortet mit $code")
-                break
+            var shown = -1
+            job.onProgress = { done, total ->
+                val t = if (total > 0) total else (m.sizeMb * 1_000_000).toLong()
+                val pct = (done * 200 / t).toInt()   // in halben Prozent melden, nicht bei jedem Puffer
+                if (pct != shown) { shown = pct; setStatus(m, ModelStatus.Downloading((done.toFloat() / t).coerceIn(0f, 1f))) }
             }
-            val total = conn.contentLengthLong.takeIf { it > 0 } ?: (m.sizeMb * 1_000_000).toLong()
-            conn.inputStream.use { input ->
-                tmp.outputStream().use { out ->
-                    val buf = ByteArray(1 shl 16)
-                    var done = 0L; var last = 0L
-                    while (true) {
-                        val n = input.read(buf); if (n < 0) break
-                        out.write(buf, 0, n); done += n
-                        if (done - last > 512 * 1024) { last = done; setStatus(m, ModelStatus.Downloading((done.toFloat() / total).coerceIn(0f, 1f))) }
-                    }
-                }
-            }
+            runInterruptible { job.run() }
             dir.deleteRecursively(); dir.mkdirs()
-            if (m.zipped) unzip(tmp, dir) else tmp.copyTo(File(dir, "model.onnx"), overwrite = true)
-            tmp.delete()
-            if (modelFile(m) == null) throw IOException("Archiv enthält kein ONNX-Modell")
+            if (m.zipped) { unzip(tmp, dir); tmp.delete() }
+            else if (!tmp.renameTo(File(dir, "model.onnx"))) { tmp.copyTo(File(dir, "model.onnx"), overwrite = true); tmp.delete() }
+            if (modelFile(m) == null) throw IOException(tr("Archiv enthält kein ONNX-Modell"))
             setStatus(m, ModelStatus.Ready)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            job.cancelled = true
+            setStatus(m, ModelStatus.Missing); throw e
         } catch (e: Exception) {
-            tmp.delete()
             setStatus(m, ModelStatus.Failed(e.message ?: e.javaClass.simpleName))
         }
     }
@@ -137,13 +126,14 @@ class AiModelManager(private val context: Context) {
     fun delete(m: AiModel) {
         synchronized(sessions) { sessions.remove(m)?.close() }
         File(root, m.id).deleteRecursively()
+        File(root, "${m.id}.part").delete(); File(root, "${m.id}.part.state").delete()
         setStatus(m, ModelStatus.Missing)
     }
 
     /** Öffnet (und hält) eine Inferenz-Sitzung; teuer beim ersten Aufruf. */
     fun session(m: AiModel): OrtSession = synchronized(sessions) {
         sessions.getOrPut(m) {
-            val f = modelFile(m) ?: throw IOException("Modell ${m.title} ist nicht installiert")
+            val f = modelFile(m) ?: throw IOException(tr("Modell {0} ist nicht installiert", m.title))
             val opts = OrtSession.SessionOptions().apply {
                 setIntraOpNumThreads(Runtime.getRuntime().availableProcessors().coerceIn(1, 4))
                 setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)

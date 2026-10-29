@@ -1,5 +1,6 @@
 package de.photographics.core.xcf
 
+import de.photographics.core.tr
 import de.photographics.core.color.IccProfile
 import de.photographics.core.color.IccProfiles
 import de.photographics.core.doc.Document
@@ -50,14 +51,14 @@ object XcfReader {
         0 -> Precision(1, Precision.Kind.INT, false); 1 -> Precision(2, Precision.Kind.INT, false)
         2 -> Precision(4, Precision.Kind.INT, true); 3 -> Precision(2, Precision.Kind.HALF, true)
         4 -> Precision(4, Precision.Kind.FLOAT, true)
-        else -> throw XcfFormatException("Unbekannte Genauigkeit $p")
+        else -> throw XcfFormatException(tr("Unbekannte Genauigkeit {0}", p))
     } else {
         val linear = p % 100 == 0
         when (p / 100) {
             1 -> Precision(1, Precision.Kind.INT, linear); 2 -> Precision(2, Precision.Kind.INT, linear)
             3 -> Precision(4, Precision.Kind.INT, linear); 5 -> Precision(2, Precision.Kind.HALF, linear)
             6 -> Precision(4, Precision.Kind.FLOAT, linear); 7 -> Precision(8, Precision.Kind.DOUBLE, linear)
-            else -> throw XcfFormatException("Unbekannte Genauigkeit $p")
+            else -> throw XcfFormatException(tr("Unbekannte Genauigkeit {0}", p))
         }
     }
 
@@ -70,20 +71,20 @@ object XcfReader {
     )
 
     fun read(buffer: ByteBuffer, workingRgb: IccProfile = IccProfiles.sRGB): Document {
-        if (!isXcf(buffer)) throw XcfFormatException("Keine GIMP-Datei")
+        if (!isXcf(buffer)) throw XcfFormatException(tr("Keine GIMP-Datei"))
         val r = BinaryReader(buffer)
         r.skip(9)
         val v = r.ascii(4)
-        val version = if (v == "file") 0 else v.removePrefix("v").toIntOrNull() ?: throw XcfFormatException("Unbekannte Version $v")
+        val version = if (v == "file") 0 else v.removePrefix("v").toIntOrNull() ?: throw XcfFormatException(tr("Unbekannte Version {0}", v))
         r.u8()
         val w = r.i32(); val h = r.i32(); val base = r.i32()
-        if (w <= 0 || h <= 0 || w.toLong() * h > 1_000_000_000L) throw XcfFormatException("Ungültige Bildgröße $w×$h")
+        if (w <= 0 || h <= 0 || w.toLong() * h > 1_000_000_000L) throw XcfFormatException(tr("Ungültige Bildgröße {0}×{1}", w, h))
         val prec = precisionOf(version, if (version >= 4) r.i32() else 150)
         val big = version >= 11
         fun ptr() = if (big) r.i64() else r.u32()
 
         val doc = Document(w, h)
-        if (version > 23) doc.importWarnings += "Neuere XCF-Version ($version) als bekannt – es wird versucht, sie zu lesen."
+        if (version > 23) doc.importWarnings += tr("Neuere XCF-Version ({0}) als bekannt – es wird versucht, sie zu lesen.", version)
         var compression = 0
         var colormap = ByteArray(0)
         var iccData: ByteArray? = null
@@ -118,7 +119,7 @@ object XcfReader {
         val icc = iccData?.let { runCatching { IccProfile(it) }.getOrNull() }
         doc.colorProfile = if (base == 0 || base == 2) icc?.takeIf { it.isRgb } ?: IccProfiles.sRGB else workingRgb
         val grayConv = if (base == 1 && icc?.isGray == true) runCatching { de.photographics.core.color.DeviceToRgb.icc(icc, workingRgb) }.getOrNull() else null
-        if (prec.bytes != 1 || prec.linear) doc.importWarnings += "XCF mit ${prec.bytes * 8} Bit${if (prec.linear) " (linear)" else ""} wurde in 8 Bit umgerechnet."
+        if (prec.bytes != 1 || prec.linear) doc.importWarnings += tr("XCF mit {0} Bit{1} wurde in 8 Bit umgerechnet.", prec.bytes * 8, if (prec.linear) tr(" (linear)") else "")
 
         // Ebenen in Dateireihenfolge (oben zuerst, Gruppen vor ihren Kindern)
         val infos = layerPtrs.map { readLayerInfo(r, it, big) }
@@ -135,7 +136,7 @@ object XcfReader {
             layer.visible = info.visible
             layer.lockTransparency = info.lockAlpha
             layer.blendMode = blendMode(info.mode, info.group, warnings)
-            if (info.text) warnings += "Textebenen wurden als Pixel übernommen."
+            if (info.text) warnings += tr("Textebenen wurden als Pixel übernommen.")
             if (info.mptr != 0L) runCatching { layer.mask = readMask(r, info, big, compression, prec, w, h) }
             if (info.active) doc.activeLayer = layer
             layers += layer
@@ -154,7 +155,7 @@ object XcfReader {
         attach("", doc.root)
         if (doc.activeLayer == null) doc.activeLayer = doc.allLayers().lastOrNull { it is PixelLayer }
         if (layers.any { it.blendMode != BlendMode.NORMAL && it.blendMode != BlendMode.PASS_THROUGH } || layers.any { it.opacity < 1f })
-            warnings += "GIMP mischt Ebenen linear, Photographics wie Photoshop – Mischmodi und Deckkraft können leicht anders wirken."
+            warnings += tr("GIMP mischt Ebenen linear, Photographics wie Photoshop – Mischmodi und Deckkraft können leicht anders wirken.")
         doc.importWarnings += warnings
         return doc
     }
@@ -204,7 +205,7 @@ object XcfReader {
         val tables = Tables(prec)
         val dev = IntArray(4)
         readTiles(r, hptr, big, compression) { tw, th, x0, y0, bytes, bpp ->
-            if (bpp != comps * prec.bytes) throw XcfFormatException("Unerwartete Pixelgröße $bpp")
+            if (bpp != comps * prec.bytes) throw XcfFormatException(tr("Unerwartete Pixelgröße {0}", bpp))
             val px = IntArray(tw * th)
             for (i in 0 until tw * th) {
                 val o = i * bpp
@@ -250,7 +251,7 @@ object XcfReader {
         val lptr = if (big) r.i64() else r.u32()
         r.seek(lptr.toInt())
         val lw = r.i32(); val lh = r.i32()
-        if (lw != hw || lh != hh || bpp !in 1..64) throw XcfFormatException("Beschädigte Ebenendaten")
+        if (lw != hw || lh != hh || bpp !in 1..64) throw XcfFormatException(tr("Beschädigte Ebenendaten"))
         val tilesX = (lw + TILE - 1) / TILE; val tilesY = (lh + TILE - 1) / TILE
         val ptrs = LongArray(tilesX * tilesY) { if (big) r.i64() else r.u32() }
         val buf = ByteArray(TILE * TILE * bpp)
@@ -264,7 +265,7 @@ object XcfReader {
                 0 -> r.copy(start, buf, 0, minOf(n * bpp, r.limit - start))
                 1 -> rle(r, start, end, buf, n, bpp)
                 2 -> inflate(r, start, end, buf, n * bpp)
-                else -> throw XcfFormatException("Nicht unterstützte Kompression $compression")
+                else -> throw XcfFormatException(tr("Nicht unterstützte Kompression {0}", compression))
             }
             onTile(tw, th, tx * TILE, ty * TILE, buf, bpp)
         }
@@ -273,7 +274,7 @@ object XcfReader {
     /** XCF-RLE: je Byte-Position eines Pixels ein eigener Strom (Ebenen nacheinander). */
     private fun rle(r: BinaryReader, start: Int, end: Int, out: ByteArray, n: Int, bpp: Int) {
         var p = start
-        fun next(): Int { if (p >= end || p >= r.limit) throw XcfFormatException("RLE-Daten beschädigt"); return r.buf.get(p++).toInt() and 0xFF }
+        fun next(): Int { if (p >= end || p >= r.limit) throw XcfFormatException(tr("RLE-Daten beschädigt")); return r.buf.get(p++).toInt() and 0xFF }
         for (plane in 0 until bpp) {
             var i = 0
             while (i < n) {
@@ -369,6 +370,6 @@ object XcfReader {
         54 -> BlendMode.DARKER_COLOR
         55 -> BlendMode.LIGHTER_COLOR
         61 -> if (group) BlendMode.PASS_THROUGH else BlendMode.NORMAL
-        else -> { warnings += "GIMP-Mischmodus $m (z. B. Körnung extrahieren/zusammenführen) gibt es hier nicht – als „Normal“ übernommen."; BlendMode.NORMAL }
+        else -> { warnings += tr("GIMP-Mischmodus {0} (z. B. Körnung extrahieren/zusammenführen) gibt es hier nicht – als „Normal“ übernommen.", m); BlendMode.NORMAL }
     }
 }

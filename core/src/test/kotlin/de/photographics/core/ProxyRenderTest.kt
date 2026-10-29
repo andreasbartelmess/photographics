@@ -85,4 +85,44 @@ class ProxyRenderTest {
         assertEquals(2, Compositor.liveSplit(doc, inGroup))
         assertEquals(3, Compositor.liveSplit(doc, clipped))
     }
+
+    /** GPU-Vorschau: darunter + Ebene (verschoben, Deckkraft, Maske) + darüber = Compositor (Quelle-über ist assoziativ). */
+    @Test
+    fun gpuSandwichMatchesCompositor() {
+        val w = 240; val h = 160
+        fun grid(f: (Int, Int) -> Int) = TileGrid.fromPixels(w, h, IntArray(w * h) { i -> f(i % w, i / w) })
+        val doc = Document(w, h)
+        doc.root.add(PixelLayer("Hintergrund", grid { x, y -> (0xFF shl 24) or (x shl 16) or (y shl 8) or 0x30 }))
+        doc.root.add(PixelLayer("Weich", grid { x, _ -> if (x % 40 < 20) 0x8020A0F0.toInt() else 0 }).also { it.blendMode = BlendMode.SOFT_LIGHT })
+        val moved = PixelLayer("Motiv", grid { x, y -> if (x in 60..140 && y in 40..110) 0xC0E04020.toInt() else 0 }).also { it.opacity = 0.7f }
+        moved.mask = LayerMask(TileGrid.fromPixels(w, h, IntArray(w * h) { i -> (i % w) * 255 / w }), enabled = true)
+        doc.root.add(moved)
+        doc.root.add(PixelLayer("Oben", grid { _, y -> if (y < 30) 0x9000FF00.toInt() else 0 }).also { it.opacity = 0.5f })
+        moved.previewDx = 17; moved.previewDy = -9
+        val from = 2; val rect = IntRect(0, 0, w, h)
+        val below = Compositor.renderRangeSampled(doc, rect, 1, 0, from, null)
+        val above = Compositor.renderRangeSampled(doc, rect, 1, from + 1, doc.root.children.size, null)
+        val layerPx = Compositor.renderLayerSampled(moved, rect, 1)   // unverschoben, Maske eingerechnet
+        fun over(dst: FloatArray, c: Int, alpha: Float) {
+            val a = (c ushr 24) / 255f * alpha
+            if (a <= 0f) return
+            for (k in 0..2) dst[k] = ((c shr (16 - 8 * k)) and 0xFF) / 255f * a + dst[k] * (1 - a)
+            dst[3] = a + dst[3] * (1 - a)
+        }
+        val want = Compositor.renderArgbSampled(doc, rect, 1)
+        var maxDiff = 0
+        for (y in 0 until h) for (x in 0 until w) {
+            val d = FloatArray(4)
+            over(d, below[y * w + x], 1f)
+            val lx = x - moved.previewDx; val ly = y - moved.previewDy
+            if (lx in 0 until w && ly in 0 until h) over(d, layerPx[ly * w + lx], moved.opacity)
+            over(d, above[y * w + x], 1f)
+            val got = if (d[3] <= 0f) 0 else ((d[3] * 255 + 0.5f).toInt() shl 24) or
+                ((d[0] / d[3] * 255 + 0.5f).toInt().coerceIn(0, 255) shl 16) or ((d[1] / d[3] * 255 + 0.5f).toInt().coerceIn(0, 255) shl 8) or
+                (d[2] / d[3] * 255 + 0.5f).toInt().coerceIn(0, 255)
+            val ref = want[y * w + x]
+            for (sh in intArrayOf(24, 16, 8, 0)) maxDiff = maxOf(maxDiff, kotlin.math.abs(((got shr sh) and 0xFF) - ((ref shr sh) and 0xFF)))
+        }
+        assertTrue("Abweichung $maxDiff", maxDiff <= 3)
+    }
 }

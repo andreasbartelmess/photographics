@@ -1,5 +1,7 @@
 package de.photographics.core.psd
 
+import de.photographics.core.tr
+
 /** Roh erhaltener "Additional Layer Information"-Block (Signatur 8BIM/8B64, 4-Zeichen-Schlüssel). */
 class PsdTaggedBlock(val signature: String, val key: String, val data: ByteArray)
 
@@ -19,7 +21,7 @@ object PsdColorMode {
     const val LAB = 9
 
     fun name(mode: Int) = when (mode) {
-        BITMAP -> "Bitmap"; GRAYSCALE -> "Graustufen"; INDEXED -> "Indizierte Farben"; RGB -> "RGB"
-        CMYK -> "CMYK"; MULTICHANNEL -> "Mehrkanal"; DUOTONE -> "Duplex"; LAB -> "Lab"; else -> "Unbekannt ($mode)"
+        BITMAP -> "Bitmap"; GRAYSCALE -> "Graustufen"; INDEXED -> tr("Indizierte Farben"); RGB -> "RGB"
+        CMYK -> "CMYK"; MULTICHANNEL -> "Mehrkanal"; DUOTONE -> "Duplex"; LAB -> "Lab"; else -> tr("Unbekannt ({0})", mode)
     }
 }

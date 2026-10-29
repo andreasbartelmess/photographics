@@ -1,5 +1,6 @@
 package de.photographics.app.ui
 
+import de.photographics.core.tr
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BarChart
@@ -112,38 +113,38 @@ private fun choice(label: String, vararg options: String) = FilterParam(label, 0
 /** Filter-Menü, gruppiert wie in Photoshop. */
 val FilterSpecs = listOf(
     // Weichzeichnungsfilter
-    FilterSpec("Gaußscher Weichzeichner", "Weichzeichnungsfilter", Icons.Filled.BlurOn, listOf(s("Radius (px)", 0.5f, 100f, 4f, 1))) { GaussianBlurFilter(it[0]) },
-    FilterSpec("Bewegungsunschärfe", "Weichzeichnungsfilter", Icons.Filled.BlurLinear, listOf(s("Winkel (°)", -90f, 90f, 0f), s("Distanz (px)", 1f, 200f, 20f))) { MotionBlur(it[0], it[1].toInt()) },
-    FilterSpec("Radialer Weichzeichner", "Weichzeichnungsfilter", Icons.Filled.BlurCircular, listOf(s("Stärke", 1f, 100f, 15f), choice("Methode", "Kreisförmig", "Strahlenförmig"))) { RadialBlur(it[0], it[1] >= 0.5f) },
-    FilterSpec("Matter machen", "Weichzeichnungsfilter", Icons.Filled.BlurOn, listOf(s("Radius (px)", 1f, 40f, 5f), s("Schwellenwert", 2f, 100f, 15f))) { SurfaceBlur(it[0].toInt(), it[1].toInt()) },
-    FilterSpec("Tilt-Shift (Miniatur)", "Weichzeichnungsfilter", Icons.Filled.FilterTiltShift, listOf(s("Unschärfe", 1f, 40f, 10f, 1), s("Position (%)", 0f, 100f, 50f), s("Schärfebereich (%)", 2f, 60f, 15f))) {
+    FilterSpec(tr("Gaußscher Weichzeichner"), tr("Weichzeichnungsfilter"), Icons.Filled.BlurOn, listOf(s(tr("Radius (px)"), 0.5f, 100f, 4f, 1))) { GaussianBlurFilter(it[0]) },
+    FilterSpec(tr("Bewegungsunschärfe"), tr("Weichzeichnungsfilter"), Icons.Filled.BlurLinear, listOf(s(tr("Winkel (°)"), -90f, 90f, 0f), s(tr("Distanz (px)"), 1f, 200f, 20f))) { MotionBlur(it[0], it[1].toInt()) },
+    FilterSpec(tr("Radialer Weichzeichner"), tr("Weichzeichnungsfilter"), Icons.Filled.BlurCircular, listOf(s(tr("Stärke"), 1f, 100f, 15f), choice(tr("Methode"), tr("Kreisförmig"), tr("Strahlenförmig")))) { RadialBlur(it[0], it[1] >= 0.5f) },
+    FilterSpec(tr("Matter machen"), tr("Weichzeichnungsfilter"), Icons.Filled.BlurOn, listOf(s(tr("Radius (px)"), 1f, 40f, 5f), s(tr("Schwellenwert"), 2f, 100f, 15f))) { SurfaceBlur(it[0].toInt(), it[1].toInt()) },
+    FilterSpec(tr("Tilt-Shift (Miniatur)"), tr("Weichzeichnungsfilter"), Icons.Filled.FilterTiltShift, listOf(s(tr("Unschärfe"), 1f, 40f, 10f, 1), s(tr("Position (%)"), 0f, 100f, 50f), s(tr("Schärfebereich (%)"), 2f, 60f, 15f))) {
         TiltShift(it[0], it[1] / 100f, it[2] / 100f)
     },
     // Scharfzeichnungsfilter
-    FilterSpec("Unscharf maskieren", "Scharfzeichnungsfilter", Icons.Filled.CenterFocusStrong,
-        listOf(s("Stärke (%)", 0f, 500f, 80f), s("Radius (px)", 0.3f, 50f, 1.5f, 1), s("Schwellenwert", 0f, 64f, 2f))) { UnsharpMask(it[0], it[1], it[2].toInt()) },
-    FilterSpec("Selektiver Scharfzeichner", "Scharfzeichnungsfilter", Icons.Filled.CenterFocusStrong,
-        listOf(s("Stärke (%)", 0f, 300f, 120f), s("Radius (px)", 0.3f, 10f, 1.2f, 1), s("Rauschen reduzieren (%)", 0f, 100f, 20f))) { SmartSharpen(it[0], it[1], it[2]) },
-    FilterSpec("Hochpass", "Sonstige Filter", Icons.Filled.Tune, listOf(s("Radius (px)", 0.5f, 100f, 6f, 1))) { HighPass(it[0]) },
+    FilterSpec(tr("Unscharf maskieren"), tr("Scharfzeichnungsfilter"), Icons.Filled.CenterFocusStrong,
+        listOf(s(tr("Stärke (%)"), 0f, 500f, 80f), s(tr("Radius (px)"), 0.3f, 50f, 1.5f, 1), s(tr("Schwellenwert"), 0f, 64f, 2f))) { UnsharpMask(it[0], it[1], it[2].toInt()) },
+    FilterSpec(tr("Selektiver Scharfzeichner"), tr("Scharfzeichnungsfilter"), Icons.Filled.CenterFocusStrong,
+        listOf(s(tr("Stärke (%)"), 0f, 300f, 120f), s(tr("Radius (px)"), 0.3f, 10f, 1.2f, 1), s(tr("Rauschen reduzieren (%)"), 0f, 100f, 20f))) { SmartSharpen(it[0], it[1], it[2]) },
+    FilterSpec(tr("Hochpass"), tr("Sonstige Filter"), Icons.Filled.Tune, listOf(s(tr("Radius (px)"), 0.5f, 100f, 6f, 1))) { HighPass(it[0]) },
     // Rauschfilter
-    FilterSpec("Rauschen reduzieren", "Rauschfilter", Icons.Filled.Grain, listOf(s("Stärke", 0f, 100f, 40f))) { ReduceNoise(it[0]) },
-    FilterSpec("Median", "Rauschfilter", Icons.Filled.Grain, listOf(s("Radius (px)", 1f, 20f, 2f))) { Median(it[0].toInt()) },
-    FilterSpec("Staub & Kratzer", "Rauschfilter", Icons.Filled.Grain, listOf(s("Radius (px)", 1f, 20f, 2f), s("Schwellenwert", 0f, 128f, 20f))) { DustAndScratches(it[0].toInt(), it[1].toInt()) },
-    FilterSpec("Rauschen hinzufügen", "Rauschfilter", Icons.Filled.Grain, listOf(s("Stärke (%)", 0.5f, 50f, 6f, 1), sw("Gaußsche Verteilung", true), sw("Monochromatisch", true))) {
+    FilterSpec(tr("Rauschen reduzieren"), tr("Rauschfilter"), Icons.Filled.Grain, listOf(s(tr("Stärke"), 0f, 100f, 40f))) { ReduceNoise(it[0]) },
+    FilterSpec(tr("Median"), tr("Rauschfilter"), Icons.Filled.Grain, listOf(s(tr("Radius (px)"), 1f, 20f, 2f))) { Median(it[0].toInt()) },
+    FilterSpec(tr("Staub & Kratzer"), tr("Rauschfilter"), Icons.Filled.Grain, listOf(s(tr("Radius (px)"), 1f, 20f, 2f), s(tr("Schwellenwert"), 0f, 128f, 20f))) { DustAndScratches(it[0].toInt(), it[1].toInt()) },
+    FilterSpec(tr("Rauschen hinzufügen"), tr("Rauschfilter"), Icons.Filled.Grain, listOf(s(tr("Stärke (%)"), 0.5f, 50f, 6f, 1), sw(tr("Gaußsche Verteilung"), true), sw(tr("Monochromatisch"), true))) {
         AddNoise(it[0], it[1] >= 0.5f, it[2] >= 0.5f)
     },
     // Fotografisch
-    FilterSpec("Haut glätten", "Retusche", Icons.Filled.Face, listOf(s("Glättung", 0f, 100f, 50f), s("Struktur erhalten (%)", 0f, 100f, 40f))) { SkinSmooth(it[0], it[1]) },
-    FilterSpec("Klarheit", "Retusche", Icons.Filled.WbSunny, listOf(s("Stärke", -100f, 100f, 30f))) { Clarity(it[0]) },
-    FilterSpec("Dunst entfernen", "Retusche", Icons.Filled.Cloud, listOf(s("Stärke", 0f, 100f, 40f))) { Dehaze(it[0]) },
-    FilterSpec("Vignette", "Objektiv", Icons.Filled.Vignette, listOf(s("Stärke", -100f, 100f, -40f), s("Mittelpunkt (%)", 0f, 100f, 50f))) { Vignette(it[0], it[1]) },
-    FilterSpec("Objektivkorrektur (Verzeichnung)", "Objektiv", Icons.Filled.Lens, listOf(s("Verzeichnung", -100f, 100f, 0f))) { LensDistortion(it[0]) },
+    FilterSpec(tr("Haut glätten"), tr("Retusche"), Icons.Filled.Face, listOf(s(tr("Glättung"), 0f, 100f, 50f), s(tr("Struktur erhalten (%)"), 0f, 100f, 40f))) { SkinSmooth(it[0], it[1]) },
+    FilterSpec(tr("Klarheit"), tr("Retusche"), Icons.Filled.WbSunny, listOf(s(tr("Stärke"), -100f, 100f, 30f))) { Clarity(it[0]) },
+    FilterSpec(tr("Dunst entfernen"), tr("Retusche"), Icons.Filled.Cloud, listOf(s(tr("Stärke"), 0f, 100f, 40f))) { Dehaze(it[0]) },
+    FilterSpec(tr("Vignette"), tr("Objektiv"), Icons.Filled.Vignette, listOf(s(tr("Stärke"), -100f, 100f, -40f), s(tr("Mittelpunkt (%)"), 0f, 100f, 50f))) { Vignette(it[0], it[1]) },
+    FilterSpec(tr("Objektivkorrektur (Verzeichnung)"), tr("Objektiv"), Icons.Filled.Lens, listOf(s(tr("Verzeichnung"), -100f, 100f, 0f))) { LensDistortion(it[0]) },
     // Stilisierungsfilter
-    FilterSpec("Ölfarbe", "Stilisierungsfilter", Icons.Filled.FilterVintage, listOf(s("Pinselgröße", 1f, 12f, 4f))) { OilPaint(it[0].toInt()) },
-    FilterSpec("Relief", "Stilisierungsfilter", Icons.Filled.FilterVintage, listOf(s("Winkel (°)", -180f, 180f, 135f), s("Höhe (px)", 1f, 10f, 3f), s("Stärke (%)", 1f, 500f, 100f))) {
+    FilterSpec(tr("Ölfarbe"), tr("Stilisierungsfilter"), Icons.Filled.FilterVintage, listOf(s(tr("Pinselgröße"), 1f, 12f, 4f))) { OilPaint(it[0].toInt()) },
+    FilterSpec(tr("Relief"), tr("Stilisierungsfilter"), Icons.Filled.FilterVintage, listOf(s(tr("Winkel (°)"), -180f, 180f, 135f), s(tr("Höhe (px)"), 1f, 10f, 3f), s(tr("Stärke (%)"), 1f, 500f, 100f))) {
         Emboss(it[0], it[1].toInt(), it[2])
     },
-    FilterSpec("Konturen finden", "Stilisierungsfilter", Icons.Filled.FilterVintage, emptyList()) { FindEdges() },
-    FilterSpec("Mosaik", "Vergröberungsfilter", Icons.Filled.GridOn, listOf(s("Zellengröße (px)", 2f, 200f, 16f))) { Mosaic(it[0].toInt()) },
-    FilterSpec("Strudel", "Verzerrungsfilter", Icons.Filled.BlurCircular, listOf(s("Winkel (°)", -999f, 999f, 180f))) { Twirl(it[0]) },
+    FilterSpec(tr("Konturen finden"), tr("Stilisierungsfilter"), Icons.Filled.FilterVintage, emptyList()) { FindEdges() },
+    FilterSpec(tr("Mosaik"), tr("Vergröberungsfilter"), Icons.Filled.GridOn, listOf(s(tr("Zellengröße (px)"), 2f, 200f, 16f))) { Mosaic(it[0].toInt()) },
+    FilterSpec(tr("Strudel"), tr("Verzerrungsfilter"), Icons.Filled.BlurCircular, listOf(s(tr("Winkel (°)"), -999f, 999f, 180f))) { Twirl(it[0]) },
 )

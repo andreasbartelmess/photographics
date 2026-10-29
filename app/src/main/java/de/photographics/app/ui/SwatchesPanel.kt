@@ -1,5 +1,6 @@
 package de.photographics.app.ui
 
+import de.photographics.core.tr
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -70,34 +71,34 @@ fun SwatchesDialog(vm: EditorViewModel, onImport: () -> Unit, onExport: (String)
         ) {
             Column(Modifier.padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Farbfelder", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                    Text(tr("Farbfelder"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
                     ColorSwatchPair(state.color, state.bgColor, onFg = {}, onBg = {}, onSwap = vm::swapColors, onReset = vm::resetColors, Modifier.padding(end = 8.dp))
-                    IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, "Schließen") }
+                    IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, tr("Schließen")) }
                 }
                 Column(Modifier.padding(end = 12.dp).verticalScroll(rememberScrollState())) {
                     if (state.recentColors.isNotEmpty()) {
-                        Text("Zuletzt verwendet", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp, bottom = 6.dp))
+                        Text(tr("Zuletzt verwendet"), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp, bottom = 6.dp))
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             for (c in state.recentColors) Field(c, onClick = { vm.setColor(c) }, onLong = { vm.setBgColor(c) })
                         }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 12.dp)) {
                         Box(Modifier.weight(1f)) {
-                            OutlinedButton(onClick = { choose = true }) { Text(palette.name); Icon(Icons.Filled.ArrowDropDown, null) }
+                            OutlinedButton(onClick = { choose = true }) { Text(tr(palette.name)); Icon(Icons.Filled.ArrowDropDown, null) }
                             DropdownMenu(choose, { choose = false }) {
-                                for (p in state.palettes) DropdownMenuItem(text = { Text("${p.name} (${p.swatches.size})") }, onClick = { vm.selectPalette(p.name); choose = false })
+                                for (p in state.palettes) DropdownMenuItem(text = { Text("${tr(p.name)} (${p.swatches.size})") }, onClick = { vm.selectPalette(p.name); choose = false })
                                 HorizontalDivider()
-                                DropdownMenuItem(text = { Text("Neue Bibliothek …") }, onClick = { choose = false; naming = true })
+                                DropdownMenuItem(text = { Text(tr("Neue Bibliothek …")) }, onClick = { choose = false; naming = true })
                             }
                         }
-                        TextButton(onClick = { vm.addSwatch(state.color) }) { Icon(Icons.Filled.Add, null, Modifier.size(18.dp)); Text("Vordergrundfarbe", Modifier.padding(start = 4.dp)) }
+                        TextButton(onClick = { vm.addSwatch(state.color) }) { Icon(Icons.Filled.Add, null, Modifier.size(18.dp)); Text(tr("Vordergrundfarbe"), Modifier.padding(start = 4.dp)) }
                     }
                     if (naming) Row(verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(newName, { newName = it }, label = { Text("Name der Bibliothek") }, singleLine = true, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { vm.newPalette(newName); naming = false; newName = "" }, enabled = newName.isNotBlank()) { Text("Anlegen") }
+                        OutlinedTextField(newName, { newName = it }, label = { Text(tr("Name der Bibliothek")) }, singleLine = true, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { vm.newPalette(newName); naming = false; newName = "" }, enabled = newName.isNotBlank()) { Text(tr("Anlegen")) }
                     }
                     if (builtin) Text(
-                        "Eingebaute Bibliothek – neue Farben landen in „Eigene Farbfelder“.",
+                        tr("Eingebaute Bibliothek – neue Farben landen in „Eigene Farbfelder“."),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp),
                     )
                     FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -105,33 +106,33 @@ fun SwatchesDialog(vm: EditorViewModel, onImport: () -> Unit, onExport: (String)
                             Box {
                                 Field(s.color, onClick = { vm.setColor(s.color) }, onLong = { menuFor = i })
                                 DropdownMenu(menuFor == i, { menuFor = null }) {
-                                    if (s.name.isNotEmpty()) Text(s.name, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
-                                    DropdownMenuItem(text = { Text("Als Vordergrundfarbe") }, onClick = { vm.setColor(s.color); menuFor = null })
-                                    DropdownMenuItem(text = { Text("Als Hintergrundfarbe") }, onClick = { vm.setBgColor(s.color); menuFor = null })
-                                    if (!builtin) DropdownMenuItem(text = { Text("Entfernen") }, onClick = { vm.removeSwatch(palette.name, i); menuFor = null })
+                                    if (s.name.isNotEmpty()) Text(tr(s.name), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+                                    DropdownMenuItem(text = { Text(tr("Als Vordergrundfarbe")) }, onClick = { vm.setColor(s.color); menuFor = null })
+                                    DropdownMenuItem(text = { Text(tr("Als Hintergrundfarbe")) }, onClick = { vm.setBgColor(s.color); menuFor = null })
+                                    if (!builtin) DropdownMenuItem(text = { Text(tr("Entfernen")) }, onClick = { vm.removeSwatch(palette.name, i); menuFor = null })
                                 }
                             }
                         }
                     }
                     Text(
-                        "Antippen: Vordergrundfarbe · lange drücken: weitere Aktionen",
+                        tr("Antippen: Vordergrundfarbe · lange drücken: weitere Aktionen"),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp),
                     )
                     HorizontalDivider(Modifier.padding(vertical = 12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onImport) { Text("Importieren …") }
+                        OutlinedButton(onClick = onImport) { Text(tr("Importieren …")) }
                         Box {
-                            OutlinedButton(onClick = { exportMenu = true }) { Text("Exportieren …") }
+                            OutlinedButton(onClick = { exportMenu = true }) { Text(tr("Exportieren …")) }
                             DropdownMenu(exportMenu, { exportMenu = false }) {
-                                DropdownMenuItem(text = { Text("Photoshop-Farbfelder (.aco)") }, onClick = { exportMenu = false; onExport("aco") })
-                                DropdownMenuItem(text = { Text("Adobe Swatch Exchange (.ase)") }, onClick = { exportMenu = false; onExport("ase") })
-                                DropdownMenuItem(text = { Text("GIMP-Palette (.gpl)") }, onClick = { exportMenu = false; onExport("gpl") })
+                                DropdownMenuItem(text = { Text(tr("Photoshop-Farbfelder (.aco)")) }, onClick = { exportMenu = false; onExport("aco") })
+                                DropdownMenuItem(text = { Text(tr("Adobe Swatch Exchange (.ase)")) }, onClick = { exportMenu = false; onExport("ase") })
+                                DropdownMenuItem(text = { Text(tr("GIMP-Palette (.gpl)")) }, onClick = { exportMenu = false; onExport("gpl") })
                             }
                         }
-                        if (!builtin) TextButton(onClick = { vm.deletePalette(palette.name) }) { Text("Bibliothek löschen") }
+                        if (!builtin) TextButton(onClick = { vm.deletePalette(palette.name) }) { Text(tr("Bibliothek löschen")) }
                     }
                     Text(
-                        "Import: Photoshop (.aco, .act), Illustrator/InDesign (.ase), GIMP (.gpl)",
+                        tr("Import: Photoshop (.aco, .act), Illustrator/InDesign (.ase), GIMP (.gpl)"),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp),
                     )
                 }

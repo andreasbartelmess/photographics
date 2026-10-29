@@ -1,5 +1,6 @@
 package de.photographics.app.ui
 
+import de.photographics.core.tr
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -119,15 +120,15 @@ fun LayersPanel(
         var showProps by remember(roomy) { mutableStateOf(roomy) }
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Ebenen", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                Text(tr("Ebenen"), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 if (active != null) {
                     IconToggleButton(checked = showProps, onCheckedChange = { showProps = it }) {
-                        Icon(Icons.Filled.Tune, "Ebeneneigenschaften")
+                        Icon(Icons.Filled.Tune, tr("Ebeneneigenschaften"))
                     }
                 }
-                TipIconButton(Icons.Filled.Contrast, "Neue Einstellungsebene") { onAddAdjustment() }
-                TipIconButton(Icons.Filled.CreateNewFolder, "Neue Gruppe") { vm.addGroup() }
-                TipIconButton(Icons.Filled.Add, "Neue Ebene") { vm.addLayer() }
+                TipIconButton(Icons.Filled.Contrast, tr("Neue Einstellungsebene")) { onAddAdjustment() }
+                TipIconButton(Icons.Filled.CreateNewFolder, tr("Neue Gruppe")) { vm.addGroup() }
+                TipIconButton(Icons.Filled.Add, tr("Neue Ebene")) { vm.addLayer() }
             }
 
             if (active != null && showProps) ActiveLayerProperties(active, vm)
@@ -163,12 +164,12 @@ fun LayersPanel(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 val enabled = active != null
-                TipTonalButton(Icons.Filled.ContentCopy, "Duplizieren", enabled) { vm.duplicateLayer() }
-                TipTonalButton(Icons.Filled.ArrowUpward, "Nach oben", enabled) { active?.let { vm.moveLayer(it.id, up = true) } }
-                TipTonalButton(Icons.Filled.ArrowDownward, "Nach unten", enabled) { active?.let { vm.moveLayer(it.id, up = false) } }
-                TipTonalButton(Icons.Filled.VerticalAlignBottom, "Auf darunterliegende reduzieren", enabled && active?.isGroup == false) { vm.mergeDown() }
-                TipTonalButton(Icons.Filled.Gradient, "Maske hinzufügen", enabled && active?.hasMask == false) { vm.addMask(fromSelection = state.hasSelection) }
-                TipTonalButton(Icons.Filled.Delete, "Löschen", enabled) { vm.deleteLayer() }
+                TipTonalButton(Icons.Filled.ContentCopy, tr("Duplizieren"), enabled) { vm.duplicateLayer() }
+                TipTonalButton(Icons.Filled.ArrowUpward, tr("Nach oben"), enabled) { active?.let { vm.moveLayer(it.id, up = true) } }
+                TipTonalButton(Icons.Filled.ArrowDownward, tr("Nach unten"), enabled) { active?.let { vm.moveLayer(it.id, up = false) } }
+                TipTonalButton(Icons.Filled.VerticalAlignBottom, tr("Auf darunterliegende reduzieren"), enabled && active?.isGroup == false) { vm.mergeDown() }
+                TipTonalButton(Icons.Filled.Gradient, tr("Maske hinzufügen"), enabled && active?.hasMask == false) { vm.addMask(fromSelection = state.hasSelection) }
+                TipTonalButton(Icons.Filled.Delete, tr("Löschen"), enabled) { vm.deleteLayer() }
             }
         }
         }
@@ -214,7 +215,7 @@ private fun ActiveLayerProperties(item: LayerItem, vm: EditorViewModel) {
                 onValueChange = {},
                 readOnly = true,
                 singleLine = true,
-                label = { Text("Mischmodus") },
+                label = { Text(tr("Mischmodus")) },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
                 modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
             )
@@ -229,8 +230,8 @@ private fun ActiveLayerProperties(item: LayerItem, vm: EditorViewModel) {
                 }
             }
         }
-        PropertySlider("Deckkraft", item.opacity, onDone = { vm.endOpacityEdit() }) { vm.setOpacityLive(item.id, opacity = it) }
-        PropertySlider("Fläche", item.fillOpacity, onDone = { vm.endOpacityEdit() }) { vm.setOpacityLive(item.id, fill = it) }
+        PropertySlider(tr("Deckkraft"), item.opacity, onDone = { vm.endOpacityEdit() }) { vm.setOpacityLive(item.id, opacity = it) }
+        PropertySlider(tr("Fläche"), item.fillOpacity, onDone = { vm.endOpacityEdit() }) { vm.setOpacityLive(item.id, fill = it) }
         if (item.kind != LayerKind.PIXEL) {
             Text(item.kind.label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
         }
@@ -266,7 +267,7 @@ private fun LayerRow(item: LayerItem, selected: Boolean, maskTargeted: Boolean, 
     ) {
         if (item.isGroup) {
             IconButton(onClick = { vm.toggleExpanded(item.id) }, modifier = Modifier.size(32.dp)) {
-                Icon(if (item.expanded) Icons.Filled.ExpandMore else Icons.Filled.ExpandLess, "Auf-/Zuklappen")
+                Icon(if (item.expanded) Icons.Filled.ExpandMore else Icons.Filled.ExpandLess, tr("Auf-/Zuklappen"))
             }
             Box(Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)).background(cs.tertiaryContainer), contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.Folder, null, tint = cs.onTertiaryContainer)
@@ -291,7 +292,7 @@ private fun LayerRow(item: LayerItem, selected: Boolean, maskTargeted: Boolean, 
             // Kettensymbol: Maske mit der Ebene verbunden – antippen löst/verbindet
             Icon(
                 if (item.maskLinked) Icons.Filled.Link else Icons.Filled.LinkOff,
-                if (item.maskLinked) "Maske von Ebene lösen" else "Maske mit Ebene verbinden",
+                if (item.maskLinked) tr("Maske von Ebene lösen") else tr("Maske mit Ebene verbinden"),
                 Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).clickable { vm.toggleMaskLink(item.id) }.padding(1.dp),
                 tint = if (item.maskLinked) cs.onSurfaceVariant else cs.error,
             )
@@ -316,43 +317,43 @@ private fun LayerRow(item: LayerItem, selected: Boolean, maskTargeted: Boolean, 
             }.trimEnd(' ', '·')
             if (info.isNotEmpty()) Text(info, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1)
         }
-        if (item.lockTransparency) Icon(Icons.Filled.Lock, "Transparenz fixiert", Modifier.size(16.dp), tint = cs.onSurfaceVariant)
+        if (item.lockTransparency) Icon(Icons.Filled.Lock, tr("Transparenz fixiert"), Modifier.size(16.dp), tint = cs.onSurfaceVariant)
         IconButton(onClick = { vm.toggleVisibility(item.id) }) {
             Icon(
-                if (item.visible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff, "Sichtbarkeit",
+                if (item.visible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff, tr("Sichtbarkeit"),
                 tint = if (item.visible) cs.onSurfaceVariant else cs.outline,
             )
         }
         Box {
-            IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "Mehr") }
+            IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, tr("Mehr")) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 @Composable
                 fun act(label: String, f: () -> Unit) = DropdownMenuItem(text = { Text(label) }, onClick = { menu = false; vm.selectLayer(item.id); f() })
-                act("Umbenennen …", onRename)
-                act(if (item.clipped) "Schnittmaske zurückwandeln (Strg+Alt+G)" else "Schnittmaske erstellen (Strg+Alt+G)") { vm.toggleClipping(item.id) }
-                if (item.hasMask) act(if (item.maskLinked) "Maske von Ebene lösen" else "Maske mit Ebene verbinden") { vm.toggleMaskLink(item.id) }
-                act(if (item.lockTransparency) "Transparenz freigeben" else "Transparenz fixieren") { vm.toggleLockTransparency(item.id) }
-                act("In Gruppe verschieben") { vm.groupActive() }
+                act(tr("Umbenennen …"), onRename)
+                act(if (item.clipped) tr("Schnittmaske zurückwandeln (Strg+Alt+G)") else tr("Schnittmaske erstellen (Strg+Alt+G)")) { vm.toggleClipping(item.id) }
+                if (item.hasMask) act(if (item.maskLinked) tr("Maske von Ebene lösen") else tr("Maske mit Ebene verbinden")) { vm.toggleMaskLink(item.id) }
+                act(if (item.lockTransparency) tr("Transparenz freigeben") else tr("Transparenz fixieren")) { vm.toggleLockTransparency(item.id) }
+                act(tr("In Gruppe verschieben")) { vm.groupActive() }
                 when (item.type) {
-                    LayerType.PIXEL -> act("In Smartobjekt konvertieren") { vm.convertToSmart(item.id) }
-                    LayerType.TEXT -> { act("Text bearbeiten") { vm.editTextLayer(item.id) }; act("Ebene rastern") { vm.rasterizeLayer(item.id) } }
-                    LayerType.SMART -> act("Ebene rastern") { vm.rasterizeLayer(item.id) }
-                    LayerType.ADJUSTMENT -> act("Einstellungen bearbeiten") { vm.openAdjustment(item.id) }
+                    LayerType.PIXEL -> act(tr("In Smartobjekt konvertieren")) { vm.convertToSmart(item.id) }
+                    LayerType.TEXT -> { act(tr("Text bearbeiten")) { vm.editTextLayer(item.id) }; act(tr("Ebene rastern")) { vm.rasterizeLayer(item.id) } }
+                    LayerType.SMART -> act(tr("Ebene rastern")) { vm.rasterizeLayer(item.id) }
+                    LayerType.ADJUSTMENT -> act(tr("Einstellungen bearbeiten")) { vm.openAdjustment(item.id) }
                     else -> {}
                 }
-                if (!item.isGroup) act("Auf darunterliegende reduzieren") { vm.mergeDown() }
+                if (!item.isGroup) act(tr("Auf darunterliegende reduzieren")) { vm.mergeDown() }
                 HorizontalDivider()
                 if (!item.hasMask) {
-                    act("Maske hinzufügen (alles zeigen)") { vm.addMask(fromSelection = false) }
-                    act("Maske aus Auswahl") { vm.addMask(fromSelection = true) }
+                    act(tr("Maske hinzufügen (alles zeigen)")) { vm.addMask(fromSelection = false) }
+                    act(tr("Maske aus Auswahl")) { vm.addMask(fromSelection = true) }
                 } else {
-                    act(if (item.maskEnabled) "Maske deaktivieren" else "Maske aktivieren") { vm.toggleMaskEnabled(item.id) }
-                    if (!item.isGroup) act("Maske anwenden") { vm.applyMask() }
-                    act("Maske löschen") { vm.deleteMask() }
+                    act(if (item.maskEnabled) tr("Maske deaktivieren") else tr("Maske aktivieren")) { vm.toggleMaskEnabled(item.id) }
+                    if (!item.isGroup) act(tr("Maske anwenden")) { vm.applyMask() }
+                    act(tr("Maske löschen")) { vm.deleteMask() }
                 }
                 HorizontalDivider()
-                act("Duplizieren") { vm.duplicateLayer() }
-                act("Löschen") { vm.deleteLayer() }
+                act(tr("Duplizieren")) { vm.duplicateLayer() }
+                act(tr("Löschen")) { vm.deleteLayer() }
             }
         }
     }
