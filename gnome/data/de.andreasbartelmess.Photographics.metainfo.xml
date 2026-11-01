@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>de.andreasbartelmess.Photographics</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>photographics</name>
+  <summary>Layer-based photo editor</summary>
+  <summary xml:lang="de">Ebenenbasierte Bildbearbeitung</summary>
+  <description>
+    <p>photographics is a layer-based photo editor designed for professional workflows. It opens and saves Photoshop (PSD), TIFF and GIMP (XCF) files with layers, masks, adjustment layers and layer styles.</p>
+    <p xml:lang="de">photographics ist eine ebenenbasierte Bildbearbeitung für professionelle Arbeitsabläufe. Sie öffnet und speichert Photoshop- (PSD), TIFF- und GIMP-Dateien (XCF) mit Ebenen, Masken, Einstellungsebenen und Ebenenstilen.</p>
+    <ul>
+      <li>Layers, masks, groups, blend modes and adjustment layers</li>
+      <li>Retouching: healing brush, clone stamp, content-aware fill, AI remove</li>
+      <li>Selections: magic wand, quick and object selection, pen paths</li>
+      <li>Filter gallery, layer styles, curves with histogram</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">de.andreasbartelmess.Photographics.desktop</launchable>
+  <developer id="de.andreasbartelmess">
+    <name>Andreas Bartelmess</name>
+  </developer>
+  <url type="homepage">https://photographics.andreasbartelmess.de</url>
+  <url type="vcs-browser">https://github.com/andreasbartelmess/photographics</url>
+  <url type="bugtracker">https://github.com/andreasbartelmess/photographics/issues</url>
+  <content_rating type="oars-1.1"/>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <releases>
+    <release version="0.4.0" date="2026-11-01"/>
+  </releases>
+</component>

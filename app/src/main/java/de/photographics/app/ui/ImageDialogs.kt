@@ -40,6 +40,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -264,6 +265,45 @@ fun AiModelsDialog(
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(tr("Schließen")) } },
+    )
+}
+
+/** Exportieren als (wie Photoshop): JPEG oder PNG, JPEG-Qualität, Größe mit festem Seitenverhältnis, sRGB. */
+@Composable
+fun ExportDialog(
+    width: Int, height: Int, jpeg0: Boolean, quality0: Int, srgb0: Boolean,
+    onConfirm: (jpeg: Boolean, quality: Int, w: Int, h: Int, srgb: Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var jpeg by remember { mutableStateOf(jpeg0) }
+    var quality by remember { mutableStateOf(quality0.toFloat()) }
+    var pct by remember { mutableStateOf(100f) }
+    var srgb by remember { mutableStateOf(srgb0) }
+    val w = (width * pct / 100f).roundToInt().coerceAtLeast(1); val h = (height * pct / 100f).roundToInt().coerceAtLeast(1)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(tr("Exportieren als")) },
+        text = {
+            Column {
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                    SegmentedButton(selected = jpeg, onClick = { jpeg = true }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text("JPEG") }
+                    SegmentedButton(selected = !jpeg, onClick = { jpeg = false }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text("PNG") }
+                }
+                if (jpeg) {
+                    Text(tr("Qualität: {0}", quality.roundToInt()), style = MaterialTheme.typography.bodyMedium)
+                    Slider(quality, { quality = it }, valueRange = 1f..100f)
+                    Text(tr("JPEG kennt keine Transparenz – sie wird auf Weiß reduziert."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(tr("Größe: {0} × {1} px ({2} %)", w, h, pct.roundToInt()), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
+                Slider(pct, { pct = it.roundToInt().toFloat() }, valueRange = 5f..100f)
+                Row(Modifier.fillMaxWidth().clickable { srgb = !srgb }.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(srgb, { srgb = it })
+                    Text(tr("In sRGB umwandeln (Web, Geräte ohne Farbmanagement)"), Modifier.padding(start = 8.dp))
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(jpeg, quality.roundToInt(), w, h, srgb) }) { Text(tr("Exportieren …")) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Abbrechen")) } },
     )
 }
 

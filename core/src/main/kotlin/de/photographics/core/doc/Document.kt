@@ -20,6 +20,12 @@ class Document(width: Int, height: Int) {
     var activeLayer: Layer? = null
     var selection: Selection? = null
 
+    /**
+     * Farbtiefe je Kanal: 8 oder 16. Bei 16 Bit tragen Pixelebenen zusätzlich die unteren 8 Bit
+     * ([PixelLayer.low]); Compositor, Korrekturen und Export rechnen dann mit voller Genauigkeit.
+     */
+    var bitDepth = 8
+
     /** Auflösung in dpi. */
     var dpi = 72f
 
@@ -34,6 +40,11 @@ class Document(width: Int, height: Int) {
     val importWarnings = mutableListOf<String>()
     /** Hilfslinien (unveränderliche Liste; Änderungen ersetzen sie). */
     var guides: List<Guide> = emptyList()
+    /** Gesicherte Pfade (Pfade-Bedienfeld) und der Arbeitspfad (unbenannt, wird überschrieben). */
+    var paths: List<de.photographics.core.vector.NamedPath> = emptyList()
+    var workPath: de.photographics.core.vector.VectorPath? = null
+    /** Alphakanäle (gespeicherte Auswahlen, Graustufen 0..255 in Dokumentgröße). */
+    var channels: List<AlphaChannel> = emptyList()
     /** PSD: Photoshop hat ein echtes zusammengeführtes Bild gespeichert (Ressource 1057); null = unbekannt. */
     var hasRealComposite: Boolean? = null
 
@@ -86,13 +97,17 @@ class Document(width: Int, height: Int) {
         val shift = Affine.translate(dx.toDouble(), dy.toDouble())
         for (l in allLayers()) {
             when (l) {
-                is PixelLayer -> l.pixels = l.pixels.resized(newW, newH, dx, dy, keepOutside)
+                is PixelLayer -> { l.pixels = l.pixels.resized(newW, newH, dx, dy, keepOutside); l.low = l.low?.resized(newW, newH, dx, dy, keepOutside) }
                 is TextLayer -> { l.docWidth = newW; l.docHeight = newH; l.transform = l.transform.then(shift) }
                 is SmartLayer -> { l.docWidth = newW; l.docHeight = newH; l.applyDocTransform(shift) }
+                is ShapeLayer -> { l.docWidth = newW; l.docHeight = newH; l.transform = l.transform.then(shift) }
                 else -> {}
             }
             l.mask?.let { it.grid = it.grid.resized(newW, newH, dx, dy, keepOutside) }
         }
+        paths = paths.map { it.copy(path = it.path.map(shift)) }
+        workPath = workPath?.map(shift)
+        channels = channels.map { it.copy(grid = it.grid.resized(newW, newH, dx, dy, false)) }
         width = newW; height = newH
         // Hilfslinien wandern mit dem Inhalt; außerhalb der neuen Fläche fallen sie weg
         guides = guides.map { if (it.vertical) it.copy(position = it.position + dx) else it.copy(position = it.position + dy) }
@@ -106,6 +121,7 @@ class Document(width: Int, height: Int) {
         for (l in allLayers()) {
             if (l is TextLayer) { l.docWidth = newW; l.docHeight = newH; l.invalidate() }
             if (l is SmartLayer) { l.docWidth = newW; l.docHeight = newH; l.invalidate() }
+            if (l is ShapeLayer) { l.docWidth = newW; l.docHeight = newH; l.invalidate() }
         }
         selection = null
     }
@@ -114,11 +130,12 @@ class Document(width: Int, height: Int) {
     fun snapshot(): Snapshot = Snapshot(width, height, allLayers().associate { l ->
         l.id to LayerData(
             (l as? PixelLayer)?.pixels, l.mask?.grid,
-            when (l) { is TextLayer -> l.transform; is SmartLayer -> l.transform; else -> null },
+            when (l) { is TextLayer -> l.transform; is SmartLayer -> l.transform; is ShapeLayer -> l.transform; else -> null },
             (l as? TextLayer)?.style,
             (l as? SmartLayer)?.warp,
+            (l as? PixelLayer)?.low,
         )
-    }, selection, guides)
+    }, selection, guides, paths, workPath, channels)
 
     fun restore(s: Snapshot) {
         width = s.width; height = s.height
@@ -126,16 +143,23 @@ class Document(width: Int, height: Int) {
         for (l in allLayers()) {
             val d = s.layers[l.id] ?: continue
             if (l is PixelLayer && d.pixels != null) l.pixels = d.pixels
+            if (l is PixelLayer) l.low = d.low
             if (l is TextLayer) { l.docWidth = width; l.docHeight = height; d.style?.let { l.style = it }; d.transform?.let { l.transform = it } }
             if (l is SmartLayer) { l.docWidth = width; l.docHeight = height; d.transform?.let { l.transform = it }; l.warp = d.warp }
+            if (l is ShapeLayer) { l.docWidth = width; l.docHeight = height; d.transform?.let { l.transform = it } }
             if (d.mask != null) l.mask?.grid = d.mask
         }
         selection = s.selection
+        paths = s.paths; workPath = s.workPath; channels = s.channels
     }
 
     /** Hält nur Referenzen; Aufrufer müssen Raster ersetzen statt sie zu verändern. */
-    class Snapshot(val width: Int, val height: Int, val layers: Map<Int, LayerData>, val selection: Selection?, val guides: List<Guide> = emptyList())
-    class LayerData(val pixels: TileGrid?, val mask: TileGrid?, val transform: Affine? = null, val style: TextStyle? = null, val warp: DoubleArray? = null)
+    class Snapshot(
+        val width: Int, val height: Int, val layers: Map<Int, LayerData>, val selection: Selection?, val guides: List<Guide> = emptyList(),
+        val paths: List<de.photographics.core.vector.NamedPath> = emptyList(), val workPath: de.photographics.core.vector.VectorPath? = null,
+        val channels: List<AlphaChannel> = emptyList(),
+    )
+    class LayerData(val pixels: TileGrid?, val mask: TileGrid?, val transform: Affine? = null, val style: TextStyle? = null, val warp: DoubleArray? = null, val low: TileGrid? = null)
 
     companion object {
         fun blank(w: Int, h: Int, background: Int? = 0xFFFFFFFF.toInt()): Document {
@@ -154,3 +178,6 @@ class Document(width: Int, height: Int) {
 
 /** Hilfslinie: senkrecht ([vertical], Lage = x) oder waagerecht (Lage = y), in Dokumentpixeln. */
 data class Guide(val vertical: Boolean, val position: Double)
+
+/** Alphakanal: gespeicherte Auswahl als Graustufen (255 = ausgewählt). */
+data class AlphaChannel(val name: String, val grid: TileGrid)

@@ -31,6 +31,7 @@ import de.photographics.core.image.Transforms
 import de.photographics.core.render.BlendMode
 import de.photographics.core.render.Compositor
 import de.photographics.core.selection.Selection
+import de.photographics.core.selection.SelectionOp
 import de.photographics.core.retouch.Inpainter
 import de.photographics.core.retouch.PatchMatchInpainter
 import de.photographics.core.retouch.Poisson
@@ -46,6 +47,9 @@ import de.photographics.core.tools.StrokeContext
  * Alle Bearbeitungsbefehle mit Undo-Unterstützung. Nicht threadsicher: Aufrufe (und das Rendern)
  * müssen auf demselben Thread erfolgen.
  */
+/** Photoshop-Blöcke mit Ebeneneffekten (neu, mehrfach, alt). */
+private val EFFECT_KEYS = setOf("lfx2", "lmfx", "lrFX")
+
 class Editor(doc: Document) {
     var doc: Document = doc
         private set
@@ -64,7 +68,23 @@ class Editor(doc: Document) {
     fun undo(): IntRect? = history.undo(doc)?.let { (it as? TilePatch)?.bounds }
     fun redo(): IntRect? = history.redo(doc)?.let { (it as? TilePatch)?.bounds }
 
-    fun push(e: HistoryEntry) = history.push(e)
+    fun push(e: HistoryEntry) { collecting?.add(e) ?: history.push(e) }
+
+    /** Während [grouped] gesammelte Schritte. */
+    private var collecting: ArrayList<HistoryEntry>? = null
+
+    /** Alle Verlaufsschritte aus [block] als einen Schritt [label] zusammenfassen. */
+    fun <T> grouped(label: String, block: () -> T): T {
+        val outer = collecting
+        val sink = ArrayList<HistoryEntry>()
+        collecting = sink
+        try {
+            return block()
+        } finally {
+            collecting = outer
+            if (sink.isNotEmpty()) push(if (sink.size == 1) sink[0] else de.photographics.core.history.CompoundEntry(label, sink))
+        }
+    }
 
     // ------------------------------------------------------------ Ebenen
 
@@ -176,6 +196,140 @@ class Editor(doc: Document) {
         structural(tr("Ebene verschieben"), { np.add(layer, ni) }, { p.add(layer, idx) })
     }
 
+    // ------------------------------------------------------------ Mehrere Ebenen (Ebenenbedienfeld)
+
+    /** [layers] ohne Ebenen, die schon über eine ausgewählte Gruppe enthalten sind; in Stapelreihenfolge (unten zuerst). */
+    private fun topLevel(layers: Collection<Layer>): List<Layer> {
+        val set = layers.toSet()
+        val order = doc.allLayers()
+        return order.filter { l -> l in set && set.none { g -> g !== l && g is GroupLayer && doc.isDescendant(l, g) } }
+    }
+
+    /**
+     * Verschiebt [layers] (Drag & Drop im Ebenenbedienfeld) nach [parent] an die Stelle [index]
+     * (Index in den Kindern von [parent] vor dem Verschieben, unten = 0). Liefert false, wenn das Ziel
+     * in einer der verschobenen Gruppen liegt.
+     */
+    fun moveLayersTo(layers: Collection<Layer>, parent: GroupLayer, index: Int): Boolean {
+        val moving = topLevel(layers)
+        if (moving.isEmpty()) return false
+        if (moving.any { it === parent || (it is GroupLayer && doc.isDescendant(parent, it)) }) return false
+        val before = moving.map { doc.parentOf(it) to doc.parentOf(it).children.indexOf(it) }
+        // Zielposition unter den verbleibenden Kindern: verschobene Ebenen darunter verschieben den Index
+        val stay = parent.children.filter { it !in moving }
+        val anchor = parent.children.subList(0, index.coerceIn(0, parent.children.size)).count { it !in moving }
+        val after = stay.toMutableList().also { it.addAll(anchor, moving) }
+        if (after == parent.children && moving.all { doc.parentOf(it) === parent }) return false
+        structural(tr("Ebene verschieben"), {
+            for (l in moving) doc.parentOf(l).remove(l)
+            var i = anchor
+            for (l in moving) parent.add(l, i++)
+        }, {
+            for (l in moving) doc.parentOf(l).remove(l)
+            // In umgekehrter Reihenfolge der Entnahme zurücklegen, damit die alten Indizes stimmen
+            for ((k, l) in moving.withIndex().sortedBy { (k, _) -> before[k].second }) before[k].first.add(l, before[k].second)
+        })
+        return true
+    }
+
+    /** Fasst [layers] in eine neue Gruppe an der Stelle der obersten (Strg+G mit Mehrfachauswahl). */
+    fun groupLayers(layers: Collection<Layer>): GroupLayer? {
+        val moving = topLevel(layers)
+        if (moving.isEmpty()) return null
+        val top = moving.last()
+        val p = doc.parentOf(top)
+        val before = moving.map { doc.parentOf(it) to doc.parentOf(it).children.indexOf(it) }
+        val g = GroupLayer(tr("Gruppe {0}", ++layerCounter))
+        structural(tr("Ebenen gruppieren"), {
+            val idx = p.children.indexOf(top) + 1 - moving.count { doc.parentOf(it) === p && p.children.indexOf(it) < p.children.indexOf(top) + 1 }
+            for (l in moving) doc.parentOf(l).remove(l)
+            p.add(g, idx.coerceAtLeast(0))
+            for (l in moving) g.add(l)
+            doc.activeLayer = g
+        }, {
+            p.remove(g)
+            for ((k, l) in moving.withIndex().sortedBy { (k, _) -> before[k].second }) before[k].first.add(l, before[k].second)
+        })
+        return g
+    }
+
+    /** Löscht [layers]; mindestens eine Ebene bleibt im Dokument. */
+    fun deleteLayers(layers: Collection<Layer>) {
+        val del = topLevel(layers)
+        if (del.isEmpty() || del.size >= doc.root.children.size && del.all { doc.parentOf(it) === doc.root }) return
+        val before = del.map { doc.parentOf(it) to doc.parentOf(it).children.indexOf(it) }
+        layerOperation(tr("Ebenen löschen"), del, {
+            for (l in del) doc.parentOf(l).remove(l)
+            val (p, i) = before.first()
+            doc.activeLayer = p.children.getOrNull(i - 1) ?: p.children.getOrNull(i) ?: (if (p !== doc.root) p else doc.allLayers().lastOrNull())
+        }, {
+            for ((k, l) in del.withIndex().sortedBy { (k, _) -> before[k].second }) before[k].first.add(l, before[k].second)
+        })
+    }
+
+    /** Dupliziert [layers]; jede Kopie liegt über ihrem Original, die oberste Kopie wird aktiv. */
+    fun duplicateLayers(layers: Collection<Layer>): List<Layer> {
+        val src = topLevel(layers)
+        val copies = src.map { it.deepCopy() }
+        structural(tr("Ebene duplizieren"), {
+            for ((l, c) in src.zip(copies)) { val p = doc.parentOf(l); p.add(c, p.children.indexOf(l) + 1) }
+            doc.activeLayer = copies.lastOrNull()
+        }, {
+            for (c in copies) doc.parentOf(c).remove(c)
+        })
+        return copies
+    }
+
+    /** Reduziert [layers] auf eine Pixelebene an der Stelle der obersten (Strg+E mit Mehrfachauswahl). */
+    fun mergeLayers(layers: Collection<Layer>): Boolean {
+        val src = topLevel(layers)
+        if (src.size < 2) return false
+        history.makeRoom(doc.width.toLong() * doc.height * 12)
+        val tmp = Document(doc.width, doc.height)
+        var area = doc.bounds
+        for (l in src) {
+            if (!l.visible) continue
+            tmp.root.add(l.deepCopy().also { c -> c.name = l.name })
+            if (l is RasterLayer) area = area.union(l.raster.extent)
+        }
+        val top = src.last()
+        val merged = renderedLayer(top.name, tmp, area)
+        val p = doc.parentOf(top)
+        val before = src.map { doc.parentOf(it) to doc.parentOf(it).children.indexOf(it) }
+        layerOperation(tr("Auf eine Ebene reduzieren"), src + merged, {
+            val idx = p.children.indexOf(top) + 1 - src.count { doc.parentOf(it) === p && p.children.indexOf(it) <= p.children.indexOf(top) }
+            for (l in src) doc.parentOf(l).remove(l)
+            p.add(merged, idx.coerceAtLeast(0))
+            doc.activeLayer = merged
+        }, {
+            p.remove(merged)
+            for ((k, l) in src.withIndex().sortedBy { (k, _) -> before[k].second }) before[k].first.add(l, before[k].second)
+        })
+        return true
+    }
+
+    /** Transparenz einer Ebene (Raster × Maske) als Auswahl laden (Photoshop: Strg+Klick aufs Miniaturbild). */
+    fun selectionFromLayer(layer: Layer, mask: Boolean = false, op: SelectionOp = SelectionOp.REPLACE) {
+        val g = TileGrid(doc.width, doc.height)
+        val band = maxOf(1, (1 shl 20) / doc.width)
+        var y = 0
+        val src = if (mask) layer.mask?.grid else (layer as? RasterLayer)?.raster
+        if (src == null) return
+        while (y < doc.height) {
+            val r = IntRect(0, y, doc.width, minOf(doc.height, y + band))
+            val px = IntArray(r.width * r.height)
+            src.readRect(r, px)
+            if (mask) for (i in px.indices) px[i] = px[i] and 0xFF
+            else for (i in px.indices) px[i] = px[i] ushr 24
+            g.writeRect(r, px)
+            y = r.bottom
+        }
+        g.compact()
+        val sel = Selection(g, Selection.outlinesOf(g))
+        val existing = doc.selection
+        setSelection(if (existing != null && op != SelectionOp.REPLACE) existing.combine(sel, op) else sel, tr("Auswahl laden"))
+    }
+
     fun setActive(layer: Layer?) { doc.activeLayer = layer }
 
     /** Übernimmt interaktiv geänderte Eigenschaften (z. B. nach dem Loslassen eines Reglers) in den Verlauf. */
@@ -205,7 +359,7 @@ class Editor(doc: Document) {
         tmp.root.add(lc); tmp.root.add(uc)
         // Auch Bereiche außerhalb der Arbeitsfläche zusammenfügen (wie Photoshop)
         val area = lower.raster.extent.union((upper as? RasterLayer)?.raster?.extent ?: doc.bounds)
-        val merged = PixelLayer(lower.name, Compositor.renderGrid(tmp, area)).apply {
+        val merged = renderedLayer(lower.name, tmp, area).apply {
             opacity = lower.opacity; fillOpacity = lower.fillOpacity; blendMode = lower.blendMode
             visible = lower.visible; clipped = lower.clipped; psdId = lower.psdId
         }
@@ -220,7 +374,8 @@ class Editor(doc: Document) {
     fun flatten() {
         history.makeRoom(doc.width.toLong() * doc.height * 12)
         // Auf Weiß reduzieren wie Photoshops "Auf Hintergrundebene reduzieren"
-        val flat = PixelLayer(tr("Hintergrund"), Compositor.renderGrid(doc) { px ->
+        val flat = if (doc.bitDepth == 16) Compositor.renderGridDeep(doc, onWhite = true).let { (hi, lo) -> PixelLayer(tr("Hintergrund"), hi).also { it.low = lo } }
+        else PixelLayer(tr("Hintergrund"), Compositor.renderGrid(doc) { px ->
             for (i in px.indices) px[i] = Colors.srcOver(0xFFFFFFFF.toInt(), px[i])
         })
         val old = doc.root.children.toList()
@@ -322,13 +477,14 @@ class Editor(doc: Document) {
         when (layer) {
             is PixelLayer -> {
                 val oldPx = layer.pixels; val newPx = oldPx.shifted(dx, dy)
-                structural(tr("Verschieben"), oldPx.byteSize + (oldMask?.byteSize ?: 0L), {
-                    layer.pixels = newPx; if (newMask != null) layer.mask?.grid = newMask
+                val oldLow = layer.low; val newLow = oldLow?.shifted(dx, dy)
+                structural(tr("Verschieben"), oldPx.byteSize + (oldMask?.byteSize ?: 0L) + (oldLow?.byteSize ?: 0L), {
+                    layer.pixels = newPx; layer.low = newLow; if (newMask != null) layer.mask?.grid = newMask
                 }, {
-                    layer.pixels = oldPx; if (oldMask != null) layer.mask?.grid = oldMask
+                    layer.pixels = oldPx; layer.low = oldLow; if (oldMask != null) layer.mask?.grid = oldMask
                 })
             }
-            is TextLayer, is SmartLayer -> {
+            is TextLayer, is SmartLayer, is de.photographics.core.doc.ShapeLayer -> {
                 val old = geometryOf(layer)
                 val shift = Affine.translate(dx.toDouble(), dy.toDouble())
                 val new = Geometry(old.transform.then(shift), old.warp?.let { SmartLayer.mapQuad(it, shift) })
@@ -389,7 +545,7 @@ class Editor(doc: Document) {
         documentChange(tr("Perspektivisch freistellen")) {
             for (l in doc.allLayers()) {
                 when (l) {
-                    is PixelLayer -> l.pixels = de.photographics.core.image.Resample.renderProjective(l.pixels, m, outW, outH)
+                    is PixelLayer -> { l.pixels = de.photographics.core.image.Resample.renderProjective(l.pixels, m, outW, outH); l.low = l.low?.let { de.photographics.core.image.Resample.renderProjective(it, m, outW, outH) } }
                     is SmartLayer -> {
                         val q = l.corners()
                         l.warp = DoubleArray(8) { i -> if (i % 2 == 0) m.mapX(q[i], q[i + 1]) else m.mapY(q[i - 1], q[i]) }
@@ -401,11 +557,14 @@ class Editor(doc: Document) {
             doc.setSize(outW, outH)
             doc.guides = emptyList()
             doc.selection = null
+            doc.paths = emptyList(); doc.workPath = null
+            doc.channels = doc.channels.map { ch -> ch.copy(grid = transformMaskWith(ch.grid, outW, outH) { argb -> de.photographics.core.image.Resample.renderProjective(argb, m, outW, outH) }) }
         }
     }
 
     fun transformOf(layer: Layer): Affine = when (layer) {
         is TextLayer -> layer.transform
+        is de.photographics.core.doc.ShapeLayer -> layer.transform
         is SmartLayer -> layer.transform
         else -> Affine.IDENTITY
     }
@@ -413,6 +572,7 @@ class Editor(doc: Document) {
     private fun setTransform(layer: Layer, t: Affine) {
         when (layer) {
             is TextLayer -> { layer.transform = t; layer.unchangedFromPsd = false }
+            is de.photographics.core.doc.ShapeLayer -> layer.boxTransform = t
             is SmartLayer -> layer.transform = t
             else -> {}
         }
@@ -437,6 +597,7 @@ class Editor(doc: Document) {
         val px: TileGrid = when (layer) {
             is TextLayer -> layer.raster.copy()
             is SmartLayer -> layer.raster.copy()
+            is de.photographics.core.doc.ShapeLayer -> layer.raster.copy()
             else -> return
         }
         val pl = PixelLayer(layer.name, px)
@@ -462,6 +623,7 @@ class Editor(doc: Document) {
         when (layer) {
             is SmartLayer -> layer.setPreviewTransform(t)
             is TextLayer -> layer.transform = t
+            is de.photographics.core.doc.ShapeLayer -> layer.boxTransform = t
             else -> {}
         }
     }
@@ -555,6 +717,28 @@ class Editor(doc: Document) {
         val after = layer.adjustment
         if (before == after) return
         push(LambdaEntry(tr("{0} ändern", after.label), { layer.adjustment = before }, { layer.adjustment = after }))
+    }
+
+    /**
+     * Ebenenstil live setzen (ohne Verlauf; null oder ohne Effekte entfernt ihn); mit [commitEffects]
+     * abschließen. Gespeichert wird er wie in Photoshop als Block `lfx2` der Ebene.
+     */
+    fun previewEffects(layer: Layer, fx: de.photographics.core.doc.LayerEffects?) {
+        val keep = layer.preservedBlocks.filter { it.key !in EFFECT_KEYS }
+        layer.preservedBlocks = if (fx == null || !fx.hasAny) keep else keep + de.photographics.core.psd.PsdEffects.toBlock(fx)
+    }
+
+    /** Ebenenstil-Änderung seit [before] (vorherige Blöcke der Ebene) als ein Schritt in den Verlauf. */
+    fun commitEffects(layer: Layer, before: List<de.photographics.core.psd.PsdTaggedBlock>) {
+        val after = layer.preservedBlocks
+        if (after == before) return
+        push(LambdaEntry(tr("Ebenenstil"), { layer.preservedBlocks = before }, { layer.preservedBlocks = after }))
+    }
+
+    fun setEffects(layer: Layer, fx: de.photographics.core.doc.LayerEffects?) {
+        val before = layer.preservedBlocks
+        previewEffects(layer, fx)
+        commitEffects(layer, before)
     }
 
     fun addTextLayer(style: TextStyle, x: Double, y: Double): TextLayer {
@@ -659,14 +843,16 @@ class Editor(doc: Document) {
         documentChange(label) {
             for (l in doc.allLayers()) {
                 when (l) {
-                    is PixelLayer -> l.pixels = de.photographics.core.image.Resample.renderAffine(l.pixels, m, nw, nh)
+                    is PixelLayer -> { l.pixels = de.photographics.core.image.Resample.renderAffine(l.pixels, m, nw, nh); l.low = l.low?.let { de.photographics.core.image.Resample.renderAffine(it, m, nw, nh) } }
                     is TextLayer -> l.transform = l.transform.then(m)
+                    is de.photographics.core.doc.ShapeLayer -> l.transform = l.transform.then(m)
                     is SmartLayer -> l.applyDocTransform(m)
                     else -> {}
                 }
                 l.mask?.let { it.grid = transformMask(it.grid, m, nw, nh) }
             }
             doc.guides = mapGuides(doc.guides, m).filter { it.position in 0.0..(if (it.vertical) nw else nh).toDouble() }
+            mapExtras(m) { g -> transformMask(g, m, nw, nh) }
             doc.setSize(nw, nh)
             doc.selection = null
             after()
@@ -704,12 +890,16 @@ class Editor(doc: Document) {
                     is PixelLayer -> l.pixels = if (upscaler != null && (newW > w || newH > h) && !l.pixels.extendsBeyondCanvas) upscaler.upscale(l.pixels, newW, newH)
                         else Resample.resizeGrid(l.pixels, newW, newH, method)
                     is TextLayer -> l.transform = l.transform.then(scale)
+                    is de.photographics.core.doc.ShapeLayer -> l.transform = l.transform.then(scale)
                     is SmartLayer -> l.applyDocTransform(scale)
                     else -> {}
                 }
+                // 16 Bit: untere Bits mitskalieren (Abweichung höchstens eine 8-Bit-Stufe)
+                if (l is PixelLayer) l.low = l.low?.let { lo -> Resample.resizeGrid(lo, newW, newH, method) }
                 l.mask?.let { m -> m.grid = Resample.resizeGrid(m.grid, newW, newH, method, gray = true) }
             }
             doc.guides = mapGuides(doc.guides, scale)
+            mapExtras(scale) { g -> transformMask(g, scale, newW, newH) }
             doc.setSize(newW, newH)
         }
     }
@@ -754,14 +944,16 @@ class Editor(doc: Document) {
         documentChange(label) {
             for (l in doc.allLayers()) {
                 when (l) {
-                    is PixelLayer -> l.pixels = f(l.pixels)
+                    is PixelLayer -> { l.pixels = f(l.pixels); l.low = l.low?.let(f) }
                     is TextLayer -> l.transform = l.transform.then(m)
+                    is de.photographics.core.doc.ShapeLayer -> l.transform = l.transform.then(m)
                     is SmartLayer -> l.applyDocTransform(m)
                     else -> {}
                 }
                 l.mask?.let { it.grid = f(it.grid) }
             }
             doc.guides = mapGuides(doc.guides, m)
+            mapExtras(m, f)
             if (swap) doc.setSize(doc.height, doc.width) else doc.selection = null
         }
     }
@@ -770,6 +962,13 @@ class Editor(doc: Document) {
      * Hilfslinien mit derselben Abbildung wie den Inhalt mitführen; Linien, die dabei nicht
      * waagerecht oder senkrecht bleiben (z. B. beim schrägen Drehen), fallen weg.
      */
+    /** Pfade (über [m]) und Alphakanäle (über [grid]) einer Dokumenttransformation folgen lassen. */
+    private fun mapExtras(m: Affine, grid: (TileGrid) -> TileGrid) {
+        doc.paths = doc.paths.map { it.copy(path = it.path.map(m)) }
+        doc.workPath = doc.workPath?.map(m)
+        doc.channels = doc.channels.map { it.copy(grid = grid(it.grid)) }
+    }
+
     private fun mapGuides(guides: List<de.photographics.core.doc.Guide>, m: Affine) = guides.mapNotNull { g ->
         val (x0, y0, x1, y1) = if (g.vertical) listOf(g.position, 0.0, g.position, 1000.0) else listOf(0.0, g.position, 1000.0, g.position)
         val ax = m.mapX(x0, y0); val ay = m.mapY(x0, y0); val bx = m.mapX(x1, y1); val by = m.mapY(x1, y1)
@@ -842,6 +1041,13 @@ class Editor(doc: Document) {
                     entries += LambdaEntry(tr("Textfarbe"), { l.style = old }, { l.style = new })
                 }
                 is SmartLayer -> smart++
+                is de.photographics.core.doc.ShapeLayer -> {
+                    val oldFill = l.fill; val oldStroke = l.stroke
+                    val c = intArrayOf(oldFill ?: 0, oldStroke?.color ?: 0); mapPx(c)
+                    val nf = oldFill?.let { c[0] }; val ns = oldStroke?.copy(color = c[1])
+                    l.fill = nf; l.stroke = ns
+                    entries += LambdaEntry(tr("Formfarbe"), { l.fill = oldFill; l.stroke = oldStroke }, { l.fill = nf; l.stroke = ns })
+                }
                 else -> {}
             }
         }
@@ -885,7 +1091,12 @@ class Editor(doc: Document) {
         history.makeRoom(area.width.toLong() * area.height * 8)
         val tx = TileTransaction(grid)
         tx.touch(area)
-        g.apply(grid, area, opacity, sel?.mask, scalar = target == de.photographics.core.tools.PaintTarget.MASK,
+        val low = (layer as? PixelLayer)?.low?.takeIf { target == de.photographics.core.tools.PaintTarget.PIXELS && doc.bitDepth == 16 }
+        if (low != null) {
+            // 16 Bit: stufenloser Verlauf in beide Raster
+            tx.linked = TileTransaction(low).also { it.touch(area) }
+            g.apply16(grid, low, area, opacity, sel?.mask, layer.lockTransparency)
+        } else g.apply(grid, area, opacity, sel?.mask, scalar = target == de.photographics.core.tools.PaintTarget.MASK,
             lockAlpha = target == de.photographics.core.tools.PaintTarget.PIXELS && layer.lockTransparency)
         tx.commit(tr("Verlauf"))?.let { push(it) }
         return area
@@ -895,11 +1106,74 @@ class Editor(doc: Document) {
         Colors.srcOver(orig, Colors.withAlpha(color, Colors.a(color) * s / 255))
     }
 
+    /**
+     * Fläche füllen (Umschalt+F5): Auswahl der aktiven Pixelebene – ohne Auswahl die ganze Ebene –
+     * mit [color] in Mischmodus [mode] und [opacity]; [preserveTransparency] wie in Photoshop.
+     */
+    fun fillArea(color: Int, mode: de.photographics.core.render.BlendMode = de.photographics.core.render.BlendMode.NORMAL,
+                 opacity: Float = 1f, preserveTransparency: Boolean = false): IntRect? {
+        val keep = preserveTransparency || doc.activeLayer?.lockTransparency == true
+        return editSelected(tr("Fläche füllen")) { orig, s -> PixelBlend.over(orig, color, mode, opacity * s / 255f, keep) }
+    }
+
+    /**
+     * Füllwerkzeug: zusammenhängende (oder alle) Pixel ähnlicher Farbe ab ([x], [y]) füllen, innerhalb
+     * einer vorhandenen Auswahl. [allLayers]: Farben aus dem Gesamtbild statt der aktiven Ebene;
+     * [antiAlias] glättet die Füllkante.
+     */
+    fun bucketFill(x: Int, y: Int, color: Int, tolerance: Int, contiguous: Boolean, allLayers: Boolean,
+                   mode: de.photographics.core.render.BlendMode = de.photographics.core.render.BlendMode.NORMAL,
+                   opacity: Float = 1f, antiAlias: Boolean = true): IntRect? {
+        val layer = doc.activeLayer as? PixelLayer ?: return null
+        val region = similarRegion(layer, x, y, tolerance, contiguous, allLayers, antiAlias) ?: return null
+        val keep = layer.lockTransparency
+        return editRegion(tr("Füllwerkzeug"), region) { orig, s -> PixelBlend.over(orig, color, mode, opacity * s / 255f, keep) }
+    }
+
+    /** Magischer Radiergummi: ähnliche Pixel ab ([x], [y]) mit [opacity] transparent machen. */
+    fun magicErase(x: Int, y: Int, tolerance: Int, contiguous: Boolean, allLayers: Boolean, opacity: Float = 1f, antiAlias: Boolean = true): IntRect? {
+        val layer = doc.activeLayer as? PixelLayer ?: return null
+        val region = similarRegion(layer, x, y, tolerance, contiguous, allLayers, antiAlias) ?: return null
+        return editRegion(tr("Magischer Radiergummi"), region) { orig, s ->
+            Colors.withAlpha(orig, ((orig ushr 24) * (1f - opacity * s / 255f) + 0.5f).toInt())
+        }
+    }
+
+    /** Bereich ähnlicher Farbe wie beim Zauberstab (die Dokumentauswahl begrenzt erst [editRegion]). */
+    private fun similarRegion(layer: PixelLayer, x: Int, y: Int, tolerance: Int, contiguous: Boolean, allLayers: Boolean, antiAlias: Boolean): Selection? {
+        if (x !in 0 until doc.width || y !in 0 until doc.height) return null
+        val src = if (allLayers) doc.newGrid().also { g -> de.photographics.core.render.Compositor.renderBands(doc, doc.bounds) { r, buf -> g.writeRect(r, buf) } }
+            else layer.pixels
+        var region = de.photographics.core.selection.MagicWand.select(src, x, y, tolerance, contiguous)
+        if (region.isEmpty) return null
+        if (antiAlias) region = region.feathered(0.7f)
+        return region
+    }
+
+    /** Wie [editSelected], aber für einen eigenen Bereich – innerhalb der Dokumentauswahl, falls vorhanden. */
+    private fun editRegion(label: String, region: Selection, f: (Int, Int) -> Int): IntRect? {
+        val layer = doc.activeLayer as? PixelLayer ?: return null
+        val sel = doc.selection
+        val r = region.bounds.intersect(sel?.bounds ?: doc.bounds).intersect(doc.bounds)
+        if (r.isEmpty) return null
+        history.makeRoom(r.width.toLong() * r.height * 8)
+        val tx = TileTransaction(layer.pixels)
+        tx.touch(r)
+        for (yy in r.top until r.bottom) for (xx in r.left until r.right) {
+            val s = if (sel == null) region.at(xx, yy) else region.at(xx, yy) * sel.at(xx, yy) / 255
+            if (s == 0) continue
+            layer.pixels[xx, yy] = f(layer.pixels[xx, yy], s)
+        }
+        tx.commit(label)?.let { push(it) }
+        return r
+    }
+
     private fun editSelected(label: String, f: (Int, Int) -> Int): IntRect? {
         val layer = doc.activeLayer as? PixelLayer ?: return null
         val sel = doc.selection ?: Selection.all(doc.width, doc.height)
         val r = sel.bounds
         if (r.isEmpty) return null
+        history.makeRoom(r.width.toLong() * r.height * 8)
         val tx = TileTransaction(layer.pixels)
         tx.touch(r)
         for (y in r.top until r.bottom) for (x in r.left until r.right) {
@@ -928,6 +1202,434 @@ class Editor(doc: Document) {
         val p = doc.parentOf(layer)
         val idx = p.children.indexOf(layer) + 1
         structural(tr("Ebene durch Kopie"), { p.add(newLayer, idx); doc.activeLayer = newLayer }, { p.remove(newLayer) })
+    }
+
+    /** Ebene durch Ausschneiden (Strg+Umschalt+J): Auswahl in eine neue Ebene, an der Quelle gelöscht. */
+    fun layerViaCut() {
+        val layer = doc.activeLayer as? PixelLayer ?: return
+        if (doc.selection == null) return
+        grouped(tr("Ebene durch Ausschneiden")) {
+            layerViaCopy()
+            val copy = doc.activeLayer
+            doc.activeLayer = layer
+            clearSelection()
+            doc.activeLayer = copy
+        }
+    }
+
+    // ------------------------------------------------------------ Zwischenablage
+
+    /**
+     * Kopieren (Strg+C): Auswahl der aktiven Ebene, mit [merged] des sichtbaren Bildes (Strg+Umschalt+C).
+     * Ohne Auswahl die ganze Ebene bzw. das ganze Bild. null = nichts Sichtbares ausgewählt.
+     */
+    fun copy(merged: Boolean = false): PixelClip? {
+        val sel = doc.selection
+        val layer = doc.activeLayer as? RasterLayer
+        if (!merged && layer == null) return null
+        val area = when {
+            sel != null -> sel.bounds.intersect(doc.bounds)
+            merged -> doc.bounds
+            else -> layer!!.raster.contentBounds().intersect(doc.bounds)
+        }
+        if (area.isEmpty) return null
+        val out = TileGrid(area.width, area.height)
+        var any = false
+        val band = maxOf(1, 262_144 / area.width)
+        var y = area.top
+        while (y < area.bottom) {
+            val r = IntRect(area.left, y, area.right, minOf(area.bottom, y + band))
+            val px = if (merged) Compositor.renderArgb(doc, r) else IntArray(r.width * r.height).also { layer!!.raster.readRect(r, it) }
+            if (sel != null) {
+                var i = 0
+                for (yy in r.top until r.bottom) for (xx in r.left until r.right) {
+                    val s = sel.at(xx, yy)
+                    val c = px[i]
+                    px[i++] = if (s >= 255) c else Colors.withAlpha(c, (c ushr 24) * s / 255)
+                }
+            }
+            if (!any) any = px.any { (it ushr 24) != 0 }
+            out.writeRect(r.offset(-area.left, -area.top), px)
+            y = r.bottom
+        }
+        if (!any) return null
+        out.compact()
+        return PixelClip(out, area)
+    }
+
+    /** Ausschneiden (Strg+X): kopieren und auf der Pixelebene löschen. */
+    fun cut(): PixelClip? {
+        if (doc.activeLayer !is PixelLayer) return null
+        val clip = copy() ?: return null
+        clearSelection()
+        return clip
+    }
+
+    /**
+     * Einfügen als neue Ebene über der aktiven. [inPlace]: an der Originalposition (Strg+Umschalt+V);
+     * sonst mittig in der Auswahl, an der Originalposition (wenn sie im sichtbaren Bereich [view] liegt)
+     * oder mittig in der Ansicht – wie Photoshop. Liefert den Bereich der eingefügten Pixel.
+     */
+    fun paste(clip: PixelClip, inPlace: Boolean, view: IntRect? = null): IntRect {
+        val w = clip.rect.width; val h = clip.rect.height
+        val sel = doc.selection
+        val vis = (view ?: doc.bounds).intersect(doc.bounds).takeIf { !it.isEmpty } ?: doc.bounds
+        val at = when {
+            inPlace -> clip.rect
+            sel != null && !sel.isEmpty -> sel.bounds.let { b -> IntRect.ofSize(w, h).offset(b.left + (b.width - w) / 2, b.top + (b.height - h) / 2) }
+            !clip.rect.intersect(vis).isEmpty && clip.rect.right <= doc.width + w && clip.rect.bottom <= doc.height + h -> clip.rect
+            else -> IntRect.ofSize(w, h).offset(vis.left + (vis.width - w) / 2, vis.top + (vis.height - h) / 2)
+        }
+        // Pixel außerhalb der Arbeitsfläche bleiben erhalten (wie Photoshop)
+        val grid = TileGrid(doc.width, doc.height, area = if (at.left < 0 || at.top < 0 || at.right > doc.width || at.bottom > doc.height) at else null)
+        grid.writeRect(at, clip.pixels())
+        grid.compact()
+        grouped(tr("Einfügen")) {
+            addLayer(nextName(), grid, tr("Einfügen"))
+            if (sel != null) setSelection(null, tr("Einfügen"))
+        }
+        return at
+    }
+
+    // ------------------------------------------------------------ Farbtiefe
+
+    /**
+     * Modus → 8/16 Bit je Kanal (Photoshop: Bild → Modus). Nach 16 Bit: untere Bits = obere (exakte
+     * Werte v·257); nach 8 Bit: auf die nächste 8-Bit-Stufe gerundet.
+     */
+    fun setBitDepth(depth: Int) {
+        val d = if (depth >= 16) 16 else 8
+        if (d == doc.bitDepth) return
+        val layers = doc.allLayers().filterIsInstance<PixelLayer>()
+        val before = layers.associateWith { it.pixels to it.low }
+        val after = layers.associateWith { l ->
+            if (d == 16) l.pixels to l.pixels.copy()
+            else {
+                val lo = l.low ?: return@associateWith l.pixels to null
+                // Runden statt Abschneiden: hi = round(v / 257)
+                val out = l.pixels.copy()
+                val area = l.pixels.extent
+                val band = maxOf(1, 262_144 / maxOf(1, area.width))
+                var y = area.top
+                while (y < area.bottom) {
+                    val r = IntRect(area.left, y, area.right, minOf(area.bottom, y + band))
+                    val h = IntArray(r.width * r.height); l.pixels.readRect(r, h)
+                    val o = IntArray(r.width * r.height); lo.readRect(r, o)
+                    for (k in h.indices) {
+                        var c = 0
+                        for (s in Colors.SHIFTS_ARGB) { val hb = (h[k] shr s) and 0xFF; val lb = (o[k] shr s) and 0xFF; val v = (hb shl 8) or (if (s == 24) Colors.lowAlpha(hb, lb) else lb); c = c or (((v + 128) / 257).coerceIn(0, 255) shl s) }
+                        h[k] = c
+                    }
+                    out.writeRect(r, h)
+                    y = r.bottom
+                }
+                out.compact()
+                out to null
+            }
+        }
+        val old = doc.bitDepth
+        fun set(m: Map<PixelLayer, Pair<TileGrid, TileGrid?>>, depthNow: Int) { for ((l, p) in m) { l.pixels = p.first; l.low = p.second }; doc.bitDepth = depthNow }
+        set(after, d)
+        push(LambdaEntry(if (d == 16) tr("16 Bit/Kanal") else tr("8 Bit/Kanal"), { set(before, old) }, { set(after, d) },
+            before.values.sumOf { (it.second?.byteSize ?: 0L) + if (d == 8) it.first.byteSize else 0L }))
+    }
+
+    /** Ebene aus dem Ergebnis von [src] (16 Bit mit unteren Bits, wenn das Dokument 16 Bit hat). */
+    private fun renderedLayer(name: String, src: Document, area: IntRect, post: ((IntArray) -> Unit)? = null): PixelLayer {
+        if (doc.bitDepth != 16 || post != null) return PixelLayer(name, Compositor.renderGrid(src, area, post))
+        src.bitDepth = 16
+        val (hi, lo) = Compositor.renderGridDeep(src, area)
+        return PixelLayer(name, hi).also { it.low = lo }
+    }
+
+    // ------------------------------------------------------------ Formen
+
+    /** Neue Formebene über der aktiven Ebene; [docPath] in Dokumentkoordinaten. */
+    fun addShapeLayer(docPath: de.photographics.core.vector.VectorPath, fill: Int?, stroke: de.photographics.core.vector.ShapeStroke?, name: String = tr("Form {0}", ++layerCounter)): de.photographics.core.doc.ShapeLayer {
+        // Eigene Koordinaten ab der linken oberen Ecke: der Transformationsrahmen beginnt dort
+        val b = docPath.bounds()
+        val origin = Affine.translate(b[0], b[1])
+        val l = de.photographics.core.doc.ShapeLayer(name, docPath.map(origin.inverse()), fill, stroke, origin, doc.width, doc.height)
+        l.clipped = doc.activeLayer?.clipped == true
+        val (parent, index) = insertionPoint()
+        structural(tr("Form erstellen"), { parent.add(l, index); doc.activeLayer = l }, { parent.remove(l) })
+        return l
+    }
+
+    /** Füllung und Kontur einer Formebene ändern. */
+    fun setShapeStyle(l: de.photographics.core.doc.ShapeLayer, fill: Int?, stroke: de.photographics.core.vector.ShapeStroke?) {
+        val f0 = l.fill; val s0 = l.stroke
+        if (f0 == fill && s0 == stroke) return
+        l.fill = fill; l.stroke = stroke
+        push(LambdaEntry(tr("Formeigenschaften"), { l.fill = f0; l.stroke = s0 }, { l.fill = fill; l.stroke = stroke }))
+    }
+
+    /** Pfad einer Formebene ersetzen ([docPath] in Dokumentkoordinaten, z. B. nach dem Bearbeiten der Anker). */
+    fun setShapePath(l: de.photographics.core.doc.ShapeLayer, docPath: de.photographics.core.vector.VectorPath) {
+        val p0 = l.path
+        val p1 = docPath.map(l.transform.inverse())
+        if (p0 == p1) return
+        l.path = p1
+        push(LambdaEntry(tr("Pfad bearbeiten"), { l.path = p0 }, { l.path = p1 }))
+    }
+
+    // ------------------------------------------------------------ Pfade
+
+    fun setWorkPath(p: de.photographics.core.vector.VectorPath?, label: String = tr("Arbeitspfad")) {
+        val before = doc.workPath
+        val after = p?.takeIf { !it.isEmpty }
+        if (before == after) return
+        doc.workPath = after
+        push(LambdaEntry(label, { it.workPath = before }, { it.workPath = after }))
+    }
+
+    fun setPaths(list: List<de.photographics.core.vector.NamedPath>, label: String) {
+        val before = doc.paths
+        if (before == list) return
+        doc.paths = list
+        push(LambdaEntry(label, { it.paths = before }, { it.paths = list }))
+    }
+
+    /** Arbeitspfad unter [name] sichern (wie „Pfad speichern“). */
+    fun saveWorkPath(name: String) {
+        val w = doc.workPath ?: return
+        grouped(tr("Pfad speichern")) {
+            setPaths(doc.paths + de.photographics.core.vector.NamedPath(name, w), tr("Pfad speichern"))
+            setWorkPath(null)
+        }
+    }
+
+    /** Pfad als Auswahl laden (Strg+Eingabe); geschlossene Teilpfade, Nonzero-Regel. */
+    fun selectionFromPath(p: de.photographics.core.vector.VectorPath, op: SelectionOp = SelectionOp.REPLACE, feather: Float = 0f) {
+        val polys = p.flatten().filter { it.second }.map { it.first }
+        if (polys.isEmpty()) return
+        val mask = de.photographics.core.vector.PathRaster.fill(doc.width, doc.height, polys)
+        var sel = Selection(mask, polys)
+        if (feather > 0f) sel = sel.feathered(feather)
+        val existing = doc.selection
+        setSelection(if (existing != null) existing.combine(sel, op) else sel, tr("Pfad als Auswahl laden"))
+    }
+
+    /** Arbeitspfad aus der Auswahl (Umrisse vereinfacht, [tolerance] in Pixeln). */
+    fun pathFromSelection(tolerance: Double = 1.0) {
+        val sel = doc.selection ?: return
+        setWorkPath(de.photographics.core.vector.VectorPath.fromOutlines(sel.outlines, tolerance), tr("Arbeitspfad erstellen"))
+    }
+
+    /** Pfad mit [color] auf der aktiven Pixelebene füllen (innerhalb einer Auswahl). */
+    fun fillPath(p: de.photographics.core.vector.VectorPath, color: Int): IntRect? {
+        val polys = p.flatten().filter { it.second }.map { it.first }
+        return paintCoverage(tr("Pfad füllen"), de.photographics.core.vector.PathRaster.fill(doc.width, doc.height, polys), color)
+    }
+
+    /** Pfadkontur mit [color] und Breite [width] auf die aktive Pixelebene (wie „Pfadkontur füllen“ mit dem Pinsel). */
+    fun strokePath(p: de.photographics.core.vector.VectorPath, color: Int, width: Float): IntRect? =
+        paintCoverage(tr("Pfadkontur füllen"), de.photographics.core.vector.PathRaster.stroke(doc.width, doc.height, p.flatten(), width), color)
+
+    private fun paintCoverage(label: String, cov: TileGrid, color: Int): IntRect? {
+        val layer = doc.activeLayer as? PixelLayer ?: return null
+        val area = cov.contentBounds(alphaOnly = false).intersect(doc.bounds)
+        if (area.isEmpty) return IntRect.EMPTY
+        val sel = doc.selection
+        val tx = TileTransaction(layer.pixels)
+        tx.touch(area)
+        val bandH = maxOf(1, 262_144 / area.width)
+        var y0 = area.top
+        while (y0 < area.bottom) {
+            val band = IntRect(area.left, y0, area.right, minOf(area.bottom, y0 + bandH))
+            y0 = band.bottom
+            val c = IntArray(band.width * band.height); cov.readRect(band, c)
+            val px = IntArray(band.width * band.height); layer.pixels.readRect(band, px)
+            var i = 0
+            for (y in band.top until band.bottom) for (x in band.left until band.right) {
+                var k = c[i]
+                if (sel != null && k > 0) k = k * sel.at(x, y) / 255
+                if (k > 0) {
+                    val src = Colors.withAlpha(color, Colors.a(color) * k / 255)
+                    px[i] = if (layer.lockTransparency) Colors.withAlpha(Colors.srcOver(px[i], src), Colors.a(px[i])) else Colors.srcOver(px[i], src)
+                }
+                i++
+            }
+            layer.pixels.writeRect(band, px)
+        }
+        tx.commit(label)?.let { push(it) }
+        return area
+    }
+
+    // ------------------------------------------------------------ Alphakanäle
+
+    fun setChannels(list: List<de.photographics.core.doc.AlphaChannel>, label: String) {
+        val before = doc.channels
+        if (before == list) return
+        doc.channels = list
+        push(LambdaEntry(label, { it.channels = before }, { it.channels = list }))
+    }
+
+    /** Auswahl speichern (als neuer Alphakanal). */
+    fun saveSelectionAsChannel(name: String = tr("Alpha {0}", doc.channels.size + 1)) {
+        val sel = doc.selection ?: return
+        setChannels(doc.channels + de.photographics.core.doc.AlphaChannel(name, sel.mask.copy()), tr("Auswahl speichern"))
+    }
+
+    /** Alphakanal [index] als Auswahl laden (Strg+Klick auf den Kanal). */
+    fun selectionFromChannel(index: Int, op: SelectionOp = SelectionOp.REPLACE) {
+        val ch = doc.channels.getOrNull(index) ?: return
+        val g = ch.grid.copy()
+        val sel = Selection(g, Selection.outlinesOf(g))
+        val existing = doc.selection
+        setSelection(if (existing != null) existing.combine(sel, op) else sel, tr("Auswahl laden"))
+    }
+
+    // ------------------------------------------------------------ Schwebende Auswahl
+
+    /**
+     * Ausgewählte Pixel der aktiven Pixelebene anheben, um sie zu verschieben oder zu transformieren:
+     * Sie liegen danach als Smartobjekt über der Ebene, an der Quelle sind sie ausgeschnitten (mit
+     * [duplicate] bleiben sie dort, wie Alt+Ziehen in Photoshop). Noch kein Verlaufsschritt –
+     * abschließen mit [commitFloating] oder [cancelFloating]. Ohne Auswahl die ganze Ebene (Strg+T
+     * auf einer Pixelebene). null = keine Pixelebene oder nichts darauf.
+     */
+    fun floatSelection(duplicate: Boolean = false): Floating? {
+        val src = doc.activeLayer as? PixelLayer ?: return null
+        val before = doc.selection
+        val sel = before ?: Selection.all(doc.width, doc.height)
+        val b = (if (before != null) sel.bounds else src.pixels.contentBounds()).intersect(doc.bounds)
+        if (b.isEmpty) return null
+        history.makeRoom(b.width.toLong() * b.height * 12)
+        val cropped = TileGrid(b.width, b.height)
+        val tx = TileTransaction(src.pixels)
+        if (!duplicate) tx.touch(b)
+        val band = maxOf(1, 262_144 / b.width)
+        var y = b.top
+        while (y < b.bottom) {
+            val r = IntRect(b.left, y, b.right, minOf(b.bottom, y + band))
+            val px = IntArray(r.width * r.height)
+            src.pixels.readRect(r, px)
+            val rest = if (duplicate) null else px.copyOf()
+            var i = 0
+            for (yy in r.top until r.bottom) for (xx in r.left until r.right) {
+                val s = sel.at(xx, yy)
+                val c = px[i]
+                if (s < 255) px[i] = Colors.withAlpha(c, (c ushr 24) * s / 255)
+                if (rest != null && s > 0) rest[i] = Colors.withAlpha(c, (c ushr 24) * (255 - s) / 255)
+                i++
+            }
+            cropped.writeRect(r.offset(-b.left, -b.top), px)
+            if (rest != null) src.pixels.writeRect(r, rest)
+            y = r.bottom
+        }
+        cropped.compact()
+        val f = SmartLayer(src.name, cropped, Affine.translate(b.left.toDouble(), b.top.toDouble()), doc.width, doc.height)
+        // Wie ein Teil der Ebene darstellen
+        f.opacity = src.opacity; f.fillOpacity = src.fillOpacity; f.blendMode = src.blendMode; f.clipped = src.clipped
+        val p = doc.parentOf(src)
+        p.add(f, p.children.indexOf(src) + 1)
+        doc.activeLayer = f
+        doc.selection = null
+        return Floating(src, f, tx, before, b, duplicate)
+    }
+
+    /**
+     * Schwebende Pixel in ihrer jetzigen Lage (Transformation/Verzerrung des Smartobjekts plus
+     * Vorschau-Verschiebung) in die Quellebene übernehmen; die Auswahl folgt. Ein Verlaufsschritt.
+     */
+    fun commitFloating(f: Floating, label: String = tr("Auswahl transformieren")): IntRect {
+        val l = f.layer
+        if (l.previewDx != 0 || l.previewDy != 0) {
+            val m = Affine.translate(l.previewDx.toDouble(), l.previewDy.toDouble())
+            l.previewDx = 0; l.previewDy = 0
+            l.applyDocTransform(m)
+        }
+        l.fastPreview = false
+        val p = doc.parentOf(l)
+        p.remove(l)
+        doc.activeLayer = f.source
+        val placed = l.raster
+        val area = placed.contentBounds().intersect(f.source.pixels.extent)
+        if (!area.isEmpty) {
+            f.tx.touch(area)
+            val band = maxOf(1, 262_144 / area.width)
+            var y = area.top
+            while (y < area.bottom) {
+                val r = IntRect(area.left, y, area.right, minOf(area.bottom, y + band))
+                val top = IntArray(r.width * r.height); placed.readRect(r, top)
+                val dst = IntArray(r.width * r.height); f.source.pixels.readRect(r, dst)
+                for (i in dst.indices) if ((top[i] ushr 24) != 0) dst[i] = Colors.srcOver(dst[i], top[i])
+                f.source.pixels.writeRect(r, dst)
+                y = r.bottom
+            }
+        }
+        // Die Auswahl macht dieselbe Bewegung wie die Pixel
+        val before = f.selectionBefore
+        val sel = before?.let { transformedSelection(it, f.bounds, l) }
+        grouped(label) {
+            f.tx.commit(label)?.let { push(it) }
+            doc.selection = sel
+            if (before != null) push(LambdaEntry(label, { it.selection = before }, { it.selection = sel }))
+        }
+        return area.union(f.bounds)
+    }
+
+    /** Schwebende Auswahl verwerfen: alles wie vorher. */
+    fun cancelFloating(f: Floating): IntRect {
+        doc.parentOf(f.layer).remove(f.layer)
+        f.tx.rollback()
+        doc.activeLayer = f.source
+        doc.selection = f.selectionBefore
+        return f.layer.corners().let { c ->
+            IntRect(
+                kotlin.math.floor(minOf(c[0], c[2], c[4], c[6])).toInt(), kotlin.math.floor(minOf(c[1], c[3], c[5], c[7])).toInt(),
+                kotlin.math.ceil(maxOf(c[0], c[2], c[4], c[6])).toInt(), kotlin.math.ceil(maxOf(c[1], c[3], c[5], c[7])).toInt(),
+            )
+        }.union(f.bounds)
+    }
+
+    /** Auswahlmaske mit der Lage des Smartobjekts [l] abbilden (Quelle = Ausschnitt [b] der alten Maske). */
+    private fun transformedSelection(sel: de.photographics.core.selection.Selection, b: IntRect, l: SmartLayer): de.photographics.core.selection.Selection? {
+        val src = TileGrid(b.width, b.height)
+        val band = maxOf(1, 262_144 / b.width)
+        var y = b.top
+        while (y < b.bottom) {
+            val r = IntRect(b.left, y, b.right, minOf(b.bottom, y + band))
+            val px = IntArray(r.width * r.height)
+            var i = 0
+            for (yy in r.top until r.bottom) for (xx in r.left until r.right) px[i++] = (sel.at(xx, yy) shl 24) or 0xFFFFFF
+            src.writeRect(r.offset(-b.left, -b.top), px)
+            y = r.bottom
+        }
+        val w = l.warp
+        val out = if (w != null) de.photographics.core.image.Resample.renderProjective(src, l.homography(), doc.width, doc.height)
+            else de.photographics.core.image.Resample.renderAffine(src, l.transform, doc.width, doc.height)
+        val mask = TileGrid(doc.width, doc.height)
+        val area = out.contentBounds().intersect(doc.bounds)
+        if (area.isEmpty) return null
+        val bandH = maxOf(1, 262_144 / area.width)
+        y = area.top
+        while (y < area.bottom) {
+            val r = IntRect(area.left, y, area.right, minOf(area.bottom, y + bandH))
+            val px = IntArray(r.width * r.height); out.readRect(r, px)
+            for (k in px.indices) px[k] = px[k] ushr 24
+            mask.writeRect(r, px)
+            y = r.bottom
+        }
+        mask.compact()
+        return de.photographics.core.selection.Selection(mask, de.photographics.core.selection.Selection.outlinesOf(mask))
+    }
+
+    /** Nur den Auswahlrahmen verschieben (Auswahlwerkzeug in der Auswahl ziehen). */
+    fun moveSelection(dx: Int, dy: Int) {
+        val sel = doc.selection ?: return
+        if (dx == 0 && dy == 0) return
+        val mask = TileGrid(doc.width, doc.height, sel.mask.defaultValue)
+        val b = sel.bounds
+        val t = b.offset(dx, dy).intersect(doc.bounds)
+        if (!t.isEmpty) {
+            val s = t.offset(-dx, -dy)
+            val px = IntArray(s.width * s.height); sel.mask.readRect(s, px)
+            mask.writeRect(t, px)
+        }
+        mask.compact()
+        setSelection(de.photographics.core.selection.Selection(mask, sel.outlines.map { o -> FloatArray(o.size) { i -> o[i] + if (i % 2 == 0) dx else dy } }), tr("Auswahl verschieben"))
     }
 
     // ------------------------------------------------------------ Retusche-Befehle

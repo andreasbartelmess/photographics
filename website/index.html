@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>photographics</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="Freier Fotoeditor mit Ebenen für Android-Tablets. Öffnet und speichert PSD, TIFF und GIMP-Dateien mit allen Ebenen.">
+<meta name="description" content="Freier Fotoeditor mit Ebenen für Android-Tablets und Linux. Öffnet und speichert PSD, TIFF und GIMP-Dateien mit allen Ebenen.">
 <link rel="icon" href="img/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="fonts/roboto.css">
 <link rel="alternate" hreflang="de" href="./">
@@ -89,6 +89,12 @@ nav .btn { padding: 7px 16px; font-size: 14px; }
 .stage figcaption { position: absolute; right: 0; bottom: 0; width: 32%; text-align: right; }
 .chapter.flip .stage figcaption { right: auto; left: 0; text-align: left; }
 .copy { display: grid; gap: 16px; min-width: 0; }
+/* Desktop-Kapitel: Fenster statt Tablet */
+.stage.desk { padding-bottom: 22%; }
+.stage.desk .window { width: 100%; border-radius: 10px; box-shadow: 0 0 0 1px #0000001f, 0 22px 50px #00000033; }
+.stage.desk .pane { position: absolute; bottom: 0; right: -5%; width: 58%; border-radius: 9px; box-shadow: 0 0 0 1px #0000002a, 0 28px 60px #00000045, 0 4px 12px #00000026; }
+.stage.desk figcaption { right: auto; left: 0; text-align: left; width: 38%; }
+@media (max-width: 860px) { .stage.desk { padding-bottom: 0; } .stage.desk .pane { position: relative; right: auto; margin: -18% 0 0 auto; width: 70%; } }
 .copy > p { color: var(--text); max-width: 50ch; }
 .copy ul { margin: 0; padding-left: 1.1em; color: var(--text); display: grid; gap: 6px; font-size: 16px; }
 @media (max-width: 860px) {
@@ -163,6 +169,7 @@ footer a:hover { color: var(--ink); }
       <li><a href="#app">Ebenen</a></li>
       <li><a href="#retusche">Retusche</a></li>
       <li><a href="#farbe">Farbe</a></li>
+      <li><a href="#linux">Linux</a></li>
       <li><a href="#dateien">Dateien</a></li>
       <li><a href="#roadmap">Roadmap</a></li>
       <li><a href="en/" lang="en" hreflang="en">English</a></li>
@@ -174,9 +181,9 @@ footer a:hover { color: var(--ink); }
 <header class="hero" id="top">
   <img src="img/alpen-abend.jpg" alt="Schneebedeckte Gipfel im letzten Abendlicht unter dunklen Wolken" fetchpriority="high">
   <div class="wrap">
-    <span class="status">Vorschau · Version 0.3 · für Android 8.1 und neuer</span>
-    <h1>Ein Fotoeditor mit Ebenen für Android-Tablets</h1>
-    <p class="lead">photographics öffnet PSD-, TIFF- und GIMP-Dateien mit allen Ebenen und speichert sie auch wieder so. Retuschiert wird mit dem Stift, Farbprofile bleiben erhalten. Kostenlos, quelloffen und ohne Konto.</p>
+    <span class="status">Vorschau · Version 0.4 · für Android 8.1 und neuer und für Linux</span>
+    <h1>Ein Fotoeditor mit Ebenen für Android-Tablets und Linux</h1>
+    <p class="lead">photographics öffnet PSD-, TIFF- und GIMP-Dateien mit allen Ebenen und speichert sie auch wieder so. Retuschiert wird mit dem Stift auf dem Tablet oder mit Maus und Grafiktablett am Linux-Rechner, Farbprofile bleiben erhalten. Kostenlos, quelloffen und ohne Konto.</p>
     <div class="ctas">
       <a class="btn light" href="#download">Zum Download</a>
       <a class="btn on-photo" href="#app">Mehr ansehen</a>
@@ -199,7 +206,9 @@ footer a:hover { color: var(--ink); }
         <li>Pixel-, Text- und Smartobjekt-Ebenen, Gruppen</li>
         <li>12 Einstellungsebenen, darunter Kurven je Farbkanal mit Histogramm, Tonwert, Farbbalance und Schwarzweiß</li>
         <li>Alle 27 Mischmodi aus Photoshop</li>
-        <li>Ebenenmasken und Schnittmasken, Ebeneneffekte aus Photoshop werden angezeigt</li>
+        <li>Ebenenmasken und Schnittmasken</li>
+        <li>Ebenenstile wie in Photoshop: Schatten, Schein, Kontur, Abgeflachte Kante, Glanz und Überlagerungen, anzeigen und bearbeiten</li>
+        <li>Formebenen, Zeichenstift, Pfade und Alphakanäle</li>
         <li>Transformieren mit Neigen, Verzerren und Perspektive, verlustfrei als Smartobjekt</li>
       </ul>
     </div>
@@ -219,7 +228,8 @@ footer a:hover { color: var(--ink); }
       <ul>
         <li>Bereichsreparatur, Reparatur-Pinsel, Ausbessern, Kopierstempel und inhaltsbasiertes Füllen</li>
         <li>Abwedeln, Nachbelichten, Schwamm, Wischfinger und Verflüssigen</li>
-        <li>Pinsel mit eigenen Spitzen, Streuung und Glättung</li>
+        <li>Pinsel mit eigenen Spitzen, Streuung und Glättung, Buntstift</li>
+        <li>Füllwerkzeug, Fläche füllen, Hintergrund- und Magischer Radiergummi</li>
         <li>Retusche auf einer leeren Ebene, das Original bleibt unberührt</li>
       </ul>
     </div>
@@ -246,6 +256,26 @@ footer a:hover { color: var(--ink); }
   </div>
 </section>
 
+<section class="chapter flip" id="linux">
+  <div class="wrap">
+    <figure class="stage desk">
+      <img class="window" src="img/gnome-ebenen.jpg" alt="photographics für Linux: das Dolomiten-Bild mit Werkzeugleiste, Menüs und dem Ebenenbedienfeld" loading="lazy">
+      <img class="pane" src="img/gnome-filter.jpg" alt="Die Filtergalerie mit dem Zeichenfilter Stempel auf der Studioaufnahme" loading="lazy">
+      <figcaption>Ebenen und Filtergalerie in der GNOME-Fassung. Fotos: Janine Joles und Vitaly Gariev / Unsplash</figcaption>
+    </figure>
+    <div class="copy">
+      <h2>Neu: am Linux-Rechner weiterarbeiten</h2>
+      <p>Seit Version 0.4 gibt es photographics auch für Linux, als GNOME-App mit Menüs, Werkzeugoptionen und Ebenenbedienfeld wie in Photoshop. Es ist derselbe Kern wie auf dem Tablet: Dateien, Werkzeuge und Ergebnisse sind identisch.</p>
+      <ul>
+        <li>Als Flatpak für jede Distribution, Java ist schon enthalten</li>
+        <li>Tastenkürzel aus Photoshop, Pinselgröße und Härte mit Alt + rechter Maustaste</li>
+        <li>Ebenen mehrfach auswählen, per Ziehen ordnen, gruppieren und zusammenfügen</li>
+        <li>Filtergalerie mit 47 Effekten, Ebenenstil-Dialog, Drucken und Softproof</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
 <section class="files" id="dateien" style="margin-top: clamp(72px, 9vw, 128px)">
   <div class="wrap">
     <figure>
@@ -255,13 +285,13 @@ footer a:hover { color: var(--ink); }
     <div class="cols">
       <div class="copy">
         <h2>Dieselbe Datei, unterwegs und am Rechner</h2>
-        <p>Eine PSD aus dem Studio lässt sich auf dem Tablet mit Ebenen, Masken, Gruppen und Einstellungsebenen öffnen. Was photographics noch nicht anzeigen kann, zum Beispiel Ebeneneffekte, bleibt in der Datei und wird beim Speichern unverändert zurückgeschrieben.</p>
+        <p>Eine PSD aus dem Studio lässt sich auf dem Tablet mit Ebenen, Masken, Gruppen und Einstellungsebenen öffnen. Was photographics noch nicht anzeigen kann, zum Beispiel Musterüberlagerungen, bleibt in der Datei und wird beim Speichern unverändert zurückgeschrieben.</p>
       </div>
       <dl>
         <dt>Öffnen</dt><dd>PSD und PSB, TIFF, GIMP (XCF), PNG, JPEG, WebP und HEIF</dd>
         <dt>Speichern</dt><dd>PSD, TIFF und XCF mit allen Ebenen</dd>
         <dt>Exportieren</dt><dd>PNG und JPEG, mit Farbprofil oder in sRGB</dd>
-        <dt>Farbtiefe</dt><dd>Liest 8, 16 und 32 Bit, bearbeitet intern mit 8 Bit</dd>
+        <dt>Farbtiefe</dt><dd>Liest 8, 16 und 32 Bit, bearbeitet mit 8 oder 16 Bit pro Kanal</dd>
       </dl>
     </div>
   </div>
@@ -277,8 +307,9 @@ footer a:hover { color: var(--ink); }
       <div><h3>Farbfelder</h3><p>Farbfelder aus Photoshop, Illustrator und GIMP laden und speichern (.aco, .ase, .gpl).</p></div>
       <div><h3>Tastatur und Maus</h3><p>Mit Tastatur-Cover, Chromebook oder Samsung DeX gelten die gewohnten Kürzel aus Photoshop.</p></div>
       <div><h3>Große Dateien</h3><p>Bilddaten liegen außerhalb des Speicherlimits für Apps, Filter rechnen auf allen Kernen, Verschieben und Transformieren laufen über die GPU.</p></div>
-      <div><h3>Auswählen</h3><p>Zauberstab, Objektauswahl per Rechteck und Lasso. Das Verschieben-Werkzeug wählt auf Wunsch die angetippte Ebene.</p></div>
+      <div><h3>Auswählen</h3><p>Zauberstab, Schnellauswahl, Objektauswahl, Lasso und Polygon-Lasso. Auswahlen lassen sich anheben, verschieben und frei transformieren.</p></div>
       <div><h3>Verläufe</h3><p>Linear, radial und gespiegelt, auf Ebenen oder direkt in Masken, zum Beispiel für einen Verlaufsfilter am Himmel.</p></div>
+      <div><h3>Filtergalerie</h3><p>47 künstlerische Effekte in sechs Gruppen, als Stapel kombinierbar, mit Vorschau auf das ganze Bild.</p></div>
       <div><h3>Deutsch und Englisch</h3><p>Die Oberfläche folgt der Systemsprache und lässt sich in den Einstellungen umstellen.</p></div>
     </div>
   </div>
@@ -288,7 +319,7 @@ footer a:hover { color: var(--ink); }
   <div class="wrap">
     <header>
       <h2>Roadmap</h2>
-      <p>Was als Nächstes kommen soll. Die Reihenfolge kann sich ändern, feste Termine gibt es nicht. Vorschläge sind willkommen. Neu in 0.3: GPU-Vorschau, Ebeneneffekte, englische Oberfläche, Verflüssigen, Verlauf, Zauberstab, Objektauswahl und Kurven je Kanal.</p>
+      <p>Was als Nächstes kommen soll. Die Reihenfolge kann sich ändern, feste Termine gibt es nicht. Vorschläge sind willkommen. Neu in 0.4: die Linux-Version, Ebenenstile bearbeiten, Formen, Zeichenstift und Pfade, Filtergalerie, Bearbeitung mit 16 Bit, Füllwerkzeug und weitere Radiergummis, Schnellauswahl sowie Kopieren und Einfügen.</p>
     </header>
     <div class="stages">
       <div>
@@ -304,19 +335,17 @@ footer a:hover { color: var(--ink); }
         <h3>Danach</h3>
         <ul>
           <li>Frequenztrennung als Retusche-Hilfe</li>
-          <li>Ebeneneffekte bearbeiten und neu anlegen</li>
           <li>Stapelexport in mehreren Größen und Formaten</li>
-          <li>Zeichenstift und Pfade</li>
+          <li>Muster und Musterüberlagerung</li>
         </ul>
       </div>
       <div>
         <h3>Später</h3>
         <ul>
-          <li>Bearbeitung mit 16 Bit pro Kanal</li>
           <li>CMYK-Dokumente und CMYK-Export</li>
           <li>Anzeige über das Farbprofil des Bildschirms</li>
           <li>Vollständiges Zusammensetzen auf der GPU</li>
-          <li>Versionen für Linux (GNOME) und iPad</li>
+          <li>Version für iPad</li>
         </ul>
       </div>
     </div>
@@ -326,12 +355,13 @@ footer a:hover { color: var(--ink); }
 <section class="download" id="download">
   <div class="wrap">
     <h2>photographics herunterladen</h2>
-    <p>Die App gibt es als APK auf GitHub. Für fast alle aktuellen Tablets und Smartphones ist die arm64-Fassung die richtige.</p>
+    <p>Beide Fassungen gibt es auf GitHub. Für Android ist die arm64-APK für fast alle aktuellen Tablets und Smartphones die richtige. Für Linux gibt es ein Flatpak, das sich mit <code>flatpak install --user photographics-0.4.0.flatpak</code> oder per Doppelklick installieren lässt.</p>
     <div class="actions">
-      <a class="btn primary" data-repo="/releases/latest" href="#download">APK auf GitHub</a>
+      <a class="btn primary" data-repo="/releases/latest" href="#download">APK für Android</a>
+      <a class="btn primary" data-repo="/releases/latest" href="#download">Flatpak für Linux</a>
       <a class="btn outline" data-repo="" href="#download">Quellcode</a>
     </div>
-    <p class="req">Android 8.1 oder neuer. Ein Tablet mit Stift wird empfohlen.</p>
+    <p class="req">Android 8.1 oder neuer, ein Tablet mit Stift wird empfohlen. Linux mit Flatpak, x86_64.</p>
   </div>
 </section>
 

@@ -75,6 +75,9 @@ abstract class PaintTool {
 
     /** Vorder-/Hintergrundfarbe für die Farbdynamik; null = Werkzeug malt keine Farbe. */
     open val dynamicsColors: Pair<Int, Int>? get() = null
+
+    /** Harte Kante ohne Glättung (Buntstift): ein Pixel ist ganz oder gar nicht getroffen. */
+    open val aliased: Boolean get() = false
 }
 
 /** Führt einen Strich aus: Interpolation der Eingabepunkte, Abdrücke, Undo-Patch. */
@@ -237,6 +240,7 @@ class Stroke(private val ctx: StrokeContext, private val tool: PaintTool, seed: 
         val r2 = radius * radius
         val soft = radius - inner
         val opacity = s.opacity
+        val aliased = tool.aliased
         grid.forTilesIn(rect) { tx, ty ->
             val tr = grid.tileRect(tx, ty).intersect(rect)
             // Arbeitskopien im Kachel-Cache: direkter Array-Zugriff auch bei nativem Speicher
@@ -262,7 +266,7 @@ class Stroke(private val ctx: StrokeContext, private val tool: PaintTool, seed: 
                         u * u + v * v
                     }
                     if (d2 >= r2) continue
-                    val shape = if (d2 <= inner * inner) 1f else {
+                    val shape = if (aliased || d2 <= inner * inner) 1f else {
                         val t = 1f - (sqrt(d2) - inner) / soft
                         t * t * (3f - 2f * t)
                     }

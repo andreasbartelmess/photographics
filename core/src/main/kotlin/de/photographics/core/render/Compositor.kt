@@ -35,6 +35,33 @@ object Compositor {
         return g
     }
 
+    /** Wie [renderGrid], aber mit 16 Bit je Kanal: obere und untere Bits als zwei Raster. */
+    fun renderGridDeep(doc: Document, area: IntRect = doc.bounds, onWhite: Boolean = false): Pair<de.photographics.core.image.TileGrid, de.photographics.core.image.TileGrid> {
+        val hi = de.photographics.core.image.TileGrid(doc.width, doc.height, area = area)
+        val lo = de.photographics.core.image.TileGrid(doc.width, doc.height, area = area)
+        if (area.isEmpty) return hi to lo
+        prepare(doc, 1, area)
+        val band = 64
+        val count = (area.height + band - 1) / band
+        de.photographics.core.image.Parallel.bands(count, area.width.toLong() * band * 40, compute = { i ->
+            val r = IntRect(area.left, area.top + i * band, area.right, minOf(area.bottom, area.top + (i + 1) * band))
+            val f = render(doc, r)
+            // Auf Weiß reduzieren (vormultipliziert: Farbe + (1 − Deckung))
+            if (onWhite) for (k in 0 until f.size / 4) { val a = f[k * 4 + 3]; f[k * 4] += 1 - a; f[k * 4 + 1] += 1 - a; f[k * 4 + 2] += 1 - a; f[k * 4 + 3] = 1f }
+            val s = ShortArray(f.size); toRgba16(f, s)
+            val h = IntArray(r.width * r.height); val l = IntArray(r.width * r.height)
+            for (k in h.indices) {
+                var ch = 0; var cl = 0
+                val shifts = Colors.SHIFTS_RGBA
+                for (j in 0 until 4) { val sh = shifts[j]; val v = s[k * 4 + j].toInt() and 0xFFFF; ch = ch or ((v ushr 8) shl sh); cl = cl or ((v and 0xFF) shl sh) }
+                h[k] = ch; l[k] = cl
+            }
+            Triple(r, h, l)
+        }, consume = { _, (r, h, l) -> hi.writeRect(r, h); lo.writeRect(r, l) })
+        hi.compact(); lo.compact()
+        return hi to lo
+    }
+
     /**
      * Rendert [area] in Streifen parallel auf allen Kernen; [consume] erhält die Streifen der Reihe
      * nach auf dem aufrufenden Thread.
@@ -163,7 +190,7 @@ object Compositor {
                     }
                 }
             }
-            compositeChildren(layers, buf, Area(part, maxOf(1, step), lightAngle(doc)))
+            compositeChildren(layers, buf, Area(part, maxOf(1, step), lightAngle(doc), deep = step <= 1 && doc.bitDepth == 16))
             val tmp = IntArray(part.width * part.height)
             toArgb(buf, tmp)
             System.arraycopy(tmp, 0, out, (y - rect.top) * rect.width, tmp.size)
@@ -198,7 +225,7 @@ object Compositor {
     /** Vormultiplizierter RGBA-Float-Puffer (4 Werte pro Pixel). */
     fun render(doc: Document, rect: IntRect): FloatArray {
         val buf = FloatArray(rect.width * rect.height * 4)
-        if (!rect.isEmpty) compositeChildren(doc.root.children, buf, Area(rect, 1, lightAngle(doc)))
+        if (!rect.isEmpty) compositeChildren(doc.root.children, buf, Area(rect, 1, lightAngle(doc), deep = doc.bitDepth == 16))
         return buf
     }
 
@@ -209,7 +236,8 @@ object Compositor {
     /** Globaler Lichtwinkel für Schatten der Ebeneneffekte. */
     private fun lightAngle(doc: Document) = de.photographics.core.psd.PsdEffects.globalAngle(doc.preservedResources)
 
-    private class Area(val rect: IntRect, val step: Int, val lightAngle: Double = 120.0) {
+    /** [deep]: 16-Bit-Dokument in voller Auflösung – Ebenen mit unteren Bits lesen, Korrekturen ohne 8-Bit-Rundung. */
+    private class Area(val rect: IntRect, val step: Int, val lightAngle: Double = 120.0, val deep: Boolean = false) {
         val width get() = rect.width
         val height get() = rect.height
         /** Abgedeckter Bereich in Dokumentkoordinaten. */
@@ -276,6 +304,45 @@ object Compositor {
         }
     }
 
+    private val rgbOut get() = RGB_OUT.get()
+    private val RGB_OUT = ThreadLocal.withInitial { FloatArray(3) }
+
+    /**
+     * Abbildung [map] (8 Bit je Kanal) für Zwischenwerte ([r], [g], [b] in 0..255): trilinear aus den
+     * acht umgebenden Gitterpunkten. Liegt der Wert auf dem Gitter, genügt ein Aufruf.
+     */
+    fun mapSmooth(map: de.photographics.core.adjust.RgbMap, r: Float, g: Float, b: Float, out: FloatArray) {
+        val rc = r.coerceIn(0f, 255f); val gc = g.coerceIn(0f, 255f); val bc = b.coerceIn(0f, 255f)
+        val r0 = rc.toInt().coerceAtMost(254); val g0 = gc.toInt().coerceAtMost(254); val b0 = bc.toInt().coerceAtMost(254)
+        val fr = rc - r0; val fg = gc - g0; val fb = bc - b0
+        if (fr < 1e-3f && fg < 1e-3f && fb < 1e-3f) {
+            val m = map.map((r0 shl 16) or (g0 shl 8) or b0)
+            out[0] = ((m shr 16) and 0xFF).toFloat(); out[1] = ((m shr 8) and 0xFF).toFloat(); out[2] = (m and 0xFF).toFloat()
+            return
+        }
+        var or = 0f; var og = 0f; var ob = 0f
+        for (c in 0 until 8) {
+            val dr = c and 1; val dg = (c shr 1) and 1; val db = (c shr 2) and 1
+            val w = (if (dr == 1) fr else 1 - fr) * (if (dg == 1) fg else 1 - fg) * (if (db == 1) fb else 1 - fb)
+            if (w <= 0f) continue
+            val m = map.map(((r0 + dr) shl 16) or ((g0 + dg) shl 8) or (b0 + db))
+            or += ((m shr 16) and 0xFF) * w; og += ((m shr 8) and 0xFF) * w; ob += (m and 0xFF) * w
+        }
+        out[0] = or; out[1] = og; out[2] = ob
+    }
+
+    /** Premultiplizierter Float-Puffer → 16 Bit je Kanal (R, G, B, A; nicht vormultipliziert). */
+    fun toRgba16(buf: FloatArray, out: ShortArray) {
+        val n = buf.size / 4
+        for (i in 0 until n) {
+            val a = buf[i * 4 + 3]
+            if (a <= 1f / 131072f) { out[i * 4] = 0; out[i * 4 + 1] = 0; out[i * 4 + 2] = 0; out[i * 4 + 3] = 0; continue }
+            val inv = 65535f / a
+            fun q(v: Float) = (v + 0.5f).toInt().coerceIn(0, 65535).toShort()
+            out[i * 4] = q(buf[i * 4] * inv); out[i * 4 + 1] = q(buf[i * 4 + 1] * inv); out[i * 4 + 2] = q(buf[i * 4 + 2] * inv); out[i * 4 + 3] = q(a * 65535f)
+        }
+    }
+
     /** 0..255 (bereits skaliert) → gerundeter Kanalwert, begrenzt. */
     @Suppress("NOTHING_TO_INLINE")
     private inline fun to8(v: Float): Int { val x = (v + 0.5f).toInt(); return if (x < 0) 0 else if (x > 255) 255 else x }
@@ -327,7 +394,23 @@ object Compositor {
                 if (direct) (layer as SmartLayer).samplePreview(rect.rect, rect.step, layer.previewDx, layer.previewDy, px)
                 else rect.read(raster!!, layer.previewDx, layer.previewDy, px)
                 val src = pool.floats(n * 4)
-                for (k in 0 until n) {
+                val low = if (rect.deep && rect.step == 1) (layer as? de.photographics.core.doc.PixelLayer)?.low else null
+                if (low != null) {
+                    // 16 Bit: oberes und unteres Byte je Kanal
+                    val lo = pool.ints(n)
+                    rect.read(low, layer.previewDx, layer.previewDy, lo)
+                    val k16 = 1f / 65535f
+                    for (k in 0 until n) {
+                        val c = px[k]; val l = lo[k]
+                        val a = (((c ushr 24) shl 8) or Colors.lowAlpha(c ushr 24, l ushr 24)) * k16
+                        if (a == 0f) continue
+                        src[k * 4] = ((((c shr 16) and 0xFF) shl 8) or ((l shr 16) and 0xFF)) * k16 * a
+                        src[k * 4 + 1] = ((((c shr 8) and 0xFF) shl 8) or ((l shr 8) and 0xFF)) * k16 * a
+                        src[k * 4 + 2] = (((c and 0xFF) shl 8) or (l and 0xFF)) * k16 * a
+                        src[k * 4 + 3] = a
+                    }
+                    pool.release(lo)
+                } else for (k in 0 until n) {
                     val c = px[k]
                     val a = (c ushr 24) / 255f
                     if (a == 0f) continue
@@ -349,6 +432,13 @@ object Compositor {
                     val a = dst[o + 3]
                     if (a <= 0f) continue
                     val inv = 255f / a
+                    if (rect.deep) {
+                        // Ohne Rundung auf 8 Bit: zwischen den Tabellenpunkten trilinear interpolieren
+                        mapSmooth(map, dst[o] * inv, dst[o + 1] * inv, dst[o + 2] * inv, rgbOut)
+                        src[o] = rgbOut[0] / 255f * a; src[o + 1] = rgbOut[1] / 255f * a; src[o + 2] = rgbOut[2] / 255f * a
+                        src[o + 3] = a
+                        continue
+                    }
                     val rgb = (to8(dst[o] * inv) shl 16) or (to8(dst[o + 1] * inv) shl 8) or to8(dst[o + 2] * inv)
                     val m = map.map(rgb)
                     src[o] = ((m shr 16) and 0xFF) / 255f * a
@@ -394,6 +484,11 @@ object Compositor {
         fx.innerGlow?.let { add(FxPart(it.color, it.opacity, it.blend, false)) }
         for (s in fx.innerShadows) add(FxPart(s.color, s.opacity, s.blend, false))
         for (s in fx.strokes) add(FxPart(s.color, s.opacity, s.blend, false))
+        fx.satin?.let { add(FxPart(it.color, it.opacity, it.blend, false)) }
+        fx.bevel?.let { b ->
+            add(FxPart(b.highlightColor, b.highlightOpacity, b.highlightBlend, false))
+            add(FxPart(b.shadowColor, b.shadowOpacity, b.shadowBlend, false))
+        }
     }
 
     private fun fxMargin(fx: de.photographics.core.doc.LayerEffects, step: Int) = kotlin.math.ceil(fx.reach() / step).toInt() + 2
@@ -413,6 +508,8 @@ object Compositor {
             fx.innerGlow?.let { add(if (it.fromEdge) FloatArray(n) else a.copyOf()) }
             for (s in fx.innerShadows) add(FloatArray(n))
             for (s in fx.strokes) add(FloatArray(n))
+            fx.satin?.let { add(if (it.invert) a.copyOf() else FloatArray(n)) }
+            fx.bevel?.let { add(FloatArray(n)); add(FloatArray(n)) }
         }
         val scale = step.toDouble()
         fun angleOf(s: de.photographics.core.doc.LayerEffects.Shadow) = if (s.useGlobalAngle) lightAngle else s.angle
@@ -423,6 +520,8 @@ object Compositor {
             fx.innerGlow?.let { add(Effects.innerGlow(a, w, h, it, scale)) }
             for (s in fx.innerShadows) add(Effects.innerShadow(a, w, h, s, angleOf(s), scale))
             for (s in fx.strokes) add(Effects.stroke(a, w, h, s, scale, dist))
+            fx.satin?.let { add(Effects.satin(a, w, h, it, scale)) }
+            fx.bevel?.let { b -> val (hi, lo) = Effects.bevel(a, w, h, b, if (b.useGlobalAngle) lightAngle else b.angle, scale); add(hi); add(lo) }
         }
     }
 
@@ -451,6 +550,11 @@ object Compositor {
 
     /** Je Ebene die Zwischenspeicher der zuletzt benutzten Abtastschritte (Gesamtansicht, Ausschnitt, Vorschau). */
     private val fxCaches = java.util.WeakHashMap<Layer, LinkedHashMap<Int, FxCache>>()
+
+    init {
+        // Effekt-Zwischenspeicher lassen sich jederzeit neu rechnen: bei Speichermangel zuerst weg damit
+        de.photographics.core.image.TileMemory.onPressure += { synchronized(fxCaches) { fxCaches.clear() } }
+    }
 
     private fun fxCache(layer: Layer, step: Int): FxCache? = synchronized(fxCaches) { fxCaches[layer]?.get(step) }
 
@@ -625,6 +729,29 @@ object Compositor {
             val maskR = maskValues(layer, rect)
             // [alpha] ist Deckkraft × Fläche (bzw. 1 als isolierte Basis einer Schnittmaske)
             if (atop) blendAtop(src, dst, mode, alpha, maskR) else blendBuffer(src, dst, mode, alpha, r, maskR)
+        }
+        fx.gradientOverlay?.let { g ->
+            // Verlauf über die Begrenzung der Ebene (Dokumentkoordinaten), wie Photoshops „An Ebene ausrichten“
+            val b = layer.raster.contentBounds()
+            if (!b.isEmpty) {
+                val src = FloatArray(w * h * 4)
+                val cx = (b.left + b.right) / 2.0; val cy = (b.top + b.bottom) / 2.0
+                val ang = Math.toRadians(g.angle); val ux = kotlin.math.cos(ang); val uy = -kotlin.math.sin(ang)
+                val half = (kotlin.math.abs(ux) * b.width + kotlin.math.abs(uy) * b.height) / 2 * g.scale
+                val radius = kotlin.math.hypot(b.width.toDouble(), b.height.toDouble()) / 2 * g.scale
+                var any = false
+                for (k in 0 until w * h) {
+                    val ak = a[k] * g.opacity
+                    if (ak <= 0f) continue
+                    any = true
+                    val dx = (r.left + k % w + 0.5) * rect.step - cx; val dy = (r.top + k / w + 0.5) * rect.step - cy
+                    val t = if (g.radial) (kotlin.math.hypot(dx, dy) / radius.coerceAtLeast(1.0)).toFloat()
+                        else ((dx * ux + dy * uy) / (2 * half.coerceAtLeast(1.0)) + 0.5).toFloat()
+                    val c = g.color(t)
+                    src[k * 4] = ((c shr 16) and 0xFF) / 255f * ak; src[k * 4 + 1] = ((c shr 8) and 0xFF) / 255f * ak; src[k * 4 + 2] = (c and 0xFF) / 255f * ak; src[k * 4 + 3] = ak
+                }
+                if (any) { val bm = g.blend.normalizedForBuffer(); if (atop) blendAtop(src, dst, bm, layerAlpha, null) else blendBuffer(src, dst, bm, layerAlpha, r, null) }
+            }
         }
         for (o in fx.colorOverlays) put(a, o.color, o.opacity, o.blend)
         for ((k, p) in parts.withIndex()) if (!p.exterior) put(maps[k], p.color, p.opacity, p.blend)

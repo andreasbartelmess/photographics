@@ -311,6 +311,7 @@ fun ShortcutsDialog(onDismiss: () -> Unit) {
         tr("Strg+S / Strg+O / Strg+N") to tr("Speichern / Öffnen / Neu"),
         tr("Strg+A / Strg+D / Strg+⇧I") to tr("Alles / Aufheben / Auswahl umkehren"),
         tr("Strg+J / Strg+E") to tr("Ebene durch Kopie / Auf eine Ebene reduzieren"),
+        tr("Strg+Umschalt+E") to tr("Exportieren als …"),
         tr("Strg+L / Strg+U / Strg+I") to tr("Tonwert / Farbton/Sättigung / Umkehren"),
         tr("Strg+0 / Strg+1 / Strg± ") to tr("Einpassen / 100 % / Zoom"),
         tr("Tab / F / Entf") to tr("Panels / Vollbild / Auswahl löschen"),

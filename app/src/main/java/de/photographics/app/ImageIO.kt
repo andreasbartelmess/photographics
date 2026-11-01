@@ -207,7 +207,8 @@ object ImageIO {
      * aus dem Dokumentprofil in sRGB umgerechnet (Web, Druck), sonst wird die Bitmap mit dem
      * Dokumentprofil gekennzeichnet (wird beim Export eingebettet).
      */
-    fun renderBitmap(doc: Document, flattenOnWhite: Boolean, toSrgb: Boolean = true): Bitmap {
+    fun renderBitmap(doc: Document, flattenOnWhite: Boolean, toSrgb: Boolean = true, width: Int = doc.width, height: Int = doc.height): Bitmap {
+        if (width != doc.width || height != doc.height) return renderScaled(doc, flattenOnWhite, toSrgb, width, height)
         val bmp = Bitmap.createBitmap(doc.width, doc.height, Bitmap.Config.ARGB_8888)
         val tagAs = if (toSrgb || android.os.Build.VERSION.SDK_INT < 29) null else ColorSpaces.toAndroid(doc.colorProfile)
         val conv = if (tagAs == null) de.photographics.core.color.ColorTransform.rgb(doc.colorProfile, IccProfiles.sRGB, RenderingIntent.RELATIVE, true) else null
@@ -226,10 +227,22 @@ object ImageIO {
         return bmp
     }
 
+    /** Verkleinert (Lanczos im Kern) in eine Bitmap der Zielgröße, streifenweise. */
+    private fun renderScaled(doc: Document, flattenOnWhite: Boolean, toSrgb: Boolean, width: Int, height: Int): Bitmap {
+        val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val tagAs = if (toSrgb || android.os.Build.VERSION.SDK_INT < 29) null else ColorSpaces.toAndroid(doc.colorProfile)
+        de.photographics.core.render.ExportRender.bands(doc, width, height, toSrgb = tagAs == null, onWhite = flattenOnWhite) { r, px ->
+            bmp.setPixels(px, 0, r.width, 0, r.top, r.width, r.height)
+        }
+        if (tagAs != null && android.os.Build.VERSION.SDK_INT >= 29) bmp.setColorSpace(tagAs)
+        return bmp
+    }
+
     enum class ExportFormat(val mime: String, val ext: String) { PNG("image/png", "png"), JPEG("image/jpeg", "jpg") }
 
-    fun export(cr: ContentResolver, uri: Uri, doc: Document, format: ExportFormat, toSrgb: Boolean, quality: Int = 92) {
-        val bmp = renderBitmap(doc, flattenOnWhite = format == ExportFormat.JPEG, toSrgb = toSrgb)
+    /** [width]/[height]: Zielgröße (kleiner = verkleinern), [quality] nur für JPEG (1..100). */
+    fun export(cr: ContentResolver, uri: Uri, doc: Document, format: ExportFormat, toSrgb: Boolean, quality: Int = 92, width: Int = doc.width, height: Int = doc.height) {
+        val bmp = renderBitmap(doc, flattenOnWhite = format == ExportFormat.JPEG, toSrgb = toSrgb, width = width, height = height)
         try {
             cr.openOutputStream(uri, "wt")?.use { out ->
                 val fmt = if (format == ExportFormat.PNG) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG

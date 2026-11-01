@@ -43,6 +43,8 @@ object PsdReader {
     private val CONSUMED_KEYS = setOf("luni", "lsct", "lsdk", "lyid", "iOpa", "Lr16", "Lr32", "Layr", "Mt16", "Mt32", "Mtrn", PsdWriter.MASK_LINK_KEY)
 
     private val TEXT_KEYS = setOf("TySh", "tySh")
+    /** Daten einer Formebene, die photographics selbst schreibt (vogk = ursprüngliche Live-Form). */
+    private val SHAPE_KEYS = setOf("SoCo", "vmsk", "vsms", "vstk", "vscg", "vogk")
     private val SMART_KEYS = setOf("SoLd", "PlLd", "SoLE")
     private val FILL_KEYS = setOf("SoCo", "GdFl", "PtFl")
     private val ADJUSTMENT_KEYS = setOf(
@@ -52,6 +54,8 @@ object PsdReader {
 
     internal class Header(val version: Int, val channels: Int, val width: Int, val height: Int, val depth: Int, val mode: Int) {
         val big get() = version == 2
+        /** 16-Bit-RGB: untere Bits mitlesen. */
+        val deep get() = depth == 16 && mode == PsdColorMode.RGB
         /** Farbumrechnung über ICC-Profile für CMYK, Graustufen und Lab (sonst einfache Formeln). */
         var conv: de.photographics.core.color.DeviceToRgb? = null
     }
@@ -79,8 +83,9 @@ object PsdReader {
     }
 
     /**
-     * Liest Zeilen eines Kanals bei Bedarf. RLE und unkomprimierte 8-Bit-Kanäle (der Normalfall)
-     * werden zeilenweise direkt aus der Datei dekodiert; andere (ZIP, 16/32 Bit) einmal komplett.
+     * Liest Zeilen eines Kanals bei Bedarf. RLE-, ZIP- und unkomprimierte Kanäle mit 8 oder 16 Bit
+     * werden zeilenweise direkt aus der Datei dekodiert (ZIP fortlaufend von oben nach unten);
+     * 32 Bit und Bitmap einmal komplett.
      */
     private class ChannelReader(
         private val src: BinaryReader, private val dataStart: Int, private val end: Int, private val compression: Int,
@@ -89,7 +94,61 @@ object PsdReader {
         private var rowLen: IntArray? = null,
     ) {
         private var full: ByteArray? = null
-        private val direct = depth == 8 && (compression == 0 || compression == 1)
+        private var fullLow: ByteArray? = null
+        private val direct = (depth == 8 || depth == 16) && compression in 0..3
+        private val zip = compression == 2 || compression == 3
+        private var inflater: Inflater? = null
+        private var zipIn = 0
+        private var zipRowNext = 0
+        private var zipChunk: ByteArray? = null
+
+        /** Nächste Zeile des ZIP-Datenstroms nach [row] (Länge [rowBytes]), Prädiktion aufgehoben. */
+        private fun zipRow(row: ByteArray) {
+            val inf = inflater ?: Inflater().also { inflater = it; zipIn = dataStart; zipRowNext = 0 }
+            val chunk = zipChunk ?: ByteArray(1 shl 16).also { zipChunk = it }
+            var o = 0
+            try {
+                while (o < rowBytes && !inf.finished()) {
+                    if (inf.needsInput()) {
+                        if (zipIn >= end) break
+                        val n = minOf(chunk.size, end - zipIn)
+                        src.copy(zipIn, chunk, 0, n); zipIn += n
+                        inf.setInput(chunk, 0, n)
+                    }
+                    val n = inf.inflate(row, o, rowBytes - o)
+                    if (n == 0 && inf.needsDictionary()) break
+                    o += n
+                }
+            } catch (e: java.util.zip.DataFormatException) {
+                throw PsdFormatException(tr("ZIP-Daten beschädigt"))
+            }
+            if (o < rowBytes) row.fill(0, o, rowBytes)
+            if (compression == 3) unpredict(row, w, 1, depth)
+            zipRowNext++
+        }
+
+        /** ZIP: Datenstrom bis Zeile [y] vorspulen (bei Rücksprung von vorn beginnen). */
+        private fun zipSeek(y: Int, row: ByteArray) {
+            if (y < zipRowNext) { inflater?.end(); inflater = null; zipRowNext = 0 }
+            while (zipRowNext < y) zipRow(row)
+        }
+        /** Bytes je Zeile in der Datei. */
+        private val rowBytes = w * (if (depth == 16) 2 else 1)
+        /** 16 Bit, zeilenweise: untere Bytes der zuletzt gelesenen Zeilen. */
+        private var lastLow: ByteArray? = null
+        private var lastRange = -1 to -1
+
+        /** 16 Bit: untere Bytes der Zeilen [y0, y1) (Länge w·(y1−y0)); obere über [rows]. */
+        fun rowsLow(y0: Int, y1: Int, dst: ByteArray) {
+            if (depth != 16) { dst.fill(0); return }
+            if (direct) {
+                if (lastRange != y0 to y1) rows(y0, y1, ByteArray((y1 - y0) * w))
+                System.arraycopy(lastLow!!, 0, dst, 0, (y1 - y0) * w)
+                return
+            }
+            if (full == null) rows(0, 0, ByteArray(0))
+            System.arraycopy(fullLow!!, y0 * w, dst, 0, (y1 - y0) * w)
+        }
 
         init {
             if (direct && compression == 1 && rowStart == null) {
@@ -104,8 +163,43 @@ object PsdReader {
         /** Zeilen [y0, y1) als 8-Bit-Werte nach [dst] (Länge w·(y1−y0)). */
         fun rows(y0: Int, y1: Int, dst: ByteArray) {
             if (!direct) {
-                val f = full ?: decodeChannel(BinaryReader(src.buf, dataStart, src.limit, src.le), end, compression, w, h, depth, big, gamma).also { full = it }
+                if (full == null && depth == 16) fullLow = ByteArray(w * h)
+                val f = full ?: decodeChannel(BinaryReader(src.buf, dataStart, src.limit, src.le), end, compression, w, h, depth, big, gamma, fullLow).also { full = it }
                 System.arraycopy(f, y0 * w, dst, 0, (y1 - y0) * w)
+                return
+            }
+            if (zip) {
+                val row = ByteArray(rowBytes)
+                val low = if (depth == 16) (lastLow?.takeIf { it.size >= (y1 - y0) * w } ?: ByteArray((y1 - y0) * w)).also { lastLow = it } else null
+                zipSeek(y0, row)
+                for (y in y0 until y1) {
+                    zipRow(row)
+                    val o = (y - y0) * w
+                    if (low == null) System.arraycopy(row, 0, dst, o, w)
+                    else for (x in 0 until w) { dst[o + x] = row[x * 2]; low[o + x] = row[x * 2 + 1] }
+                }
+                if (low != null) lastRange = y0 to y1
+                if (zipRowNext >= h) { inflater?.end(); inflater = null; zipRowNext = 0 }
+                return
+            }
+            if (depth == 16) {
+                // Zeilenweise: oberes Byte nach dst, unteres zwischenspeichern
+                val low = (lastLow?.takeIf { it.size >= (y1 - y0) * w } ?: ByteArray((y1 - y0) * w)).also { lastLow = it }
+                val row = ByteArray(rowBytes)
+                for (y in y0 until y1) {
+                    if (compression == 0) {
+                        val from = dataStart + y * rowBytes
+                        val n = minOf(rowBytes, maxOf(0, end - from))
+                        if (n > 0) src.copy(from, row, 0, n)
+                        if (n < rowBytes) row.fill(0, maxOf(0, n), rowBytes)
+                    } else {
+                        val st = rowStart!![y]
+                        PackBits.decode(src, st, minOf(rowLen!![y], maxOf(0, end - st)), row, 0, rowBytes)
+                    }
+                    val o = (y - y0) * w
+                    for (x in 0 until w) { dst[o + x] = row[x * 2]; low[o + x] = row[x * 2 + 1] }
+                }
+                lastRange = y0 to y1
                 return
             }
             if (compression == 0) {
@@ -153,7 +247,9 @@ object PsdReader {
 
         val doc = Document(h.width, h.height)
         if (h.big) doc.importWarnings += tr("PSB (Großformat) – Zusatzdaten werden beim Speichern als PSD nicht übernommen.")
-        if (h.depth != 8) doc.importWarnings += tr("{0}-Bit-Dokument wurde in 8 Bit pro Kanal umgewandelt.", h.depth)
+        // 16-Bit-RGB bleibt 16 Bit (untere Bits je Ebene), alles andere wird 8 Bit
+        if (h.depth == 16 && h.mode == PsdColorMode.RGB) doc.bitDepth = 16
+        else if (h.depth != 8) doc.importWarnings += tr("{0}-Bit-Dokument wurde in 8 Bit pro Kanal umgewandelt.", h.depth)
 
         // Farbmodusdaten (Palette bei indizierten Farben)
         val cmLen = r.u32()
@@ -163,6 +259,9 @@ object PsdReader {
         var targetLayerIndex = -1
         var iccData: ByteArray? = null
         val resources = mutableListOf<PsdImageResource>()
+        val savedPaths = ArrayList<PsdImageResource>()
+        var workPath: ByteArray? = null
+        var alphaNames: List<String> = emptyList()
         val resLen = r.u32().toInt()
         val resEnd = r.pos + resLen
         while (r.pos + 12 <= resEnd) {
@@ -181,11 +280,23 @@ object PsdReader {
                 1032 -> doc.guides = readGuides(data)
                 // Versionsinfo: Byte 4 = „hasRealMergedData“
                 1057 -> if (data.size >= 5) doc.hasRealComposite = data[4].toInt() != 0
+                PsdPaths.WORK_PATH -> workPath = data
+                in PsdPaths.FIRST_SAVED..PsdPaths.LAST_SAVED -> savedPaths += PsdImageResource(id, name, data)
+                // Namen der Alphakanäle (Pascal-Strings hintereinander)
+                1006 -> alphaNames = runCatching {
+                    val br = BinaryReader(data); val out = ArrayList<String>()
+                    while (br.pos < data.size) { val n = data[br.pos].toInt() and 0xFF; out += String(data, br.pos + 1, minOf(n, data.size - br.pos - 1), Charsets.ISO_8859_1); br.pos += n + 1 }
+                    out
+                }.getOrDefault(emptyList())
             }
             if (id in PRESERVED_RESOURCES) resources += PsdImageResource(id, name, data)
         }
         r.seek(resEnd)
         doc.preservedResources = resources
+        runCatching {
+            doc.paths = savedPaths.sortedBy { it.id }.map { de.photographics.core.vector.NamedPath(it.name.ifBlank { tr("Pfad {0}", it.id - PsdPaths.FIRST_SAVED + 1) }, PsdPaths.decode(it.data, h.width, h.height)) }
+            doc.workPath = workPath?.let { PsdPaths.decode(it, h.width, h.height) }?.takeIf { !it.isEmpty }
+        }
         setUpColor(doc, h, iccData, workingRgb)
 
         // Ebenen- und Maskeninformationen
@@ -206,7 +317,15 @@ object PsdReader {
                 val gmLen = r.u32()
                 r.skip(gmLen.coerceAtMost((lmEnd - r.pos).toLong()))
             }
-            for (blk in readTaggedBlocks(r, lmEnd, h.big)) {
+            // Ebenenblöcke direkt aus dem Dateipuffer lesen (keine Kopie der Kanaldaten)
+            val blocks = readTaggedBlocks(r, lmEnd, h.big, setOf("Lr16", "Lr32", "Layr")) { key, br ->
+                if (records.isEmpty()) {
+                    val depth = when (key) { "Lr16" -> 16; "Lr32" -> 32; else -> h.depth }
+                    val res = readLayerInfo(br, h, depth)
+                    records = res.first; mergedHasAlpha = res.second
+                }
+            }
+            for (blk in blocks) {
                 when (blk.key) {
                     "Lr16", "Lr32", "Layr" -> if (records.isEmpty()) {
                         val depth = when (blk.key) { "Lr16" -> 16; "Lr32" -> 32; else -> h.depth }
@@ -223,9 +342,21 @@ object PsdReader {
         if (records.isNotEmpty() && layers) {
             buildLayers(doc, records, h, colorData, targetLayerIndex)
         }
+        // Alphakanäle stehen im zusammengeführten Bild hinter den Farbkanälen (und der Transparenz)
+        val firstAlpha = baseChannels(h.mode) + (if (mergedHasAlpha) 1 else 0)
+        if (h.channels > firstAlpha && (h.depth == 8 || h.depth == 16)) {
+            // Auch bei defekten Alphakanälen an den Anfang des zusammengeführten Bildes zurück
+            val start = r.pos
+            try {
+                runCatching {
+                    doc.channels = readAlphaChannels(r, h, firstAlpha).mapIndexed { i, g -> de.photographics.core.doc.AlphaChannel(alphaNames.getOrNull(i + (if (mergedHasAlpha && alphaNames.size > h.channels - firstAlpha) 1 else 0)) ?: tr("Alpha {0}", i + 1), g) }
+                }
+            } finally { r.pos = start }
+        }
         if (doc.root.children.isEmpty()) {
             // Keine Ebenen: zusammengeführtes Bild als Hintergrund verwenden
-            val bg = PixelLayer("Hintergrund", readMergedGrid(r, h, colorData, mergedHasAlpha))
+            val lowOut = arrayOfNulls<TileGrid>(1)
+            val bg = PixelLayer("Hintergrund", readMergedGrid(r, h, colorData, mergedHasAlpha, lowOut)).also { it.low = lowOut[0] }
             doc.root.add(bg)
             doc.activeLayer = bg
         }
@@ -321,7 +452,11 @@ object PsdReader {
         )
     }
 
-    private fun readTaggedBlocks(r: BinaryReader, end: Int, big: Boolean): List<PsdTaggedBlock> {
+    /**
+     * Zusatzblöcke lesen. [inPlace]: Blöcke mit diesen Schlüsseln (z. B. „Lr16“ mit allen Ebenendaten)
+     * nicht in den Heap kopieren, sondern als Leser über dem Dateipuffer übergeben.
+     */
+    private fun readTaggedBlocks(r: BinaryReader, end: Int, big: Boolean, inPlace: Set<String> = emptySet(), onInPlace: (String, BinaryReader) -> Unit = { _, _ -> }): List<PsdTaggedBlock> {
         val out = mutableListOf<PsdTaggedBlock>()
         while (true) {
             // Auffüllbytes tolerieren (je nach Erzeuger auf 2 oder 4 Byte ausgerichtet)
@@ -333,6 +468,11 @@ object PsdReader {
             val key = r.sig()
             val len = if (big && key in PSB_LONG_KEYS) r.i64() else r.u32()
             if (len < 0 || r.pos + len > end) break
+            if (key in inPlace && !r.le) {
+                onInPlace(key, BinaryReader(r.buf, r.pos, (r.pos + len).toInt(), r.le))
+                r.pos += len.toInt()
+                continue
+            }
             val data = r.bytes(len.toInt())
             if (!r.le) { out += PsdTaggedBlock(sig, key, data); continue }
             // Little-Endian (TIFF): einfache Blöcke umwandeln, alles andere verwerfen
@@ -460,6 +600,7 @@ object PsdReader {
                 // Ebenen dürfen über die Arbeitsfläche hinausragen – nichts abschneiden (Grenze gegen defekte Dateien)
                 val grid = TileGrid(h.width, h.height, area = rec.rect.intersect(sanityBounds(h)))
                 val colorIds = rec.channelReaders.keys.filter { it >= -1 }
+                val lowGrid = if (h.deep && n > 0 && colorIds.isNotEmpty()) TileGrid(h.width, h.height, area = rec.rect.intersect(sanityBounds(h))) else null
                 if (n > 0 && colorIds.isNotEmpty()) {
                     // Streifenweise lesen und umwandeln: nie eine ganze Ebene im Speicher
                     val rw = rec.rect.width
@@ -473,6 +614,14 @@ object PsdReader {
                         }
                         val px = planesToArgb(planes, h, 0, (y1 - y0) * rw, colorData, alphaId = -1)
                         grid.writeRect(IntRect(rec.rect.left, rec.rect.top + y0, rec.rect.right, rec.rect.top + y1), px)
+                        if (lowGrid != null) {
+                            val lp = HashMap<Int, ByteArray>()
+                            for (id in colorIds) runCatching { lp[id] = ByteArray((y1 - y0) * rw).also { rec.channelReaders[id]!!.rowsLow(y0, y1, it) } }
+                            // Ohne Transparenzkanal: Deckung 65535 (unteres Byte 0xFF)
+                            val lo = planesToArgb(lp, h, 0, (y1 - y0) * rw, colorData, alphaId = if (-1 in lp) -1 else null)
+                            if (-1 !in lp) for (k in lo.indices) lo[k] = lo[k] or 0xFF000000.toInt()
+                            lowGrid.writeRect(IntRect(rec.rect.left, rec.rect.top + y0, rec.rect.right, rec.rect.top + y1), lo)
+                        }
                         y0 = y1
                     }
                     grid.compact()
@@ -481,7 +630,16 @@ object PsdReader {
                 val psText = if (ourText == null) blockMap["TySh"]?.let { PsdTextSmart.parseTySh(it.data) } else null
                 val smart = blockMap[PsdTextSmart.SMART_KEY]?.let { PsdTextSmart.readSmart(it.data) }
                 val adjustment = if (rec.blocks.any { it.key in PsdAdjustments.KEYS }) PsdAdjustments.read(blockMap) else null
+                // Formebene: Volltonfüllung mit Vektormaske (und Kontur)
+                val shapePath = if (blockMap["SoCo"] != null) (blockMap["vmsk"] ?: blockMap["vsms"])?.let { PsdPaths.readVectorMask(it.data, h.width, h.height) }?.takeIf { !it.isEmpty } else null
                 layer = when {
+                    shapePath != null -> {
+                        val strokeInfo = blockMap["vstk"]?.let { PsdPaths.readStroke(it.data) }
+                        val fill = if (strokeInfo?.second == false) null else blockMap["SoCo"]?.let { PsdPaths.readSolidColor(it.data) }
+                        val b = shapePath.bounds()
+                        val origin = de.photographics.core.image.Affine.translate(b[0], b[1])
+                        de.photographics.core.doc.ShapeLayer(rec.name, shapePath.map(origin.inverse()), fill, strokeInfo?.first, origin, h.width, h.height)
+                    }
                     adjustment != null -> AdjustmentLayer(rec.name, adjustment)
                     ourText != null -> TextLayer(rec.name, ourText.first, ourText.second, h.width, h.height).also { it.originalRaster = grid }
                     psText != null -> TextLayer(rec.name, psText.first, psText.second, h.width, h.height).also {
@@ -491,7 +649,7 @@ object PsdReader {
                         blockMap[PsdTextSmart.SMART_KEY]?.let { PsdTextSmart.readSmartWarp(it.data) }?.let { sl.warp = it }
                         sl.setCachedRaster(grid)
                     }
-                    else -> PixelLayer(rec.name, grid)
+                    else -> PixelLayer(rec.name, grid).also { pl -> pl.low = lowGrid?.also { it.compact() } }
                 }
                 layer.blendMode = BlendMode.fromPsdKey(rec.blendKey)
             }
@@ -510,17 +668,18 @@ object PsdReader {
                 rec.blocks.any { it.key in FILL_KEYS } -> LayerKind.FILL
                 else -> LayerKind.PIXEL
             }
-            if (layer is AdjustmentLayer || layer is TextLayer) layer.kind = LayerKind.PIXEL
+            if (layer is AdjustmentLayer || layer is TextLayer || layer is de.photographics.core.doc.ShapeLayer) layer.kind = LayerKind.PIXEL
             if (layer.kind != LayerKind.PIXEL) kinds += layer.kind
             if (rec.blocks.any { it.key == "lfx2" || it.key == "lrFX" || it.key == "lmfx" }) {
                 // Dargestellt: Schatten, Schein, Kontur, Farbüberlagerung; die übrigen nennt die Warnung
                 val fx = PsdEffects.parse(rec.blocks)
                 if (fx == null) sawEffects = true else unsupportedEffects += fx.unsupported
             }
-            if (rec.blocks.any { it.key == "vmsk" || it.key == "vsms" }) sawVector = true
+            if (layer !is de.photographics.core.doc.ShapeLayer && rec.blocks.any { it.key == "vmsk" || it.key == "vsms" }) sawVector = true
             if (!h.big) layer.preservedBlocks = rec.blocks.filter { b ->
                 b.key !in CONSUMED_KEYS && b.key != PsdTextSmart.TEXT_KEY && b.key != PsdTextSmart.SMART_KEY &&
-                    !(layer is AdjustmentLayer && b.key in PsdAdjustments.KEYS)
+                    !(layer is AdjustmentLayer && b.key in PsdAdjustments.KEYS) &&
+                    !(layer is de.photographics.core.doc.ShapeLayer && b.key in SHAPE_KEYS)
             }
 
             // Pixelmaske: bei Vektor+Pixelmaske steht die Pixelmaske in Kanal -3 ("real user mask")
@@ -578,7 +737,7 @@ object PsdReader {
     // ---------------------------------------------------------------- Kanaldaten
 
     /** Dekodiert einen Kanal und liefert 8-Bit-Werte (w*h). */
-    private fun decodeChannel(r: BinaryReader, end: Int, compression: Int, w: Int, h: Int, depth: Int, big: Boolean, gamma: Boolean): ByteArray {
+    private fun decodeChannel(r: BinaryReader, end: Int, compression: Int, w: Int, h: Int, depth: Int, big: Boolean, gamma: Boolean, low: ByteArray? = null): ByteArray {
         val rowBytes = (w * depth + 7) / 8
         val raw = ByteArray(rowBytes * h)
         when (compression) {
@@ -602,6 +761,8 @@ object PsdReader {
             }
             else -> throw PsdFormatException(tr("Unbekannte Kompression {0}", compression))
         }
+        // 16 Bit mit unteren Bits: oberes Byte unverändert (Wert = oben · 256 + unten)
+        if (low != null && depth == 16) return ByteArray(w * h) { i -> low[i] = raw[i * 2 + 1]; raw[i * 2] }
         return to8Bit(raw, w, h, depth, gamma)
     }
 
@@ -747,31 +908,39 @@ object PsdReader {
     }
 
     /** Zusammengeführtes Bild als Raster; 8-Bit-RLE/unkomprimiert streifenweise, sonst komplett. */
-    private fun readMergedGrid(r: BinaryReader, h: Header, colorData: ByteArray, hasAlpha: Boolean): TileGrid {
+    private fun readMergedGrid(r: BinaryReader, h: Header, colorData: ByteArray, hasAlpha: Boolean, lowOut: Array<TileGrid?>? = null): TileGrid {
         val alphaId = if (hasAlpha) baseChannels(h.mode) else null
         val w = h.width; val hh = h.height
         val grid = TileGrid(w, hh)
         val start = r.pos
         val compression = if (r.remaining >= 2) r.u16() else -1
         val readers = HashMap<Int, ChannelReader>()
-        if (h.depth == 8 && (compression == 0 || compression == 1)) {
+        val streamDeep = h.depth == 16 && (h.deep || lowOut == null)
+        if ((h.depth == 8 || streamDeep) && (compression == 0 || compression == 1)) {
             val nch = h.channels
+            val d = h.depth
             if (compression == 1) {
                 val counts = IntArray(nch * hh) { if (h.big) r.i32() else r.u16() }
                 var p = r.pos
                 for (c in 0 until nch) {
                     val starts = IntArray(hh); val lens = IntArray(hh)
                     for (y in 0 until hh) { starts[y] = p; lens[y] = counts[c * hh + y]; p += lens[y] }
-                    readers[c] = ChannelReader(r, starts[0], r.limit, 1, w, hh, 8, h.big, false, starts, lens)
+                    readers[c] = ChannelReader(r, starts[0], r.limit, 1, w, hh, d, h.big, false, starts, lens)
                 }
             } else {
-                for (c in 0 until nch) readers[c] = ChannelReader(r, r.pos + c * w * hh, r.limit, 0, w, hh, 8, h.big, false)
+                for (c in 0 until nch) readers[c] = ChannelReader(r, r.pos + c * w * (d / 8) * hh, r.limit, 0, w, hh, d, h.big, false)
             }
         } else {
             r.pos = start
-            val planes = readMerged(r, h)
+            val low = if (h.deep && lowOut != null) HashMap<Int, ByteArray>() else null
+            val planes = readMerged(r, h, low)
             val px = planesToArgb(planes, h, 0, w * hh, colorData, alphaId)
             grid.writeRect(IntRect.ofSize(w, hh), px); grid.compact()
+            if (low != null && lowOut != null) {
+                val lo = planesToArgb(low, h, 0, w * hh, colorData, alphaId)
+                if (alphaId == null) for (k in lo.indices) lo[k] = lo[k] or 0xFF000000.toInt()
+                lowOut[0] = TileGrid(w, hh).also { it.writeRect(IntRect.ofSize(w, hh), lo); it.compact() }
+            }
             return grid
         }
         val band = maxOf(1, (1 shl 20) / w)
@@ -781,13 +950,81 @@ object PsdReader {
             val planes = HashMap<Int, ByteArray>()
             for ((id, rd) in readers) runCatching { planes[id] = ByteArray((y1 - y0) * w).also { rd.rows(y0, y1, it) } }
             grid.writeRect(IntRect(0, y0, w, y1), planesToArgb(planes, h, 0, (y1 - y0) * w, colorData, alphaId))
+            if (h.deep && lowOut != null) {
+                val lp = HashMap<Int, ByteArray>()
+                for ((id, rd) in readers) runCatching { lp[id] = ByteArray((y1 - y0) * w).also { rd.rowsLow(y0, y1, it) } }
+                val lo = planesToArgb(lp, h, 0, (y1 - y0) * w, colorData, alphaId)
+                if (alphaId == null) for (k in lo.indices) lo[k] = lo[k] or 0xFF000000.toInt()
+                (lowOut[0] ?: TileGrid(w, hh).also { lowOut[0] = it }).writeRect(IntRect(0, y0, w, y1), lo)
+            }
             y0 = y1
         }
-        grid.compact()
+        grid.compact(); lowOut?.get(0)?.compact()
         return grid
     }
 
-    private fun readMerged(r: BinaryReader, h: Header): Map<Int, ByteArray> {
+    /** Alphakanäle (8 Bit, unkomprimiert oder RLE) des zusammengeführten Bildes ab Kanal [first]. */
+    private fun readAlphaChannels(r: BinaryReader, h: Header, first: Int): List<TileGrid> {
+        val w = h.width; val hh = h.height; val nch = h.channels
+        val compression = r.u16()
+        if (h.depth == 16) {
+            // 16 Bit: Zeilen mit 2·w Bytes, das obere Byte zählt
+            val rowBytes = w * 2
+            val starts = LongArray(nch * hh); val lens = IntArray(nch * hh)
+            if (compression == 1) {
+                for (i in 0 until nch * hh) lens[i] = if (h.big) r.i32() else r.u16()
+                var p = r.pos.toLong()
+                for (i in 0 until nch * hh) { starts[i] = p; p += lens[i] }
+            } else if (compression == 0) {
+                for (i in 0 until nch * hh) { starts[i] = r.pos.toLong() + i.toLong() * rowBytes; lens[i] = rowBytes }
+            } else return emptyList()
+            val buf = ByteArray(rowBytes)
+            return (first until nch).map { c ->
+                val g = TileGrid(w, hh)
+                val row = IntArray(w)
+                for (y in 0 until hh) {
+                    val i = c * hh + y
+                    if (compression == 1) PackBits.decode(r, starts[i].toInt(), lens[i], buf, 0, rowBytes) else r.copy(starts[i].toInt(), buf, 0, rowBytes)
+                    for (x in 0 until w) row[x] = buf[x * 2].toInt() and 0xFF
+                    g.writeRect(IntRect(0, y, w, y + 1), row)
+                }
+                g.compact(); g
+            }
+        }
+        val readers = HashMap<Int, ChannelReader>()
+        if (compression == 1) {
+            val counts = IntArray(nch * hh) { if (h.big) r.i32() else r.u16() }
+            var p = r.pos
+            for (c in 0 until nch) {
+                val starts = IntArray(hh); val lens = IntArray(hh)
+                for (y in 0 until hh) { starts[y] = p; lens[y] = counts[c * hh + y]; p += lens[y] }
+                if (c >= first) readers[c] = ChannelReader(r, starts[0], r.limit, 1, w, hh, 8, h.big, false, starts, lens)
+            }
+        } else if (compression == 0) {
+            for (c in first until nch) readers[c] = ChannelReader(r, r.pos + c * w * hh, r.limit, 0, w, hh, 8, h.big, false)
+        } else return emptyList()
+        return (first until nch).map { c ->
+            val g = TileGrid(w, hh)
+            val rd = readers[c]!!
+            val band = maxOf(1, (1 shl 20) / w)
+            var y0 = 0
+            while (y0 < hh) {
+                val y1 = minOf(hh, y0 + band)
+                val b = ByteArray((y1 - y0) * w); rd.rows(y0, y1, b)
+                g.writeRect(IntRect(0, y0, w, y1), IntArray(b.size) { b[it].toInt() and 0xFF })
+                y0 = y1
+            }
+            g.compact()
+            g
+        }
+    }
+
+    private fun readMerged(r: BinaryReader, h: Header, low: HashMap<Int, ByteArray>? = null): Map<Int, ByteArray> {
+        fun conv(raw: ByteArray, c: Int): ByteArray {
+            val w = h.width; val hh = h.height
+            if (low != null && h.depth == 16) { val lo = ByteArray(w * hh); low[c] = lo; return ByteArray(w * hh) { i -> lo[i] = raw[i * 2 + 1]; raw[i * 2] } }
+            return to8Bit(raw, w, hh, h.depth, gamma = h.depth == 32 && c < 3)
+        }
         val planes = HashMap<Int, ByteArray>()
         if (r.remaining < 2) return planes
         val compression = r.u16()
@@ -800,7 +1037,7 @@ object PsdReader {
                 val raw = ByteArray(rowBytes * hh)
                 val n = minOf(raw.size, r.remaining)
                 r.copy(r.pos, raw, 0, n); r.pos += n
-                planes[c] = to8Bit(raw, w, hh, h.depth, gamma = h.depth == 32 && c < 3)
+                planes[c] = conv(raw, c)
             }
             1 -> {
                 val counts = IntArray(nch * hh) { if (h.big) r.i32() else r.u16() }
@@ -811,7 +1048,7 @@ object PsdReader {
                         PackBits.decode(r, r.pos, minOf(cnt, r.remaining), raw, y * rowBytes, rowBytes)
                         r.pos = minOf(r.pos + cnt, r.limit)
                     }
-                    planes[c] = to8Bit(raw, w, hh, h.depth, gamma = h.depth == 32 && c < 3)
+                    planes[c] = conv(raw, c)
                 }
             }
             2, 3 -> {
@@ -820,7 +1057,7 @@ object PsdReader {
                 for (c in 0 until nch) {
                     val raw = all.copyOfRange(c * rowBytes * hh, (c + 1) * rowBytes * hh)
                     if (compression == 3) unpredict(raw, w, hh, h.depth)
-                    planes[c] = to8Bit(raw, w, hh, h.depth, gamma = h.depth == 32 && c < 3)
+                    planes[c] = conv(raw, c)
                 }
             }
         }

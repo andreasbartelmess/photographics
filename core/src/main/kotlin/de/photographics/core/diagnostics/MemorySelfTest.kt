@@ -122,6 +122,37 @@ object MemorySelfTest {
                 ed.contentAwareFill()
                 ed.deselect()
             }
+            step("Auswahl kopieren und einfügen") {
+                ed.setSelection(de.photographics.core.selection.Selection.rect(doc.width, doc.height, nw * 0.1f, nh * 0.1f, nw * 0.6f, nh * 0.6f))
+                val clip = checkNotNull(ed.copy()) { "nichts kopiert" }
+                ed.paste(clip, inPlace = true)
+            }
+            step("Auswahl schwebend transformieren") {
+                ed.setActive(doc.root.children.first { it is de.photographics.core.doc.PixelLayer })
+                ed.setSelection(de.photographics.core.selection.Selection.ellipse(doc.width, doc.height, nw * 0.2f, nh * 0.2f, nw * 0.7f, nh * 0.7f))
+                val f = checkNotNull(ed.floatSelection()) { "nichts angehoben" }
+                f.layer.transform = f.layer.transform.then(de.photographics.core.image.Affine.around(nw / 2.0, nh / 2.0, de.photographics.core.image.Affine.rotate(12.0)))
+                ed.commitFloating(f)
+                ed.deselect()
+            }
+            step("Filtergalerie (Aquarell + Struktur)") {
+                ed.setActive(doc.root.children.first { it is de.photographics.core.doc.PixelLayer })
+                val g = de.photographics.core.filters.Gallery
+                val chain = de.photographics.core.filters.GalleryChain(listOf("watercolor", "texturizer").map { id -> g.byId(id)!!.let { de.photographics.core.filters.GalleryEffect(it, it.defaults()) } })
+                val (tx, _) = checkNotNull(ed.previewFilter(chain)) { "keine Pixelebene" }
+                ed.commitFilter(tx, "Filtergalerie")
+            }
+            step("Formen, Pfade und Alphakanal") {
+                val v = de.photographics.core.vector.VectorPath
+                ed.addShapeLayer(v.ellipse(nw * 0.1, nh * 0.1, nw * 0.9, nh * 0.9), 0xFF3366CC.toInt(), de.photographics.core.vector.ShapeStroke(40f, 0xFFFFFFFF.toInt()))
+                de.photographics.core.render.Compositor.renderBands(doc, doc.bounds) { _, _ -> }
+                ed.setWorkPath(v.polygon(0.0, 0.0, nw.toDouble(), nh.toDouble(), 7, 0.5))
+                ed.selectionFromPath(doc.workPath!!)
+                ed.saveSelectionAsChannel()
+                ed.setActive(doc.root.children.first { it is de.photographics.core.doc.PixelLayer })
+                ed.strokePath(doc.workPath!!, 0xFFFF0000.toInt(), 30f)
+                ed.deselect()
+            }
             step("Farbtabelle (LUT) als Ebene") { ed.addAdjustmentLayer(de.photographics.core.adjust.ColorLookupAdj()) }
             step("Kanalkurven + Histogramm") {
                 val l = ed.addAdjustmentLayer(de.photographics.core.adjust.CurvesAdj(red = listOf(0 to 0, 128 to 160, 255 to 255)))
@@ -138,6 +169,17 @@ object MemorySelfTest {
                 check(l.effects?.visible == true) { "Effekte nicht gelesen" }
                 de.photographics.core.render.Compositor.renderBands(doc, doc.bounds) { _, _ -> }
             }
+            step("Ebenenstil: Kante, Glanz, Verlauf (mit Verlauf)") {
+                val l = doc.root.children.filterIsInstance<de.photographics.core.doc.RasterLayer>().last()
+                val fx = (l.effects ?: de.photographics.core.doc.LayerEffects()).copy(
+                    bevel = de.photographics.core.doc.LayerEffects.Bevel(size = 30.0, soften = 4.0),
+                    satin = de.photographics.core.doc.LayerEffects.Satin(distance = 40.0, size = 30.0),
+                    gradientOverlay = de.photographics.core.doc.LayerEffects.GradientOverlay(opacity = 0.4f),
+                )
+                ed.setEffects(l, fx)
+                check(l.effects?.bevel != null && l.effects?.gradientOverlay != null) { "Ebenenstil nicht gesetzt" }
+                de.photographics.core.render.Compositor.renderBands(doc, doc.bounds) { _, _ -> }
+            }
             step("In Adobe RGB umwandeln") {
                 ed.convertToProfile(de.photographics.core.color.IccProfiles.Builtin.ADOBE_RGB.profile, de.photographics.core.color.RenderingIntent.RELATIVE, true)
             }
@@ -148,10 +190,40 @@ object MemorySelfTest {
             step("Alles wiederholen") { while (ed.history.canRedo) ed.redo() }
             check(doc.width == nw + 200) { "Wiederholen: falsche Breite ${doc.width}" }
             step("Auf Hintergrund reduzieren") { ed.flatten() }
+            step("Füllwerkzeug, Fläche füllen, Magischer Radiergummi") {
+                val l = doc.root.children.filterIsInstance<de.photographics.core.doc.PixelLayer>().first()
+                doc.activeLayer = l
+                // Innerhalb einer Auswahl (ein Viertel des Bildes), Farben aus allen Ebenen gesucht
+                ed.setSelection(Selection.rect(doc.width, doc.height, nw * 0.25f, nh * 0.25f, nw * 0.75f, nh * 0.75f))
+                ed.bucketFill(nw / 2, nh / 2, 0xFF336699.toInt(), 20, contiguous = true, allLayers = true)
+                ed.fillArea(0xFF808080.toInt(), de.photographics.core.render.BlendMode.MULTIPLY, 0.5f)
+                ed.magicErase(nw / 2, nh / 2, 16, contiguous = true, allLayers = true)
+                ed.deselect()
+            }
+            step("Schnellauswahl (großer Pinsel)") {
+                val l = doc.root.children.filterIsInstance<de.photographics.core.doc.RasterLayer>().first()
+                val sel = de.photographics.core.selection.QuickSelect.select(l.raster, floatArrayOf(nw * 0.2f, nh * 0.5f, nw * 0.6f, nh * 0.55f), 120f)
+                check(!sel.isEmpty) { "Schnellauswahl leer" }
+            }
             step("PSD öffnen (speicherabgebildet)") {
                 val d = RandomAccessFile(psd, "r").use { f -> PsdReader.read(f.channel.map(FileChannel.MapMode.READ_ONLY, 0, f.length())) }
                 check(d.width == nw + 200) { "PSD: falsche Breite ${d.width}" }
                 check(d.colorProfile.description == "Adobe RGB (1998)") { "PSD: Profil fehlt (${d.colorProfile.description})" }
+            }
+            step("16 Bit/Kanal: Umwandeln, Verlauf, Korrektur") {
+                ed.setBitDepth(16)
+                ed.setActive(doc.root.children.first { it is de.photographics.core.doc.PixelLayer })
+                ed.fillGradient(PaintTarget.PIXELS, de.photographics.core.editor.Gradient(de.photographics.core.editor.GradientType.LINEAR,
+                    0f, 0f, nw.toFloat(), 0f, 0xFF102030.toInt(), 0x80E0D0C0.toInt()), 0.7f)
+                val l = doc.activeLayer as de.photographics.core.doc.PixelLayer
+                val (tx, _) = de.photographics.core.filters.FilterRunner.apply(doc, l, de.photographics.core.filters.Levels(10, 240, 1.2f, 0, 255))
+                ed.commitFilter(tx, "Tonwert 16 Bit")
+                check(l.low != null) { "untere Bits fehlen" }
+            }
+            step("PSD mit 16 Bit speichern und öffnen") {
+                psd.outputStream().buffered().use { PsdWriter.write(doc, it, File(scratch, "psd")) }
+                val d = RandomAccessFile(psd, "r").use { f -> PsdReader.read(f.channel.map(FileChannel.MapMode.READ_ONLY, 0, f.length())) }
+                check(d.bitDepth == 16 && d.pixelLayers().any { it.low != null }) { "PSD: 16 Bit fehlen" }
             }
             psd.delete()
             val tif = File(scratch, "selbsttest.tif")

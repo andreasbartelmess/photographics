@@ -12,8 +12,10 @@ import kotlin.math.roundToInt
  * Pinsel: trägt die Vordergrundfarbe im Malmodus der Einstellungen auf (auf Masken als Grauwert).
  * [background] dient der Farbdynamik (Vorder-/Hintergrund-Zufall).
  */
-class BrushTool(private val color: Int, private val background: Int = color) : PaintTool() {
-    override val label = tr("Pinsel")
+class BrushTool(private val color: Int, private val background: Int = color, pencil: Boolean = false) : PaintTool() {
+    override val label = if (pencil) tr("Buntstift") else tr("Pinsel")
+    /** Buntstift: harte Kante ohne Glättung, auch bei 1 Pixel Größe. */
+    override val aliased = pencil
     override val supportsMask = true
     private val gray = (Colors.luma(Colors.r(color) / 255f, Colors.g(color) / 255f, Colors.b(color) / 255f) * 255f).roundToInt()
 
@@ -34,6 +36,45 @@ class EraserTool : PaintTool() {
     override fun apply(ctx: StrokeContext, x: Int, y: Int, orig: Int, amount: Float): Int =
         if (ctx.target == PaintTarget.MASK) (orig + (255 - orig) * amount).roundToInt()
         else Colors.withAlpha(orig, (Colors.a(orig) * (1f - amount)).roundToInt())
+}
+
+/**
+ * Hintergrund-Radiergummi: nimmt bei jedem Abdruck die Farbe unter der Pinselmitte auf (bzw. nur
+ * beim ersten, [once]) und radiert innerhalb des Pinsels nur Pixel, die höchstens [tolerance]
+ * (0..255) davon abweichen. [protect]: diese Farbe nie radieren (Vordergrundfarbe schützen).
+ */
+class BackgroundEraserTool(private val tolerance: Int, private val once: Boolean = false, private val protect: Int? = null) : PaintTool() {
+    override val label = tr("Hintergrund-Radiergummi")
+    override val customDab = true
+    private var sample: Int? = null
+
+    override fun apply(ctx: StrokeContext, x: Int, y: Int, orig: Int, amount: Float): Int = orig
+
+    private fun near(a: Int, b: Int, tol: Int): Boolean =
+        kotlin.math.abs(Colors.r(a) - Colors.r(b)) <= tol && kotlin.math.abs(Colors.g(a) - Colors.g(b)) <= tol && kotlin.math.abs(Colors.b(a) - Colors.b(b)) <= tol
+
+    override fun dab(ctx: StrokeContext, cx: Float, cy: Float, radius: Float, shape: (Float) -> Float) {
+        val g = ctx.grid
+        val ix = cx.toInt().coerceIn(0, g.width - 1); val iy = cy.toInt().coerceIn(0, g.height - 1)
+        val ref = if (once && sample != null) sample!! else ctx.original(ix, iy).also { sample = it }
+        if (Colors.a(ref) == 0) return
+        val x0 = maxOf(0, (cx - radius).toInt()); val x1 = minOf(g.width, (cx + radius).toInt() + 1)
+        val y0 = maxOf(0, (cy - radius).toInt()); val y1 = minOf(g.height, (cy + radius).toInt() + 1)
+        val opacity = ctx.settings.opacity
+        for (y in y0 until y1) for (x in x0 until x1) {
+            val k = shape(kotlin.math.hypot(x + 0.5f - cx, y + 0.5f - cy) / radius) * opacity * ctx.selectionFactor(x, y)
+            if (k <= 0f) continue
+            val orig = ctx.original(x, y)
+            if (Colors.a(orig) == 0 || !near(orig, ref, tolerance)) continue
+            if (protect != null && near(orig, protect, 8)) continue
+            // Deckung des Strichs wächst nur (mehrfaches Überstreichen radiert nicht stärker als der Pinsel)
+            val old = ctx.coverage[x, y] / 65535f
+            val c = maxOf(old, k)
+            if (c <= old) continue
+            ctx.coverage[x, y] = (c * 65535f).toInt()
+            g[x, y] = Colors.withAlpha(orig, (Colors.a(orig) * (1f - c) + 0.5f).toInt())
+        }
+    }
 }
 
 /**

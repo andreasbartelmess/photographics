@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.ContentCopy
@@ -105,6 +106,8 @@ fun LayersPanel(
     onAddAdjustment: () -> Unit = {},
 ) {
     var renameTarget by remember { mutableStateOf<LayerItem?>(null) }
+    var styleTarget by remember { mutableStateOf<Pair<Int, de.photographics.core.doc.LayerEffects>?>(null) }
+    val openStyle = { id: Int -> vm.openLayerStyle(id) { styleTarget = id to it } }
     val active = state.layers.firstOrNull { it.id == state.activeLayerId }
 
     Surface(
@@ -118,14 +121,21 @@ fun LayersPanel(
         // damit die Ebenenliste Platz behält
         val roomy = maxHeight >= 560.dp
         var showProps by remember(roomy) { mutableStateOf(roomy) }
+        var tab by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableIntStateOf(0) }
         Column(Modifier.fillMaxSize()) {
+            // Ebenen | Kanäle | Pfade (wie Photoshops Bedienfeldgruppe)
+            androidx.compose.material3.SecondaryTabRow(selectedTabIndex = tab, containerColor = androidx.compose.ui.graphics.Color.Transparent) {
+                for ((k, t) in listOf(tr("Ebenen"), tr("Kanäle"), tr("Pfade")).withIndex()) androidx.compose.material3.Tab(tab == k, { tab = k }, text = { Text(t) })
+            }
+            if (tab == 1) ChannelsPane(state, vm) else if (tab == 2) PathsPane(state, vm) else Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(tr("Ebenen"), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                Spacer(Modifier.weight(1f))
                 if (active != null) {
                     IconToggleButton(checked = showProps, onCheckedChange = { showProps = it }) {
                         Icon(Icons.Filled.Tune, tr("Ebeneneigenschaften"))
                     }
                 }
+                if (active != null && active.type.hasStyle) TipIconButton(Icons.Filled.AutoAwesome, tr("Ebenenstil")) { openStyle(active.id) }
                 TipIconButton(Icons.Filled.Contrast, tr("Neue Einstellungsebene")) { onAddAdjustment() }
                 TipIconButton(Icons.Filled.CreateNewFolder, tr("Neue Gruppe")) { vm.addGroup() }
                 TipIconButton(Icons.Filled.Add, tr("Neue Ebene")) { vm.addLayer() }
@@ -154,6 +164,7 @@ fun LayersPanel(
                         maskTargeted = item.id == state.activeLayerId && state.paintTarget == PaintTarget.MASK,
                         vm = vm,
                         onRename = { renameTarget = item },
+                        onStyle = { openStyle(item.id) },
                     )
                 }
             }
@@ -173,10 +184,14 @@ fun LayersPanel(
             }
         }
         }
+        }
     }
 
     renameTarget?.let { t ->
         RenameDialog(t.name, onRename = { vm.renameLayer(t.id, it); renameTarget = null }, onDismiss = { renameTarget = null })
+    }
+    styleTarget?.let { (id, fx) ->
+        LayerStyleDialog(fx, onPreview = { vm.previewLayerStyle(id, it) }, onFinish = { vm.finishLayerStyle(id, it); styleTarget = null })
     }
 }
 
@@ -249,7 +264,7 @@ private fun PropertySlider(label: String, value: Float, onDone: () -> Unit, onCh
 }
 
 @Composable
-private fun LayerRow(item: LayerItem, selected: Boolean, maskTargeted: Boolean, vm: EditorViewModel, onRename: () -> Unit) {
+private fun LayerRow(item: LayerItem, selected: Boolean, maskTargeted: Boolean, vm: EditorViewModel, onRename: () -> Unit, onStyle: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val cs = MaterialTheme.colorScheme
     Row(
@@ -330,6 +345,7 @@ private fun LayerRow(item: LayerItem, selected: Boolean, maskTargeted: Boolean, 
                 @Composable
                 fun act(label: String, f: () -> Unit) = DropdownMenuItem(text = { Text(label) }, onClick = { menu = false; vm.selectLayer(item.id); f() })
                 act(tr("Umbenennen …"), onRename)
+                if (item.type.hasStyle) act(tr("Ebenenstil") + " …", onStyle)
                 act(if (item.clipped) tr("Schnittmaske zurückwandeln (Strg+Alt+G)") else tr("Schnittmaske erstellen (Strg+Alt+G)")) { vm.toggleClipping(item.id) }
                 if (item.hasMask) act(if (item.maskLinked) tr("Maske von Ebene lösen") else tr("Maske mit Ebene verbinden")) { vm.toggleMaskLink(item.id) }
                 act(if (item.lockTransparency) tr("Transparenz freigeben") else tr("Transparenz fixieren")) { vm.toggleLockTransparency(item.id) }

@@ -93,6 +93,9 @@ data class AppSettings(
     val conversionBpc: Boolean = true,
     /** Beim Export (PNG/JPEG) in sRGB umwandeln statt das Dokumentprofil einzubetten. */
     val exportToSrgb: Boolean = false,
+    /** Exportieren als: zuletzt gewähltes Format und JPEG-Qualität (1..100). */
+    val exportJpeg: Boolean = true,
+    val jpegQuality: Int = 90,
     // Ansicht: Lineale, Hilfslinien, Ausrichten
     val showRulers: Boolean = true,
     val showGuides: Boolean = true,
@@ -164,6 +167,8 @@ class SettingsStore(context: Context) {
             conversionIntent = enumOf("conversionIntent", d.conversionIntent),
             conversionBpc = prefs.getBoolean("conversionBpc", d.conversionBpc),
             exportToSrgb = prefs.getBoolean("exportToSrgb", d.exportToSrgb),
+            exportJpeg = prefs.getBoolean("exportJpeg", d.exportJpeg),
+            jpegQuality = prefs.getInt("jpegQuality", d.jpegQuality).coerceIn(1, 100),
             showRulers = prefs.getBoolean("showRulers", d.showRulers),
             showGuides = prefs.getBoolean("showGuides", d.showGuides),
             snap = prefs.getBoolean("snap", d.snap),
@@ -200,6 +205,8 @@ class SettingsStore(context: Context) {
             .putString("conversionIntent", s.conversionIntent.name)
             .putBoolean("conversionBpc", s.conversionBpc)
             .putBoolean("exportToSrgb", s.exportToSrgb)
+            .putBoolean("exportJpeg", s.exportJpeg)
+            .putInt("jpegQuality", s.jpegQuality)
             .putBoolean("showRulers", s.showRulers)
             .putBoolean("showGuides", s.showGuides)
             .putBoolean("snap", s.snap)

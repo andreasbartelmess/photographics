@@ -14,8 +14,8 @@ android {
         applicationId = "de.photographics.app"
         minSdk = 27 // SharedMemory für den nativen Kachelspeicher
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.3.0"
+        versionCode = 3
+        versionName = "0.4.0"
         // Adresse des Quellcodes (in gradle.properties: photographics.sourceUrl=https://github.com/…)
         buildConfigField("String", "SOURCE_URL", "\"${providers.gradleProperty("photographics.sourceUrl").getOrElse("")}\"")
 

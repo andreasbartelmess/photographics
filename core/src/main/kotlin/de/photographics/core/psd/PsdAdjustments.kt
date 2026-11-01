@@ -182,12 +182,16 @@ object PsdAdjustments {
                 val curves = listOf(a.master, a.red, a.green, a.blue)
                 var bits = 0
                 curves.forEachIndexed { i, c -> if (c != null) bits = bits or (1 shl i) }
-                w.u8(0); w.u16(1); w.i32(bits)
-                for (c in curves) if (c != null) {
+                fun points(c: List<Pair<Int, Int>>) {
                     val pts = c.sortedBy { it.first }
                     w.u16(pts.size)
                     for ((inp, out) in pts) { w.u16(out); w.u16(inp) }
                 }
+                w.u8(0); w.u16(1); w.i32(bits)
+                for (c in curves) if (c != null) points(c)
+                // Erweiterung „Crv “ (Version 4) mit denselben Kurven, wie Photoshop sie zusätzlich schreibt
+                w.ascii("Crv "); w.u16(4); w.i32(curves.count { it != null })
+                curves.forEachIndexed { i, c -> if (c != null) { w.u16(i); points(c) } }
                 listOf("curv" to w.toByteArray())
             }
             is HueSaturationAdj -> {

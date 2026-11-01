@@ -59,50 +59,6 @@ import kotlinx.coroutines.withContext
 import java.text.DateFormat
 import java.util.Date
 
-/** Dokumentvorgabe; [print]: Größe in cm anzeigen. */
-private data class Preset(val label: String, val w: Int, val h: Int, val dpi: Float = 72f, val print: Boolean = false)
-
-/** Vorgaben nach Einsatzzweck, wie im „Neues Dokument“-Dialog von Photoshop. */
-private val PRESET_GROUPS = listOf(
-    tr("Foto") to listOf(
-        Preset(tr("Kleinbild 3:2 · 24 MP"), 6000, 4000, 300f),
-        Preset(tr("Kleinbild 3:2 · 45 MP"), 8256, 5504, 300f),
-        Preset(tr("Mittelformat 4:3"), 8256, 6192, 300f),
-        Preset(tr("Micro Four Thirds 4:3"), 5184, 3888, 300f),
-        Preset(tr("Smartphone 4:3"), 4032, 3024, 300f),
-        Preset(tr("Großformat 5:4"), 5000, 4000, 300f),
-        Preset(tr("Quadrat 1:1"), 4000, 4000, 300f),
-        Preset(tr("Panorama 3:1"), 9000, 3000, 300f),
-    ),
-    tr("Druck · 300 dpi") to listOf(
-        Preset("A5", 1748, 2480, 300f, print = true),
-        Preset("A4", 2480, 3508, 300f, print = true),
-        Preset("A3", 3508, 4961, 300f, print = true),
-        Preset(tr("Postkarte 10 × 15"), 1181, 1772, 300f, print = true),
-        Preset(tr("Abzug 13 × 18"), 1535, 2126, 300f, print = true),
-        Preset(tr("Abzug 20 × 30"), 2362, 3543, 300f, print = true),
-        Preset(tr("Poster 30 × 45"), 3543, 5315, 300f, print = true),
-        Preset(tr("US Letter"), 2550, 3300, 300f, print = true),
-    ),
-    tr("Bildschirm & Video") to listOf(
-        Preset(tr("Full HD"), 1920, 1080),
-        Preset("4K UHD", 3840, 2160),
-        Preset("DCI 4K", 4096, 2160),
-        Preset("5K", 5120, 2880),
-        Preset("QHD", 2560, 1440),
-        Preset(tr("Tablet 16:10"), 2560, 1600),
-        Preset(tr("Smartphone 20:9"), 1080, 2400),
-    ),
-    tr("Social Media") to listOf(
-        Preset(tr("Hochformat 4:5"), 1080, 1350),
-        Preset(tr("Quadrat"), 1080, 1080),
-        Preset(tr("Story / Reel 9:16"), 1080, 1920),
-        Preset(tr("Video-Vorschau 16:9"), 1280, 720),
-        Preset(tr("Pin 2:3"), 1000, 1500),
-        Preset(tr("Profil-Banner 4:1"), 1584, 396),
-    ),
-)
-
 /** Startbildschirm: Neu aus Vorlage, Öffnen, Galerie, zuletzt verwendete Dateien. */
 @Composable
 fun StartScreen(
@@ -151,7 +107,7 @@ fun StartScreen(
                 }
             }
             // Je Gruppe eine Reihe gleich großer Karten (seitlich scrollbar): keine halb gefüllten Zeilen
-            for ((group, presets) in PRESET_GROUPS) {
+            for ((group, presets) in de.photographics.core.doc.DocPresets.groups) {
                 item(span = { GridItemSpan(maxLineSpan) }, key = "gruppe-$group") {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(group, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -174,7 +130,7 @@ private fun SectionTitle(text: String) =
     Text(text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
 
 @Composable
-private fun PresetCard(p: Preset, onClick: () -> Unit) {
+private fun PresetCard(p: de.photographics.core.doc.DocPreset, onClick: () -> Unit) {
     ElevatedCard(onClick = onClick, modifier = Modifier.width(176.dp)) {
         Column(Modifier.padding(14.dp)) {
             // Seitenverhältnis in einen festen Rahmen eingepasst: alle Karten gleich hoch, Vorschau mittig
@@ -191,17 +147,11 @@ private fun PresetCard(p: Preset, onClick: () -> Unit) {
             Spacer(Modifier.height(10.dp))
             Text(p.label, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                if (p.print) tr("{0} × {1} cm", cm(p.w, p.dpi), cm(p.h, p.dpi)) else tr("{0} × {1} px", p.w, p.h),
+                p.sizeLabel,
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
             )
         }
     }
-}
-
-/** Pixel → cm bei [dpi], auf eine Nachkommastelle („29,7“, „21“). */
-private fun cm(px: Int, dpi: Float): String {
-    val v = Math.round(px / dpi * 25.4f) / 10f
-    return if (v % 1f == 0f) v.toInt().toString() else v.toString().replace('.', ',')
 }
 
 @Composable

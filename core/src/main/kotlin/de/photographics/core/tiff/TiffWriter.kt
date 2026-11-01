@@ -34,7 +34,10 @@ object TiffWriter {
         val hasAlpha = !compositeIsOpaque(doc)
         val spp = if (hasAlpha) 4 else 3
         val w = doc.width; val h = doc.height
-        val rowBytes = w * spp
+        // 16-Bit-Dokument: 16 Bit je Kanal (Big Endian) aus dem Gleitkomma-Ergebnis
+        val deep = doc.bitDepth == 16
+        val bytesPerSample = if (deep) 2 else 1
+        val rowBytes = w * spp * bytesPerSample
         val rowsPerStrip = (256 * 1024 / rowBytes).coerceIn(1, h)
         val strips = (h + rowsPerStrip - 1) / rowsPerStrip
         val stripCounts = LongArray(strips)
@@ -46,18 +49,29 @@ object TiffWriter {
                 val raw = ByteArray(rowsPerStrip * rowBytes)
                 for (s in 0 until strips) {
                     val y0 = s * rowsPerStrip; val y1 = minOf(h, y0 + rowsPerStrip)
-                    val px = Compositor.renderArgb(doc, IntRect(0, y0, w, y1))
                     val n = (y1 - y0) * rowBytes
                     var o = 0
-                    for (c in px) {
-                        raw[o++] = (c shr 16).toByte(); raw[o++] = (c shr 8).toByte(); raw[o++] = c.toByte()
-                        if (hasAlpha) raw[o++] = (c ushr 24).toByte()
+                    if (deep) {
+                        val s16 = PsdWriter.renderDeep(doc, IntRect(0, y0, w, y1))
+                        for (k in 0 until w * (y1 - y0)) for (c in 0 until spp) { val v = s16[k * 4 + c].toInt(); raw[o++] = (v ushr 8).toByte(); raw[o++] = v.toByte() }
+                    } else {
+                        val px = Compositor.renderArgb(doc, IntRect(0, y0, w, y1))
+                        for (c in px) {
+                            raw[o++] = (c shr 16).toByte(); raw[o++] = (c shr 8).toByte(); raw[o++] = c.toByte()
+                            if (hasAlpha) raw[o++] = (c ushr 24).toByte()
+                        }
                     }
                     if (compression != Compression.NONE) {
-                        // Horizontaler Prädiktor (rückwärts, damit die Originalwerte als Basis dienen)
+                        // Horizontaler Prädiktor (rückwärts, damit die Originalwerte als Basis dienen), je Abtastwert
                         for (r in 0 until y1 - y0) {
                             val b = r * rowBytes
-                            for (i in rowBytes - 1 downTo spp) raw[b + i] = (raw[b + i] - raw[b + i - spp]).toByte()
+                            if (deep) for (i in w * spp - 1 downTo spp) {
+                                val cur = ((raw[b + i * 2].toInt() and 0xFF) shl 8) or (raw[b + i * 2 + 1].toInt() and 0xFF)
+                                val prev = ((raw[b + (i - spp) * 2].toInt() and 0xFF) shl 8) or (raw[b + (i - spp) * 2 + 1].toInt() and 0xFF)
+                                val d = cur - prev
+                                raw[b + i * 2] = (d ushr 8).toByte(); raw[b + i * 2 + 1] = d.toByte()
+                            }
+                            else for (i in rowBytes - 1 downTo spp) raw[b + i] = (raw[b + i] - raw[b + i - spp]).toByte()
                         }
                     }
                     val enc = when (compression) {
@@ -69,7 +83,7 @@ object TiffWriter {
                 }
             }
             // 2. Ebenen (Photoshop-Format) vorbereiten
-            if (layers) layerInfo = PsdWriter.layerInfo(doc, tmpDir, hasAlpha)
+            if (layers) layerInfo = PsdWriter.layerInfo(doc, tmpDir, hasAlpha, deep)
             val layerBlockSize = layerInfo?.let { (MAGIC.length + 1) + 12 + pad4(it.size) } ?: 0L
 
             // 3. Aufbau berechnen: Kopf, IFD, ausgelagerte Werte, Streifen, Ebenenblock
@@ -79,7 +93,7 @@ object TiffWriter {
             val tags = ArrayList<Tag>()
             tags += Tag.long(254, 0)
             tags += Tag.long(256, w.toLong()); tags += Tag.long(257, h.toLong())
-            tags += Tag.shorts(258, IntArray(spp) { 8 })
+            tags += Tag.shorts(258, IntArray(spp) { if (deep) 16 else 8 })
             tags += Tag.short(259, compression.code)
             tags += Tag.short(262, 2)
             val stripOffsetsTag = Tag.longs(273, LongArray(strips)); tags += stripOffsetsTag

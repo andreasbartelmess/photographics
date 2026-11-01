@@ -2,12 +2,13 @@
 
 *[English version](README.md)* · [Website](https://photographics.andreasbartelmess.de)
 
-**Ebenenbasierter Fotoeditor für Android, gemacht für professionelle Workflows unterwegs.**
+**Ebenenbasierter Fotoeditor für Android und Linux, gemacht für professionelle Workflows unterwegs.**
 Retusche, Montage und Farbkorrektur mit dem Stift – mit Ebenen, Masken, Einstellungsebenen, Mischmodi und
 Farbmanagement; Dateien wandern als PSD, TIFF oder GIMP-Datei zwischen Schreibtisch und unterwegs.
-Kotlin + Jetpack Compose, minSdk 27 (Android 8.1).
+Kotlin + Jetpack Compose, minSdk 27 (Android 8.1). Seit 0.4 auch für Linux (GNOME, GTK 4/libadwaita,
+als Flatpak) mit demselben Kern.
 
-> **Vorschau (Version 0.3).** Vieles funktioniert, manches fehlt noch oder ändert sich. Bitte arbeite
+> **Vorschau (Version 0.4).** Vieles funktioniert, manches fehlt noch oder ändert sich. Bitte arbeite
 > nicht ohne Sicherungskopie an wichtigen Dateien. Ich freue mich über Rückmeldungen, Fehlerberichte,
 > Mitentwicklerinnen und Mitentwickler und alle, die das Projekt unterstützen möchten: über ein
 > [Issue](../../issues/new/choose) oder an info@andreasbartelmess.de. Wobei Hilfe gebraucht wird, steht
@@ -37,6 +38,17 @@ dann *Entwickleroptionen → USB-Debugging* aktivieren und das Tablet per USB an
 (Zugriff am Tablet bestätigen). `./build.sh` installiert und startet die App.
 Kabellos geht es mit *Debugging über WLAN* und `~/Android/Sdk/platform-tools/adb pair <IP:Port>`.
 Alternativ das APK auf das Tablet kopieren und dort öffnen („Unbekannte Quellen“ erlauben).
+
+**Linux (GNOME):** Modul `:gnome` (Kotlin + GTK 4/libadwaita über java-gi, braucht zur Laufzeit Java 25).
+
+```bash
+./gradlew :gnome:run --args="bild.psd"   # aus dem Quelltext starten
+gnome/install.sh                         # für den aktuellen Benutzer installieren (~/.local)
+gnome/flatpak/build.sh                   # Flatpak dist/photographics-<version>.flatpak
+```
+
+Für das Flatpak werden `org.gnome.Sdk//51` und `org.freedesktop.Sdk.Extension.openjdk25//26.08` von
+Flathub gebraucht; das Manifest für einen Flathub-Build liegt in `gnome/flatpak/`.
 
 **Mit Android Studio:** *Open* → diesen Ordner, dann ▶ *Run*.
 
@@ -396,16 +408,21 @@ Druckerei. Der Proof betrifft nur die Anzeige – Export und gespeicherte Dateie
 
 Ohne feste Termine, die Reihenfolge kann sich ändern. Vorschläge sind willkommen.
 
+- **Erledigt in 0.4:** Linux-Version (GNOME) als Flatpak; Ebenenstile bearbeiten, auch Abgeflachte
+  Kante, Glanz und Verlaufsüberlagerung; Formebenen, Zeichenstift, Pfade und Alphakanäle;
+  Filtergalerie (47 Effekte); Bearbeitung mit 16 Bit; Füllwerkzeug, Fläche füllen, Buntstift,
+  Hintergrund- und Magischer Radiergummi; Schnellauswahl, Polygon-Lasso; Kopieren/Einfügen und
+  schwebende Auswahl
 - **Erledigt in 0.3:** Verschieben, Transformieren und Deckkraft live über die GPU; Ebeneneffekte
   anzeigen; Oberfläche auf Englisch; Verflüssigen; Verlauf, Zauberstab, Objektauswahl und automatische
   Ebenenauswahl; Kurven je Kanal mit Histogramm; besseres inhaltsbasiertes Füllen
 - **Als Nächstes:** automatisches Sichern und Wiederherstellen nach Abstürzen; eigene Schriften
   (TTF/OTF); Protokoll-Panel mit Schnappschüssen; Motiv und Himmel per KI auswählen (Modell auf dem Gerät),
   Auswahlkante für Haare verbessern
-- **Danach:** Frequenztrennung als Retusche-Hilfe; Ebeneneffekte
-  bearbeiten und neu anlegen; Stapelexport (mehrere Größen/Formate auf einmal); Zeichenstift und Pfade
-- **Später:** Bearbeitung mit 16 Bit pro Kanal; CMYK-Dokumente und -Export; Anzeige über das Farbprofil
-  des Bildschirms; vollständiges Zusammensetzen auf der GPU; Versionen für Linux (GNOME) und iPad
+- **Danach:** Frequenztrennung als Retusche-Hilfe; Stapelexport (mehrere Größen/Formate auf einmal);
+  Muster und Musterüberlagerung
+- **Später:** CMYK-Dokumente und -Export; Anzeige über das Farbprofil des Bildschirms; vollständiges
+  Zusammensetzen auf der GPU; Version für iPad
 
 ## Über mich
 

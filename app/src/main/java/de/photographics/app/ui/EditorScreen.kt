@@ -7,6 +7,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.FormatColorFill
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Transform
@@ -145,7 +147,7 @@ private val OPEN_TYPES = arrayOf(
     "image/*", "image/vnd.adobe.photoshop", "application/x-photoshop", "application/photoshop", "application/psd", "image/x-xcf", "application/octet-stream",
 )
 
-private enum class DialogKind { NEW, IMAGE_SIZE, CANVAS_SIZE, COLOR, TEXT_COLOR, FEATHER, SHORTCUTS, AI_MODELS, SETTINGS, ASSIGN_PROFILE, CONVERT_PROFILE, TIFF_OPTIONS, BG_COLOR, BRUSH, SWATCHES, CROP_SIZE, ROTATE, NEW_GUIDE, GUIDE_LAYOUT }
+private enum class DialogKind { FILL, EXPORT, NEW, IMAGE_SIZE, CANVAS_SIZE, COLOR, TEXT_COLOR, FEATHER, SHORTCUTS, AI_MODELS, SETTINGS, ASSIGN_PROFILE, CONVERT_PROFILE, TIFF_OPTIONS, BG_COLOR, BRUSH, SWATCHES, CROP_SIZE, ROTATE, NEW_GUIDE, GUIDE_LAYOUT }
 
 /** Ab dieser Breite wird das Ebenen-Panel fest angedockt (Tablet quer, große Tablets hoch). */
 private val DOCK_WIDTH = 840.dp
@@ -176,6 +178,7 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
     var dialog by remember { mutableStateOf<DialogKind?>(null) }
     var activeSpec by remember { mutableStateOf<FilterSpec?>(null) }
     var adjustSheet by remember { mutableStateOf(false) }
+    var galleryOpen by remember { mutableStateOf(false) }
     var adjustAsLayer by remember { mutableStateOf(true) }
     var overflow by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
@@ -276,9 +279,13 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                 Key.D -> vm.deselect()
                 Key.Backspace, Key.Delete -> vm.fillSelected(background = true)
                 Key.I -> when { alt -> dialog = DialogKind.IMAGE_SIZE; shift -> vm.invertSelection(); else -> runFilter(directAdjustmentSpec(AdjustmentType.INVERT)) }
-                Key.C -> if (alt) dialog = DialogKind.CANVAS_SIZE else return false
-                Key.J -> vm.layerViaCopy()
-                Key.E -> vm.mergeDown()
+                Key.C -> if (alt) dialog = DialogKind.CANVAS_SIZE else vm.copy(merged = shift)
+                Key.X -> vm.cut()
+                Key.V -> vm.paste(inPlace = shift)
+                Key.J -> if (shift) vm.layerViaCut() else vm.layerViaCopy()
+                Key.E -> if (shift) dialog = DialogKind.EXPORT else vm.mergeDown()
+                // Photoshop: Strg+Alt+Umschalt+W = Exportieren als
+                Key.W -> if (alt && shift) dialog = DialogKind.EXPORT else return false
                 Key.G -> if (alt) vm.toggleClippingActive() else vm.groupActive()
                 Key.T -> vm.selectTool(Tool.TRANSFORM)
                 Key.P -> print()
@@ -305,7 +312,7 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
             Key.DirectionDown -> { vm.nudge(0, step); return true }
             else -> {}
         }
-        if (shift && e.key == Key.F5) { vm.contentAwareFill(); return true }
+        if (shift && e.key == Key.F5) { dialog = DialogKind.FILL; return true }
         if (e.key == Key.F5) { dialog = DialogKind.BRUSH; return true }
         if (alt && (e.key == Key.Backspace || e.key == Key.Delete)) { vm.fillSelected(background = false); return true }
         when (e.key) {
@@ -317,8 +324,8 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
             Key.V -> Tool.MOVE
             Key.M -> Tool.SELECT
             Key.C -> Tool.CROP
-            Key.B -> Tool.BRUSH
-            Key.E -> Tool.ERASER
+            Key.B -> if (shift) Tool.PENCIL else Tool.BRUSH
+            Key.E -> when { shift && alt -> Tool.MAGIC_ERASER; shift -> Tool.BG_ERASER; else -> Tool.ERASER }
             Key.S -> Tool.CLONE
             Key.J -> when { shift && alt -> Tool.RED_EYE; shift -> Tool.HEAL; alt -> Tool.PATCH; else -> Tool.SPOT_HEAL }
             Key.K -> Tool.AI_REMOVE
@@ -327,23 +334,29 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
             Key.O -> if (shift) Tool.BURN else Tool.DODGE
             Key.I -> Tool.EYEDROPPER
             Key.T -> Tool.TEXT
-            Key.G -> Tool.GRADIENT
+            Key.G -> if (shift) Tool.BUCKET else Tool.GRADIENT
+            Key.U -> Tool.SHAPE
+            Key.P -> Tool.PEN
             else -> null
         }
         if (tool != null) { vm.selectTool(tool); return true }
         when (e.key) {
             Key.LeftBracket -> vm.stepBrushSize(up = false)
             Key.RightBracket -> vm.stepBrushSize(up = true)
-            Key.Delete, Key.Backspace -> vm.clearSelected()
+            Key.Delete, Key.Backspace -> if (state.polyPoints.isNotEmpty()) vm.polyUndo() else vm.clearSelected()
             Key.Tab -> { layersDocked = !layersDocked; layersOverlay = !layersOverlay }
             Key.F -> fullscreen = !fullscreen
             Key.Enter, Key.NumPadEnter -> when {
                 state.transform != null -> vm.applyTransform()
                 state.tool == Tool.CROP -> vm.applyCrop()
+                state.polyPoints.isNotEmpty() -> vm.polyClose()
+                state.penAnchors.isNotEmpty() -> vm.penFinish(false)
                 else -> return false
             }
             Key.Escape -> when {
                 activeSpec != null -> { vm.cancelFilter(); activeSpec = null }
+                state.polyPoints.isNotEmpty() -> vm.polyCancel()
+                state.penAnchors.isNotEmpty() -> vm.penFinish(false)
                 state.transform != null -> vm.cancelTransform()
                 state.adjustEdit != null -> vm.closeAdjustment()
                 state.tool == Tool.CROP -> vm.cancelCrop()
@@ -429,8 +442,7 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                         DrawerItem(Icons.Filled.Save, tr("Als PSD speichern"), tr("Strg+S")) { closeDrawerThen { saveLauncher.launch("$baseName.psd") } }
                         DrawerItem(Icons.Filled.Layers, tr("Als TIFF speichern …")) { closeDrawerThen { dialog = DialogKind.TIFF_OPTIONS } }
                         DrawerItem(Icons.Filled.Pets, tr("Als GIMP-Datei speichern (.xcf)")) { closeDrawerThen { xcfLauncher.launch("$baseName.xcf") } }
-                        DrawerItem(Icons.Filled.Image, tr("Als PNG exportieren")) { closeDrawerThen { pngLauncher.launch("$baseName.png") } }
-                        DrawerItem(Icons.Filled.Photo, tr("Als JPEG exportieren")) { closeDrawerThen { jpgLauncher.launch("$baseName.jpg") } }
+                        DrawerItem(Icons.Filled.Photo, tr("Exportieren als …"), tr("Strg+Umschalt+E")) { closeDrawerThen { dialog = DialogKind.EXPORT } }
                         DrawerItem(Icons.Filled.Gradient, tr("Farbtabelle exportieren (.cube)")) { closeDrawerThen { lutExportLauncher.launch("$baseName.cube") } }
                         DrawerItem(Icons.Filled.Print, tr("Drucken"), tr("Strg+P")) { closeDrawerThen { print() } }
                         HorizontalDivider(Modifier.padding(vertical = 12.dp))
@@ -453,7 +465,7 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                                 Text(state.fileName, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 if (!compact) Text(
                                     tr("{0} × {1} px", state.docWidth, state.docHeight) +
-                                        " · ${state.docProfileName}" +
+                                        " · ${state.docProfileName}" + (if (state.bitDepth == 16) tr(" · 16 Bit") else "") +
                                         (if (state.proofOn) tr(" · Proof: {0}", state.proofLabel) else "") +
                                         (if (state.gamutWarning) tr(" · Farbumfang-Warnung") else ""),
                                     style = MaterialTheme.typography.bodySmall,
@@ -481,6 +493,7 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                                     Item(tr("Arbeitsfläche …"), tr("Strg+Alt+C"), Icons.Filled.AspectRatio) { go { dialog = DialogKind.CANVAS_SIZE } }
                                     Item(tr("Profil zuweisen …"), icon = Icons.Filled.Style) { go { dialog = DialogKind.ASSIGN_PROFILE } }
                                     Item(tr("In Profil umwandeln …"), icon = Icons.Filled.Palette) { go { dialog = DialogKind.CONVERT_PROFILE } }
+                                    Item(if (state.bitDepth == 16) tr("Modus: 8 Bit/Kanal") else tr("Modus: 16 Bit/Kanal"), icon = Icons.Filled.Tune) { go { vm.setBitDepth(if (state.bitDepth == 16) 8 else 16) } }
                                     Item(tr("Farbeinstellungen …"), icon = Icons.Filled.Tune) { go { settingsTab = SettingsTab.COLOR; dialog = DialogKind.SETTINGS } }
                                     Item(tr("Freistellen"), "C", Icons.Filled.Crop) { go { vm.selectTool(Tool.CROP) } }
                                     Item(tr("Nach rechts drehen"), icon = Icons.Filled.Rotate90DegreesCw) { go { vm.rotate(true) } }
@@ -492,7 +505,8 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                                     HorizontalDivider()
                                     MenuHeader(tr("Bearbeiten"))
                                     Item(tr("Frei transformieren"), tr("Strg+T"), Icons.Filled.Transform) { go { vm.selectTool(Tool.TRANSFORM) } }
-                                    Item(tr("Inhaltsbasiert füllen"), "⇧F5", Icons.Filled.AutoFixHigh) { go { vm.contentAwareFill() } }
+                                    Item(tr("Fläche füllen …"), "⇧F5", Icons.Filled.FormatColorFill) { go { dialog = DialogKind.FILL } }
+                                    Item(tr("Inhaltsbasiert füllen"), icon = Icons.Filled.AutoFixHigh) { go { vm.contentAwareFill() } }
                                     Item(tr("KI-Füllen (Auswahl entfernen)"), icon = Icons.Filled.AutoAwesome) { go { vm.aiFillSelection() } }
                                     HorizontalDivider()
                                     MenuHeader(tr("Auswahl"))
@@ -558,11 +572,21 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                                 Item(tr("Rückgängig"), tr("Strg+Z")) { go { vm.undo() } }
                                 Item(tr("Wiederholen"), tr("Strg+⇧+Z")) { go { vm.redo() } }
                                 HorizontalDivider()
+                                Item(tr("Ausschneiden"), tr("Strg+X")) { go { vm.cut() } }
+                                Item(tr("Kopieren"), tr("Strg+C")) { go { vm.copy() } }
+                                Item(tr("Auf eine Ebene reduziert kopieren"), tr("Strg+⇧+C")) { go { vm.copy(merged = true) } }
+                                if (de.photographics.core.editor.Clipboard.clip != null) {
+                                    Item(tr("Einfügen"), tr("Strg+V")) { go { vm.paste() } }
+                                    Item(tr("An Originalposition einfügen"), tr("Strg+⇧+V")) { go { vm.paste(inPlace = true) } }
+                                }
+                                HorizontalDivider()
                                 if (state.hasSelection) {
                                     Item(tr("Auswahl aufheben"), tr("Strg+D")) { go { vm.deselect() } }
                                     Item(tr("Auswahl umkehren"), tr("Strg+⇧+I")) { go { vm.invertSelection() } }
                                     Item(tr("Ebene durch Kopie"), tr("Strg+J")) { go { vm.layerViaCopy() } }
-                                    Item(tr("Inhaltsbasiert füllen"), "⇧F5") { go { vm.contentAwareFill() } }
+                                    Item(tr("Ebene durch Ausschneiden"), tr("Strg+⇧+J")) { go { vm.layerViaCut() } }
+                                    Item(tr("Fläche füllen …"), "⇧F5") { go { dialog = DialogKind.FILL } }
+                                    Item(tr("Inhaltsbasiert füllen")) { go { vm.contentAwareFill() } }
                                     Item(tr("KI-Füllen")) { go { vm.aiFillSelection() } }
                                     Item(tr("Löschen"), tr("Entf")) { go { vm.clearSelected() } }
                                 } else {
@@ -578,6 +602,7 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                         ToolOptionsBar(
                             state, vm,
                             onFeatherClick = { dialog = DialogKind.FEATHER },
+                            onFillClick = { dialog = DialogKind.FILL },
                             onManageAi = { dialog = DialogKind.AI_MODELS },
                             onBrushSettings = { dialog = DialogKind.BRUSH },
                             onTargetSize = { dialog = DialogKind.CROP_SIZE },
@@ -665,9 +690,11 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
             onModeChange = { adjustAsLayer = it },
             onAdjustment = { t -> adjustSheet = false; runAdjustment(t) },
             onFilter = { spec -> adjustSheet = false; runFilter(spec) },
+            onGallery = { adjustSheet = false; galleryOpen = true },
             onDismiss = { adjustSheet = false },
         )
     }
+    if (galleryOpen) FilterGalleryDialog(vm, state.color, state.bgColor, onDismiss = { galleryOpen = false })
 
     when (dialog) {
         DialogKind.NEW -> NewDocumentDialog(onCreate = { w, h, t -> vm.newDocument(w, h, t); dialog = null }, onDismiss = { dialog = null })
@@ -697,11 +724,22 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
             state.textEdit?.let { vm.updateTextLive(it.style.copy(color = c or 0xFF000000.toInt())) }; dialog = null
         }, onDismiss = { dialog = null })
         DialogKind.FEATHER -> FeatherDialog(onApply = { vm.featherSelection(it); dialog = null }, onDismiss = { dialog = null })
+        DialogKind.FILL -> FillDialog(state.color, onApply = { c, col, m, o, k -> vm.fillArea(c, col, m, o, k); dialog = null }, onDismiss = { dialog = null })
         DialogKind.SHORTCUTS -> ShortcutsDialog(onDismiss = { dialog = null })
         DialogKind.SETTINGS -> SettingsDialog(
             settings, state.proofOn, state.gamutWarning, settingsTab,
             onChange = vm::updateSettings, onToggleProof = vm::toggleProof, onToggleGamut = vm::toggleGamutWarning,
             iccLibrary = state.iccLibrary, onImportIcc = { iccLauncher.launch(arrayOf("*/*")) }, onDeleteIcc = vm::deleteIcc,
+            onDismiss = { dialog = null },
+        )
+        DialogKind.EXPORT -> ExportDialog(
+            state.docWidth, state.docHeight, settings.exportJpeg, settings.jpegQuality, settings.exportToSrgb,
+            onConfirm = { jpeg, q, w, h, srgb ->
+                vm.updateSettings { it.copy(exportJpeg = jpeg, jpegQuality = q, exportToSrgb = srgb) }
+                vm.exportSize = w to h
+                dialog = null
+                if (jpeg) jpgLauncher.launch("$baseName.jpg") else pngLauncher.launch("$baseName.png")
+            },
             onDismiss = { dialog = null },
         )
         DialogKind.TIFF_OPTIONS -> TiffOptionsDialog(settings.tiffCompression, settings.tiffLayers,
@@ -771,6 +809,7 @@ private fun AdjustmentsSheet(
     onModeChange: (Boolean) -> Unit,
     onAdjustment: (AdjustmentType) -> Unit,
     onFilter: (FilterSpec) -> Unit,
+    onGallery: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
@@ -793,6 +832,14 @@ private fun AdjustmentsSheet(
                     modifier = Modifier.clickable { onAdjustment(t) }.padding(horizontal = 8.dp),
                 )
             }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            ListItem(
+                headlineContent = { Text(tr("Filtergalerie …")) },
+                supportingContent = { Text(tr("Künstlerische Effekte mit Vorschau, mehrere nacheinander")) },
+                leadingContent = { Icon(Icons.Filled.AutoAwesome, null) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                modifier = Modifier.clickable { onGallery() }.padding(horizontal = 8.dp),
+            )
             for ((group, specs) in FilterSpecs.groupBy { it.group }) {
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Text(group, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))

@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=photographics
+GenericName=Image Editor
+GenericName[de]=Bildbearbeitung
+Comment=Layer-based photo editor
+Comment[de]=Ebenenbasierte Bildbearbeitung
+Keywords=photo;image;editor;layers;psd;tiff;xcf;
+Keywords[de]=Foto;Bild;Bearbeitung;Ebenen;psd;tiff;xcf;
+Exec=photographics %F
+Icon=de.andreasbartelmess.Photographics
+Terminal=false
+Categories=Graphics;2DGraphics;RasterGraphics;Photography;GTK;GNOME;
+MimeType=image/vnd.adobe.photoshop;image/x-psd;image/tiff;image/x-xcf;image/png;image/jpeg;image/webp;
+StartupNotify=true
+StartupWMClass=de.andreasbartelmess.Photographics

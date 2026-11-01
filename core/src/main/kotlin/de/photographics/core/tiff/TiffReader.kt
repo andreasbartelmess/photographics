@@ -64,7 +64,10 @@ object TiffReader {
         val icc = ifd.bytes(T_ICC)
         if (img.mode == PsdColorMode.INDEXED) doc.colorProfile = icc?.let { runCatching { IccProfile(it) }.getOrNull() }?.takeIf { it.isRgb } ?: IccProfiles.sRGB
         else PsdReader.setUpColor(doc, header, icc, workingRgb)
-        if (img.bps != 8 && img.mode != PsdColorMode.INDEXED && img.bps > 1) doc.importWarnings += tr("{0}-Bit-Bild wurde in 8 Bit pro Kanal umgewandelt.", img.bps)
+        // 16-Bit-RGB (ganzzahlig) bleibt 16 Bit
+        val deep = img.bps == 16 && img.mode == PsdColorMode.RGB && img.sampleFormat != 3 && img.photometric == 2
+        if (deep) doc.bitDepth = 16
+        else if (img.bps != 8 && img.mode != PsdColorMode.INDEXED && img.bps > 1) doc.importWarnings += tr("{0}-Bit-Bild wurde in 8 Bit pro Kanal umgewandelt.", img.bps)
 
         // Photoshop-Ebenen
         var hasLayers = false
@@ -78,7 +81,8 @@ object TiffReader {
             }
         }
         if (!hasLayers) {
-            val bg = PixelLayer("Hintergrund", readComposite(img, header))
+            val lowOut = arrayOfNulls<TileGrid>(1)
+            val bg = PixelLayer("Hintergrund", readComposite(img, header, if (deep) lowOut else null)).also { it.low = lowOut[0] }
             doc.root.add(bg)
             doc.activeLayer = bg
         }
@@ -172,9 +176,11 @@ object TiffReader {
         }
     }
 
-    private fun readComposite(img: ImageInfo, header: PsdReader.Header): TileGrid {
+    private fun readComposite(img: ImageInfo, header: PsdReader.Header, lowOut: Array<TileGrid?>? = null): TileGrid {
         val w = img.w; val h = img.h
         val grid = TileGrid(w, h)
+        // 16 Bit: oberes Byte unverändert, unteres in eigenes Raster (Wert = oben · 256 + unten)
+        val low = if (lowOut != null) TileGrid(w, h).also { lowOut[0] = it } else null
         val source = SegmentRows(img)
         val band = maxOf(1, minOf(h, (1 shl 20) / w))
         val channels = (0 until img.base).toList() + listOfNotNull(img.alphaIndex.takeIf { it >= 0 })
@@ -185,6 +191,7 @@ object TiffReader {
             val n = (y1 - y0) * w
             val planes = HashMap<Int, ByteArray>()
             for (c in channels) planes[if (c == img.alphaIndex) -1 else c] = ByteArray(n)
+            val lowPlanes = if (low != null) HashMap<Int, ByteArray>().also { lp -> for (c in channels) lp[if (c == img.alphaIndex) -1 else c] = ByteArray(n) } else null
             for (y in y0 until y1) {
                 for (c in channels) {
                     val row = source.row(y, if (img.planar) c else 0)
@@ -192,7 +199,9 @@ object TiffReader {
                     val o = (y - y0) * w
                     val sampleIdx = if (img.planar) 0 else c
                     val step = if (img.planar) 1 else img.spp
-                    for (x in 0 until w) dst[o + x] = img.to8(c, source.sample(row, x * step + sampleIdx), isFloat).toByte()
+                    val ldst = lowPlanes?.get(if (c == img.alphaIndex) -1 else c)
+                    if (ldst != null) for (x in 0 until w) { val v = source.sample(row, x * step + sampleIdx).toInt(); dst[o + x] = (v ushr 8).toByte(); ldst[o + x] = v.toByte() }
+                    else for (x in 0 until w) dst[o + x] = img.to8(c, source.sample(row, x * step + sampleIdx), isFloat).toByte()
                 }
             }
             val alpha = planes[-1]
@@ -206,9 +215,14 @@ object TiffReader {
                 }
             }
             grid.writeRect(IntRect(0, y0, w, y1), PsdReader.planesToArgb(planes, header, 0, n, img.colorData, if (alpha != null) -1 else null))
+            if (low != null && lowPlanes != null) {
+                val lo = PsdReader.planesToArgb(lowPlanes, header, 0, n, img.colorData, if (alpha != null) -1 else null)
+                if (alpha == null) for (k in lo.indices) lo[k] = lo[k] or 0xFF000000.toInt()
+                low.writeRect(IntRect(0, y0, w, y1), lo)
+            }
             y0 = y1
         }
-        grid.compact()
+        grid.compact(); low?.compact()
         return grid
     }
 

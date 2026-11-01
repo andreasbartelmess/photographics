@@ -114,8 +114,15 @@ abstract class RasterLayer(name: String) : Layer(name) {
 class PixelLayer(name: String, var pixels: TileGrid) : RasterLayer(name) {
     override val raster: TileGrid get() = pixels
 
+    /**
+     * 16-Bit-Dokumente: untere 8 Bit je Kanal (gleicher Aufbau wie [pixels]); 16-Bit-Wert =
+     * oberes Byte · 256 + unteres Byte. Werkzeuge, die nur [pixels] ändern, verfälschen den Wert
+     * höchstens innerhalb einer 8-Bit-Stufe; 16-Bit-fähige Befehle schreiben beide Raster.
+     */
+    var low: TileGrid? = null
+
     override fun deepCopy(): PixelLayer =
-        PixelLayer(tr("{0} Kopie", name), pixels.copy()).also { copyPropsTo(it) }
+        PixelLayer(tr("{0} Kopie", name), pixels.copy()).also { copyPropsTo(it); it.low = low?.copy() }
 }
 
 /** Nicht-destruktive Korrektur, die alles darunter (innerhalb der Gruppe) verändert. */
@@ -292,4 +299,95 @@ class GroupLayer(name: String) : Layer(name) {
         for (c in children) g.add(c.deepCopy().also { it.name = c.name })
         return g
     }
+}
+
+/**
+ * Formebene (Rechteck, Ellipse, Vieleck, Linie, eigener Pfad): Vektorpfad mit Füllung und Kontur,
+ * bleibt editierbar. [path] liegt in eigenen Koordinaten, [transform] bildet ins Dokument ab.
+ */
+class ShapeLayer(
+    name: String, path: de.photographics.core.vector.VectorPath, fill: Int?, stroke: de.photographics.core.vector.ShapeStroke?,
+    transform: Affine, width: Int, height: Int,
+) : RasterLayer(name) {
+    var path = path
+        set(v) { field = v; invalidate() }
+    /** Füllfarbe (ARGB), null = keine Füllung. */
+    var fill = fill
+        set(v) { field = v; invalidate() }
+    var stroke = stroke
+        set(v) { field = v; invalidate() }
+    var transform = transform
+        set(v) { field = v; invalidate() }
+    var docWidth = width
+    var docHeight = height
+
+    private var cache: TileGrid? = null
+    fun invalidate() { cache = null }
+
+    /** Pfad in Dokumentkoordinaten. */
+    fun docPath() = path.map(transform)
+
+    /** Eigene Begrenzung (für den Transformationsrahmen): minX, minY, maxX, maxY. */
+    fun localBounds(): DoubleArray = path.bounds()
+
+    /** Größe des Transformationsrahmens (Begrenzung des Pfads), mindestens 1 × 1. */
+    fun boxSize(): Pair<Double, Double> = localBounds().let { b -> maxOf(1.0, b[2] - b[0]) to maxOf(1.0, b[3] - b[1]) }
+
+    /**
+     * Transformation des Rahmens: bildet (0, 0 … [boxSize]) ins Dokument ab. Der Pfad beginnt nicht
+     * unbedingt bei (0, 0) (Ankerpunkte nach links/oben gezogen, Formen aus PSD-Dateien).
+     */
+    var boxTransform: Affine
+        get() = localBounds().let { b -> Affine.translate(b[0], b[1]).then(transform) }
+        set(v) { val b = localBounds(); transform = Affine.translate(-b[0], -b[1]).then(v) }
+
+    override val raster: TileGrid
+        get() = cache ?: render().also { cache = it }
+
+    private fun render(): TileGrid {
+        val out = TileGrid(docWidth, docHeight)
+        val polys = docPath().flatten()
+        if (polys.isEmpty()) return out
+        val s = stroke
+        val pad = ((s?.width ?: 0f) + 2f).toInt()
+        val area = docPath().bounds().let {
+            IntRect(kotlin.math.floor(it[0]).toInt() - pad, kotlin.math.floor(it[1]).toInt() - pad, kotlin.math.ceil(it[2]).toInt() + pad, kotlin.math.ceil(it[3]).toInt() + pad)
+        }.intersect(IntRect.ofSize(docWidth, docHeight))
+        if (area.isEmpty) return out
+        val closed = polys.filter { it.second }.map { it.first }
+        val fillMask = if (closed.isNotEmpty() && (fill != null || (s != null && s.align != de.photographics.core.vector.ShapeStroke.Align.CENTER)))
+            de.photographics.core.vector.PathRaster.fill(docWidth, docHeight, closed, clip = area) else null
+        val strokeMask = s?.takeIf { it.width > 0f }?.let {
+            de.photographics.core.vector.PathRaster.stroke(docWidth, docHeight, polys, if (it.align == de.photographics.core.vector.ShapeStroke.Align.CENTER) it.width else it.width * 2, area)
+        }
+        val f = fill
+        // Streifenweise: nie den ganzen Bereich im Java-Speicher
+        val bandH = maxOf(1, 262_144 / area.width)
+        var y0 = area.top
+        while (y0 < area.bottom) {
+        val band = IntRect(area.left, y0, area.right, minOf(area.bottom, y0 + bandH))
+        y0 = band.bottom
+        val n = band.width * band.height
+        val fm = IntArray(n).also { fillMask?.readRect(band, it) }
+        val sm = IntArray(n).also { strokeMask?.readRect(band, it) }
+        val px = IntArray(n)
+        for (i in 0 until n) {
+            var c = if (f != null && fm[i] != 0) de.photographics.core.image.Colors.withAlpha(f, (f ushr 24) * fm[i] / 255) else 0
+            if (s != null && sm[i] != 0) {
+                val k = when (s.align) {
+                    de.photographics.core.vector.ShapeStroke.Align.INSIDE -> sm[i] * fm[i] / 255
+                    de.photographics.core.vector.ShapeStroke.Align.OUTSIDE -> sm[i] * (255 - fm[i]) / 255
+                    else -> sm[i]
+                }
+                if (k > 0) c = de.photographics.core.image.Colors.srcOver(c, de.photographics.core.image.Colors.withAlpha(s.color, (s.color ushr 24) * k / 255))
+            }
+            px[i] = c
+        }
+        out.writeRect(band, px)
+        }
+        out.compact()
+        return out
+    }
+
+    override fun deepCopy(): ShapeLayer = ShapeLayer(tr("{0} Kopie", name), path, fill, stroke, transform, docWidth, docHeight).also { copyPropsTo(it) }
 }

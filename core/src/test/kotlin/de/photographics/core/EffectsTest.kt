@@ -167,4 +167,31 @@ class EffectsTest {
         val fresh = Compositor.renderArgb(doc.also { }, doc.bounds)
         assertTrue(maxDiff(after, fresh) <= 2)
     }
+
+    @Test
+    fun bevelSatinGradientRoundTrip() {
+        val fx = LayerEffects(
+            bevel = LayerEffects.Bevel(style = LayerEffects.BevelStyle.EMBOSS, depth = 2.5, up = false, size = 9.0, soften = 2.0,
+                angle = 45.0, useGlobalAngle = false, altitude = 40.0, highlightColor = 0xFFEEDD, highlightOpacity = 0.6f,
+                shadowColor = 0x112233, shadowOpacity = 0.4f),
+            satin = LayerEffects.Satin(color = 0x334455, opacity = 0.3f, angle = 30.0, distance = 7.0, size = 5.0, invert = false),
+            gradientOverlay = LayerEffects.GradientOverlay(color0 = 0xFF0000, color1 = 0x0000FF, opacity = 0.8f, angle = 45.0, radial = true, reverse = true, scale = 0.5),
+            dropShadows = listOf(LayerEffects.Shadow(0, 0.5f, de.photographics.core.render.BlendMode.MULTIPLY, 120.0, true, 5.0, 0.0, 5.0)),
+        )
+        val back = PsdEffects.parse(listOf(PsdEffects.toBlock(fx)))!!
+        assertEquals(fx.bevel, back.bevel)
+        assertEquals(fx.satin, back.satin)
+        assertEquals(fx.gradientOverlay, back.gradientOverlay)
+        assertEquals(fx.dropShadows, back.dropShadows)
+        assertTrue(back.unsupported.isEmpty())
+        // Photoshop-Reihenfolge der Schlüssel: Hauptschalter zuerst; Schatten mit Konturkurve
+        val d = PsdDescriptor.read(de.photographics.core.psd.BinaryReader(PsdEffects.toBlock(fx).data).also { it.i32(); it.i32() })
+        assertEquals("masterFXSwitch", d.items.keys.first())
+        assertNotNull(d.descriptor("DrSh")!!.descriptor("TrnS"))
+        // Dargestellt: Relief hellt/verdunkelt die Kanten, Verlauf färbt die Fläche
+        val (doc, sq) = doc(PsdDescriptor("null"))
+        sq.preservedBlocks = listOf(PsdEffects.toBlock(fx))
+        val img = Compositor.renderArgb(doc, doc.bounds)
+        assertTrue("Verlauf statt Grau in der Fläche", at(img, 120, 60, 60) != 0x808080)
+    }
 }

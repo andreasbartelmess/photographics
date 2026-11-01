@@ -6,6 +6,19 @@ import kotlin.math.roundToInt
 
 /** Hilfsfunktionen für nicht vormultiplizierte ARGB-Ints. */
 object Colors {
+    /** Kanalverschiebungen A, R, G, B (einmal angelegt statt je Pixel). */
+    @JvmField val SHIFTS_ARGB = intArrayOf(24, 16, 8, 0)
+    @JvmField val SHIFTS_RGB = intArrayOf(16, 8, 0)
+    /** Reihenfolge R, G, B, A (16-Bit-Puffer RGBA). */
+    @JvmField val SHIFTS_RGBA = intArrayOf(16, 8, 0, 24)
+
+    /**
+     * Unteres Byte der 16-Bit-Deckkraft aus oberem [hi] und gespeichertem unterem Byte [lo].
+     * 8-Bit-Werkzeuge ändern nur das obere Byte; Deckkraft 0 bzw. 255 oben gilt daher als exakt –
+     * radierte Flächen bleiben ganz durchsichtig, neu bemalte ganz deckend.
+     */
+    fun lowAlpha(hi: Int, lo: Int): Int = if (hi == 0) 0 else if (hi == 255) 255 else lo
+
     fun a(c: Int) = c ushr 24
     fun r(c: Int) = (c shr 16) and 0xFF
     fun g(c: Int) = (c shr 8) and 0xFF

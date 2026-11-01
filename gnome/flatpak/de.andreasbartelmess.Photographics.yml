@@ -1,0 +1,51 @@
+# Flatpak der GNOME-Version (Rezept z. B. für Flathub). Lokal baut gnome/flatpak/build.sh dasselbe
+# direkt mit flatpak build-* (vorher :gnome:installDist).
+id: de.andreasbartelmess.Photographics
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.openjdk25
+command: photographics
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # KI-Modelle (Entfernen, Hochskalieren, Motiv auswählen) werden bei Bedarf geladen
+  - --share=network
+  # Bilder öffnen und daneben speichern, zuletzt verwendete Dateien wieder öffnen
+  - --filesystem=home
+  - --filesystem=/media
+  - --filesystem=/run/media
+  - --env=JAVA_HOME=/app/jre
+modules:
+  - name: openjdk
+    buildsystem: simple
+    build-commands:
+      - /usr/lib/sdk/openjdk25/install.sh
+
+  - name: photographics
+    buildsystem: simple
+    sources:
+      - type: dir
+        path: ../build/install/photographics
+        dest: dist
+      - type: file
+        path: photographics.sh
+      - type: file
+        path: ../data/de.andreasbartelmess.Photographics.desktop
+      - type: file
+        path: ../data/de.andreasbartelmess.Photographics.metainfo.xml
+      - type: file
+        path: ../src/main/resources/icons/hicolor/scalable/apps/de.andreasbartelmess.Photographics.svg
+      - type: file
+        path: ../src/main/resources/icons/hicolor/symbolic/apps/de.andreasbartelmess.Photographics-symbolic.svg
+    build-commands:
+      - mkdir -p /app/share/photographics
+      - cp -r dist/. /app/share/photographics/
+      - install -Dm755 photographics.sh /app/bin/photographics
+      - install -Dm644 de.andreasbartelmess.Photographics.desktop /app/share/applications/de.andreasbartelmess.Photographics.desktop
+      - install -Dm644 de.andreasbartelmess.Photographics.metainfo.xml /app/share/metainfo/de.andreasbartelmess.Photographics.metainfo.xml
+      - install -Dm644 de.andreasbartelmess.Photographics.svg /app/share/icons/hicolor/scalable/apps/de.andreasbartelmess.Photographics.svg
+      - install -Dm644 de.andreasbartelmess.Photographics-symbolic.svg /app/share/icons/hicolor/symbolic/apps/de.andreasbartelmess.Photographics-symbolic.svg

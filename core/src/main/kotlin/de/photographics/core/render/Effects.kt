@@ -160,4 +160,57 @@ object Effects {
             d[q] = (q - p).toFloat() * (q - p) + f[p]
         }
     }
+
+    /**
+     * Abgeflachte Kante und Relief: Höhenfeld aus dem Abstand zur Kante, beleuchtet aus [angle]
+     * (Grad) in Höhe [b].altitude. Ergebnis: Deckung der Lichter und der Tiefen.
+     */
+    fun bevel(a: FloatArray, w: Int, h: Int, b: LayerEffects.Bevel, angle: Double, scale: Double): Pair<FloatArray, FloatArray> {
+        val size = (b.size / scale).toFloat().coerceAtLeast(0.5f)
+        val n = a.size
+        // Abstand nach innen (zur Kante) und nach außen
+        val dIn = distanceToInside(FloatArray(n) { 1f - a[it] }, w, h)
+        val dOut = distanceToInside(a, w, h)
+        fun ramp(d: Float) = (d / size).coerceIn(0f, 1f).let { t -> t * t * (3 - 2 * t) }
+        val hgt = FloatArray(n) { i ->
+            val inner = if (a[i] >= 0.5f) ramp(dIn[i]) else 0f
+            val outer = if (a[i] < 0.5f) 1f - ramp(dOut[i]) else 1f
+            when (b.style) {
+                LayerEffects.BevelStyle.INNER -> inner
+                LayerEffects.BevelStyle.OUTER -> outer
+                LayerEffects.BevelStyle.EMBOSS -> (inner + outer) / 2
+                LayerEffects.BevelStyle.PILLOW -> if (a[i] >= 0.5f) inner else 1f - outer
+            }
+        }
+        val soft = (b.soften / scale).toFloat() + size * 0.15f
+        if (soft > 0.3f) Blur.gaussPlane(hgt, w, h, soft)
+        val r = Math.toRadians(angle); val alt = Math.toRadians(b.altitude.coerceIn(0.0, 90.0))
+        val lx = (cos(alt) * cos(r)).toFloat(); val ly = (-cos(alt) * sin(r)).toFloat(); val lz = sin(alt).toFloat()
+        val k = (b.depth * size * (if (b.up) 1 else -1)).toFloat()
+        val hi = FloatArray(n); val lo = FloatArray(n)
+        for (y in 0 until h) for (x in 0 until w) {
+            val i = y * w + x
+            val gx = (hgt[y * w + minOf(w - 1, x + 1)] - hgt[y * w + maxOf(0, x - 1)]) * 0.5f * k
+            val gy = (hgt[minOf(h - 1, y + 1) * w + x] - hgt[maxOf(0, y - 1) * w + x]) * 0.5f * k
+            val len = sqrt(gx * gx + gy * gy + 1f)
+            val shade = (-gx * lx - gy * ly + lz) / len
+            // Nur wo die Form wirkt: innen bzw. im Bereich der äußeren Kante
+            val where = when (b.style) {
+                LayerEffects.BevelStyle.INNER -> a[i]
+                LayerEffects.BevelStyle.OUTER -> 1f - a[i]
+                else -> 1f
+            }
+            if (shade > lz) hi[i] = ((shade - lz) / (1f - lz).coerceAtLeast(1e-3f)).coerceIn(0f, 1f) * where
+            else lo[i] = ((lz - shade) / lz.coerceAtLeast(1e-3f)).coerceIn(0f, 1f) * where
+        }
+        return hi to lo
+    }
+
+    /** Glanz: |weich(verschoben +d) − weich(verschoben −d)| im Inneren (umgekehrt: 1 − …). */
+    fun satin(a: FloatArray, w: Int, h: Int, s: LayerEffects.Satin, scale: Double): FloatArray {
+        val (dx, dy) = offset(s.angle, s.distance / scale)
+        val p = soften(shift(a, w, h, dx, dy), w, h, 0.0, s.size / scale)
+        val q = soften(shift(a, w, h, -dx, -dy), w, h, 0.0, s.size / scale)
+        return FloatArray(a.size) { i -> val v = kotlin.math.abs(p[i] - q[i]).coerceIn(0f, 1f); (if (s.invert) 1f - v else v) * a[i] }
+    }
 }

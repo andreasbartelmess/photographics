@@ -13,7 +13,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 enum class SelectionShape(val label: String) {
-    RECT(tr("Rechteck")), ELLIPSE(tr("Ellipse")), LASSO(tr("Lasso")), WAND(tr("Zauberstab")), OBJECT(tr("Objekt"));
+    RECT(tr("Rechteck")), ELLIPSE(tr("Ellipse")), LASSO(tr("Lasso")), POLYGON(tr("Polygon-Lasso")), WAND(tr("Zauberstab")), QUICK(tr("Schnellauswahl")), OBJECT(tr("Objekt"));
 
     /** Form aus einem Zug (Rechteck/Ellipse/Lasso) – für Werkzeuge, die nur solche Formen brauchen. */
     val isShape get() = this == RECT || this == ELLIPSE || this == LASSO

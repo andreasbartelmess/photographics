@@ -23,6 +23,8 @@ tasks.test {
     exclude("**/memory/**")
     // Große Objekte ohne Verschnitt ablegen, ähnlich wie Androids Large-Object-Space
     jvmArgs("-XX:G1HeapRegionSize=4m")
+    // Kontaktblatt der Filtergalerie (GalleryTest.contactSheet): PG_GALLERY_SHEET=bild.jpg:blatt.png
+    environment("PG_GALLERY_SHEET", System.getenv("PG_GALLERY_SHEET") ?: "")
 }
 
 // Speicher-Sperre: Pixel im Kachelspeicher außerhalb des Heaps, Java-Heap bewusst klein.

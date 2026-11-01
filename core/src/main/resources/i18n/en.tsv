@@ -1133,3 +1133,447 @@ OkHttp, Okio	OkHttp, Okio
 Automatisch auswählen	Auto-select
 Angetippte Ebene ziehen · Strg: aktive Ebene · zwei Finger: Ansicht	Drag the tapped layer · Ctrl: active layer · two fingers: view
 Aktive Ebene ziehen · Strg: angetippte Ebene · zwei Finger: Ansicht	Drag the active layer · Ctrl: tapped layer · two fingers: view
+# GNOME-Version
+Öffnen …	Open…
+Speichern unter …	Save As…
+Originalgröße	Actual Size
+Über photographics	About photographics
+Hauptmenü	Main Menu
+Vergrößern	Zoom In
+Verkleinern	Zoom Out
+Bild öffnen	Open an Image
+PSD, TIFF, XCF, PNG, JPEG oder WebP – oder eine Datei hierher ziehen	PSD, TIFF, XCF, PNG, JPEG or WebP – or drop a file here
+Wird geöffnet …	Opening…
+„{0}“ konnte nicht geöffnet werden	Could not open “{0}”
+Bearbeitung fehlgeschlagen	Edit failed
+Alle Bilder	All Images
+Speichern unter	Save As
+Exportieren	Export
+Exportiert: {0}	Exported: {0}
+Wird gespeichert …	Saving…
+Gespeichert: {0}	Saved: {0}
+Speichern fehlgeschlagen	Saving failed
+Änderungen speichern?	Save Changes?
+Ohne Speichern gehen die Änderungen an „{0}“ verloren.	Unsaved changes to “{0}” will be lost.
+Verwerfen	Discard
+OK	OK
+Ebenenbasierte Bildbearbeitung für GNOME	Layer-based photo editor for GNOME
+Schnittmaske	Clipping Mask
+Ebenenmaske	Layer Mask
+Hand	Hand
+Quelle gesetzt	Source set
+Zuerst mit Strg+Klick eine Quelle festlegen.	First Ctrl+click to set a source.
+Text zuerst mit „Fertig“ abschließen.	Finish the current text first.
+Einstellungsebene	Adjustment Layer
+weitere: Rechtsklick	more: right-click
+Vordergrund-/Hintergrundfarbe (X: tauschen, D: Standard)	Foreground/background color (X: swap, D: default)
+Strg+Klick: Quelle festlegen	Ctrl+click: set source
+Auf die Pupille klicken	Click the pupil
+Hinzufügen	Add
+Abziehen	Subtract
+Umschalt: hinzufügen · Alt: abziehen	Shift: add · Alt: subtract
+Fehler umranden, dann die Auswahl auf eine saubere Stelle ziehen	Outline the flaw, then drag the selection onto a clean area
+Zu transparent	To transparent
+Verhältnis	Ratio
+Beschnittene Pixel löschen	Delete cropped pixels
+Ecken: skalieren (Umschalt: frei) · außerhalb: drehen	Corners: scale (Shift: free) · outside: rotate
+Ins Bild klicken, um Text zu setzen oder zu bearbeiten	Click into the image to add or edit text
+Ziehen verschiebt die Ansicht · Leertaste: überall	Drag to pan the view · Space: anywhere
+Pinsel …	Brush…
+Abstand (%)	Spacing (%)
+Glättung (%)	Smoothing (%)
+Rundheit (%)	Roundness (%)
+Größe – Steuerung	Size – control
+Mindestdurchmesser (%)	Minimum diameter (%)
+Größen-Jitter (%)	Size jitter (%)
+Winkel-Jitter (%)	Angle jitter (%)
+Winkel – Steuerung	Angle – control
+Deckkraft – Steuerung	Opacity – control
+Deckkraft-Jitter (%)	Opacity jitter (%)
+Fluss – Steuerung	Flow – control
+Vordergrund/Hintergrund (%)	Foreground/background (%)
+Farbton-Jitter (%)	Hue jitter (%)
+Sättigungs-Jitter (%)	Saturation jitter (%)
+Helligkeits-Jitter (%)	Brightness jitter (%)
+Abbrechen (Esc)	Cancel (Esc)
+Anwenden (Eingabe)	Apply (Enter)
+Breite (px)	Width (px)
+Neues Bild	New Image
+Seitenverhältnis beibehalten	Keep aspect ratio
+Neuberechnung	Resampling
+Aktuell: {0} × {1} px	Current: {0} × {1} px
+Ändern	Change
+Winkel (°, im Uhrzeigersinn)	Angle (°, clockwise)
+Transparente Pixel fixieren	Lock transparent pixels
+Deckkraft (%)	Opacity (%)
+Fläche (%)	Fill (%)
+Filter	Filter
+Neues Bild …	New Image…
+Als Ebene platzieren …	Place as Layer…
+90° im Uhrzeigersinn drehen	Rotate 90° Clockwise
+90° gegen den Uhrzeigersinn drehen	Rotate 90° Counterclockwise
+Drehen …	Rotate…
+Ebenen gruppieren	Group Layers
+Auf darunterliegende Ebene reduzieren	Merge Down
+Schnittmaske erstellen/lösen	Create/Release Clipping Mask
+In Smartobjekt umwandeln	Convert to Smart Object
+Rastern	Rasterize
+Ebeneneigenschaften …	Layer Properties…
+Mit Vordergrundfarbe füllen	Fill with Foreground Color
+Mit Hintergrundfarbe füllen	Fill with Background Color
+Direkt auf die Ebene anwenden	Apply Directly to the Layer
+Nichts zum Zusammenfügen.	Nothing to merge.
+Diese Ebene kann keine Schnittmaske bilden.	This layer can’t form a clipping mask.
+Bild konnte nicht angelegt werden	Could not create the image
+Doppelklick: Einstellungen	Double-click: settings
+Ebenenmaske – klicken, um auf der Maske zu malen	Layer mask – click to paint on the mask
+Transparente Pixel fixiert	Transparent pixels locked
+Keine Einstellungen	No settings
+Klicken: Punkt hinzufügen · aus dem Feld ziehen: entfernen	Click: add a point · drag out of the field: remove
+Größe (px)	Size (px)
+Stil	Style
+Ausrichtung	Alignment
+Laufweite (em)	Tracking (em)
+Geöffnet	Opened
+Protokoll	History
+KI-Hochskalierung (Modell unter „KI-Modelle“ laden)	AI upscaling (load a model under “AI Models”)
+KI-Modelle …	AI Models…
+Mit KI füllen	Fill with AI
+Zuerst ein KI-Modell laden.	Load an AI model first.
+Die Modelle laufen auf diesem Rechner; Bilder werden nicht hochgeladen.	The models run on this computer; images are never uploaded.
+Erneut versuchen	Try Again
+Ebenen löschen	Delete Layers
+Auswahl laden	Load Selection
+Ø {0} px · Härte {1} %	Ø {0} px · Hardness {1} %
+Fixieren:	Lock:
+Ebenen zusammenfügen	Merge Layers
+Sichtbarkeit (Alt+Klick: nur diese Ebene)	Visibility (Alt+click: only this layer)
+Gruppe zuklappen	Collapse Group
+Gruppe aufklappen	Expand Group
+Ebenenmaske – Klick: auf der Maske malen · Umschalt+Klick: ein/aus · Strg+Klick: als Auswahl laden	Layer mask – click: paint on the mask · Shift+click: on/off · Ctrl+click: load as selection
+Ecken: skalieren (Umschalt: frei, Strg: verzerren) · außerhalb: drehen	Corners: scale (Shift: free, Ctrl: distort) · outside: rotate
+Datei laden (.cube, .3dl) …	Load File (.cube, .3dl)…
+Farbtabelle laden	Load Color Lookup Table
+Farbtabellen	Lookup Tables
+Farbtabelle konnte nicht gelesen werden: {0}	Could not read the lookup table: {0}
+Vordergrundfarbe zu „Eigene“ hinzufügen	Add foreground color to “Custom”
+Farbfelder importieren (ACO, ASE, GPL, ACT)	Import swatches (ACO, ASE, GPL, ACT)
+Klick: Vordergrund · Strg+Klick: Hintergrund · Rechtsklick auf eigene: entfernen	Click: foreground · Ctrl+click: background · right-click on custom: remove
+Farbfelder importieren	Import Swatches
+Eigene	Custom
+Allgemein	General
+Gilt ab dem nächsten Start	Takes effect after restarting
+Arbeitsfarbraum	Working color space
+Für CMYK-, Graustufen- und Lab-Dateien beim Öffnen	For CMYK, grayscale and Lab files when opening
+Beim Export in sRGB umwandeln	Convert to sRGB on export
+Sonst wird das Dokumentprofil in PNG/JPEG eingebettet	Otherwise the document profile is embedded in PNG/JPEG
+Bedingung	Condition
+Dateien	Files
+TIFF-Kompression	TIFF compression
+Proof einrichten	Proof Setup
+Eigene Vorgabe – Rechtsklick: löschen	Custom preset – right-click: delete
+Als Vorgabe speichern …	Save as Preset…
+Pinselvorgabe speichern	Save Brush Preset
+Vorgabe „{0}“ gespeichert	Preset “{0}” saved
+Neues Hilfslinienlayout	New Guide Layout
+Neues Hilfslinienlayout …	New Guide Layout…
+Drucken fehlgeschlagen	Printing failed
+Strg+Umschalt+E	Ctrl+Shift+E
+Exportieren als …	Export As…
+Exportieren als	Export As
+Qualität: {0}	Quality: {0}
+JPEG kennt keine Transparenz – sie wird auf Weiß reduziert.	JPEG has no transparency – it is flattened onto white.
+Größe: {0} × {1} px ({2} %)	Size: {0} × {1} px ({2} %)
+In sRGB umwandeln (Web, Geräte ohne Farbmanagement)	Convert to sRGB (web, devices without color management)
+Drehen (°)	Rotate (°)
+Format	Format
+Qualität	Quality
+Polygon-Lasso	Polygonal Lasso
+Ebene durch Ausschneiden	Layer via Cut
+Einfügen	Paste
+Auswahl transformieren	Transform Selection
+Auswahl verschieben	Move Selection
+Ausschneiden	Cut
+Strg+X	Ctrl+X
+Kopieren	Copy
+Strg+C	Ctrl+C
+Auf eine Ebene reduziert kopieren	Copy Merged
+Strg+⇧+C	Ctrl+⇧+C
+Strg+V	Ctrl+V
+An Originalposition einfügen	Paste in Place
+Strg+⇧+V	Ctrl+⇧+V
+Strg+⇧+J	Ctrl+⇧+J
+Tippen setzt Ecken · auf den Startpunkt tippen schließt · Umschalt: 45°	Tap to set corners · tap the start point to close · Shift: 45°
+Letzte Ecke entfernen	Remove last corner
+Kein Pixel ausgewählt.	No pixels are selected.
+Kopiert ({0} × {1} px)	Copied ({0} × {1} px)
+Die Zwischenablage ist leer.	The clipboard is empty.
+Fläche füllen (Vordergrund)	Fill with Foreground Color
+Kunstfilter	Artistic
+Malfilter	Brush Strokes
+Zeichenfilter	Sketch
+Strukturierungsfilter	Texture
+Filtergalerie	Filter Gallery
+Leinwand	Canvas
+Sackleinen	Burlap
+Ziegel	Brick
+Sandstein	Sandstone
+Oben rechts	Top right
+Unten rechts	Bottom right
+Unten links	Bottom left
+Oben links	Top left
+Aquarell	Watercolor
+Pinseldetail	Brush Detail
+Schattenintensität	Shadow Intensity
+Struktur	Texture
+Farbpapier-Collage	Cutout
+Anzahl Stufen	Number of Levels
+Kantenvereinfachung	Edge Simplicity
+Kantenschärfe	Edge Fidelity
+Grobe Malerei	Dry Brush
+Körnung (Film)	Film Grain
+Körnung	Grain
+Lichterbereich	Highlight Area
+Intensität	Intensity
+Fresko	Fresco
+Neonschein	Neon Glow
+Leuchtfarbe	Glow Color
+Ölfarbe getupft	Paint Daubs
+Spachtel	Palette Knife
+Strichgröße	Stroke Size
+Strichdetail	Stroke Detail
+Weichheit	Softness
+Kunststofffolie	Plastic Wrap
+Lichterstärke	Highlight Strength
+Detail	Detail
+Tontrennung & Kantenbetonung	Poster Edges
+Kantenstärke	Edge Thickness
+Kantenintensität	Edge Intensity
+Grobes Pastell	Rough Pastels
+Strichlänge	Stroke Length
+Diagonal verwischen	Smudge Stick
+Bilddefinition	Definition
+Malgrund	Underpainting
+Strukturdeckung	Texture Coverage
+Farbstift	Colored Pencil
+Strichbreite	Stroke Width
+Strichdruck	Stroke Pressure
+Papierhelligkeit	Paper Brightness
+Kanten betonen	Accented Edges
+Kantenbreite	Edge Width
+Kantenhelligkeit	Edge Brightness
+Verwackelte Striche	Sprayed Strokes
+Richtungsbalance	Direction Balance
+Kreuzschraffur	Crosshatch
+Dunkle Malstriche	Dark Strokes
+Balance	Balance
+Schwarzintensität	Black Intensity
+Weißintensität	White Intensity
+Konturen mit Tinte nachzeichnen	Ink Outlines
+Dunkle Intensität	Dark Intensity
+Helle Intensität	Light Intensity
+Spritzer	Spatter
+Sprühradius	Spray Radius
+Sumi-e	Sumi-e
+Lichtmenge	Glow Amount
+Verringerung	Clear Amount
+Glas	Glass
+Verzerrung	Distortion
+Milchglas	Frosted
+Blöcke	Blocks
+Kleine Linsen	Tiny Lens
+Skalierung	Scaling
+Ozeanwellen	Ocean Ripple
+Wellengröße	Ripple Size
+Wellenstärke	Ripple Magnitude
+Basrelief	Bas Relief
+Kreide & Kohle	Chalk & Charcoal
+Kohlebereich	Charcoal Area
+Kreidebereich	Chalk Area
+Kohleumsetzung	Charcoal
+Kohlestärke	Charcoal Thickness
+Hell/Dunkel-Balance	Light/Dark Balance
+Chrom	Chrome
+Grafikstift	Graphic Pen
+Rechts diagonal	Right Diagonal
+Horizontal	Horizontal
+Links diagonal	Left Diagonal
+Vertikal	Vertical
+Rasterungseffekt	Halftone Pattern
+Musterart	Pattern Type
+Kreis	Circle
+Punkt	Dot
+Linie	Line
+Prägepapier	Note Paper
+Bildbalance	Image Balance
+Fotokopie	Photocopy
+Verdunkelung	Darkness
+Gipsabdruck	Plaster
+Punktierstich	Reticulation
+Vordergrundstufe	Foreground Level
+Hintergrundstufe	Background Level
+Gerissene Kanten	Torn Edges
+Feuchtes Papier	Water Paper
+Faserlänge	Fiber Length
+Leuchtende Konturen	Glowing Edges
+Risse	Craquelure
+Rissabstand	Crack Spacing
+Risstiefe	Crack Depth
+Risshelligkeit	Crack Brightness
+Körnungsart	Grain Type
+Gesprenkelt	Sprinkles
+Klumpen	Clumped
+Mosaikfliesen	Mosaic Tiles
+Fliesengröße	Tile Size
+Fugenbreite	Grout Width
+Fugenhelligkeit	Lighten Grout
+Patchwork	Patchwork
+Quadratgröße	Square Size
+Buntglas-Mosaik	Stained Glass
+Zellgröße	Cell Size
+Rahmenstärke	Border Thickness
+Lichtintensität	Light Intensity
+Mit Struktur versehen	Texturizer
+Ganzes Bild	Whole Image
+Verwendet Vorder- und Hintergrundfarbe	Uses the foreground and background colors
+Standardwerte	Defaults
+Effektebenen	Effect Layers
+Neue Effektebene	New Effect Layer
+Effektebene löschen	Delete Effect Layer
+Effekt ein-/ausblenden	Show/hide effect
+Filtergalerie …	Filter Gallery…
+Künstlerische Effekte mit Vorschau, mehrere nacheinander	Artistic effects with preview, several in sequence
+Pfad {0}	Path {0}
+Alpha {0}	Alpha {0}
+Formfarbe	Shape Color
+Form {0}	Shape {0}
+Form erstellen	Create Shape
+Pfad bearbeiten	Edit Path
+Arbeitspfad	Work Path
+Pfad speichern	Save Path
+Pfad als Auswahl laden	Load Path as Selection
+Arbeitspfad erstellen	Make Work Path
+Pfad füllen	Fill Path
+Pfadkontur füllen	Stroke Path
+Auswahl speichern	Save Selection
+Innen	Inside
+Mitte	Center
+Außen	Outside
+Kanäle	Channels
+Pfade	Paths
+Formen & Pfade	Shapes & Paths
+Form	Shape
+Pfad	Path
+Füllung	Fill
+Kontur	Stroke
+Konturbreite	Stroke Width
+Konturfarbe = Hintergrundfarbe	Stroke color = background color
+Eckenradius	Corner Radius
+Seiten	Sides
+Stern	Star
+Auf aktive Form anwenden	Apply to active shape
+Aufziehen · Umschalt: gleichseitig · Alt: von der Mitte	Drag · Shift: constrain · Alt: from center
+Tippen: Ecke · Ziehen: Kurve · Startpunkt: schließen · Anker der Form oder des Pfads verschieben	Tap: corner · drag: curve · start point: close · drag anchors of the shape or path
+Letzten Anker entfernen	Remove last anchor
+Mit „Auswahl speichern“ entsteht ein Alphakanal.	“Save Selection” creates an alpha channel.
+Als Auswahl laden	Load as Selection
+Noch keine Pfade – Zeichenstift oder Formwerkzeug im Modus „Pfad“	No paths yet – use the Pen or a shape tool in “Path” mode
+Aus Auswahl	From Selection
+Formen	Shapes
+Zeichenstift	Pen
+Polygon	Polygon
+Kein Pfad vorhanden.	There is no path.
+Pfad umbenennen	Rename Path
+Pfad löschen	Delete Path
+Arbeitspfad löschen	Delete Work Path
+Kanal löschen	Delete Channel
+Kanal umbenennen	Rename Channel
+Linienzeichner	Line
+Direktauswahl	Direct Selection
+Stern (%)	Star (%)
+Klicken: Ecke · Ziehen: Kurve · Startpunkt oder Eingabe: fertig	Click: corner · drag: curve · start point or Enter: done
+Umschalt: gleichseitig · Alt: von der Mitte	Shift: constrain · Alt: from center
+Anker und Griffe ziehen · Alt+Klick auf einen Anker: Ecke ↔ Kurve · Entf: Anker löschen	Drag anchors and handles · Alt+click an anchor: corner ↔ smooth · Delete: remove anchor
+Konturfarbe	Stroke Color
+Lage	Position
+Übernehmen	Apply
+Als Auswahl	As Selection
+Pfad als Auswahl laden (Strg+Eingabe)	Load path as selection (Ctrl+Enter)
+Pfad mit der Vordergrundfarbe füllen	Fill path with the foreground color
+Pfadkontur mit Vordergrundfarbe und Pinselgröße füllen	Stroke path with the foreground color and brush size
+Arbeitspfad aus der Auswahl erstellen	Make work path from selection
+Arbeitspfad als Pfad speichern	Save work path as a path
+Noch keine Pfade – Zeichenstift (P) oder Formwerkzeuge im Modus „Pfad“	No paths yet – use the Pen (P) or shape tools in “Path” mode
+Auswahl als neuen Alphakanal speichern	Save selection as a new alpha channel
+Alphakanal als Auswahl laden	Load alpha channel as selection
+Zuerst einen Alphakanal wählen.	Select an alpha channel first.
+16 Bit/Kanal	16 Bits/Channel
+8 Bit/Kanal	8 Bits/Channel
+ · 16 Bit	 · 16-bit
+Modus: 8 Bit/Kanal	Mode: 8 Bits/Channel
+Modus: 16 Bit/Kanal	Mode: 16 Bits/Channel
+Abgeflachte Kante außen	Outer bevel
+Abgeflachte Kante innen	Inner bevel
+Deckkraft der Tiefen	Shadow opacity
+Distanz	Distance
+Ebene spart Schlagschatten aus	Layer knocks out drop shadow
+Endfarbe	End color
+Farbüberlagerung	Color overlay
+Globalen Lichteinfall verwenden	Use global light
+Kante	Edge
+Lichterfarbe	Highlight color
+Lichtermodus	Highlight mode
+Quelle	Source
+Reliefkontur	Pillow emboss
+Richtung	Direction
+Schatten nach innen	Inner shadow
+Schein nach außen	Outer glow
+Schein nach innen	Inner glow
+Schlagschatten	Drop shadow
+Skalieren	Scale
+Startfarbe	Start color
+Tiefe	Depth
+Tiefenfarbe	Shadow color
+Tiefenmodus	Shadow mode
+Unterfüllen	Choke
+Weichzeichnen	Soften
+Überfüllen	Spread
+Aufwärts	Up
+Abwärts	Down
+Lichthöhe	Altitude
+Verlauf umkehren	Reverse
+Ebenenstil	Layer style
+Stile	Styles
+Nicht bearbeitbar und beim Übernehmen entfernt: {0}	Not editable, removed when applied: {0}
+Buntstift	Pencil
+Hintergrund-Radiergummi	Background eraser
+Gekreuzte Malstriche	Angled Strokes
+Conté-Stifte	Conté Crayon
+Schnellauswahl	Quick selection
+Füllwerkzeug	Paint bucket
+Magischer Radiergummi	Magic eraser
+Farbe …	Color …
+Inhaltsbasiert	Content-aware
+50 % Grau	50 % gray
+Fläche füllen …	Fill …
+Magisch	Magic
+Kontinuierlich	Continuous
+Einmal	Once
+Vordergrundfarbe schützen	Protect foreground color
+Glätten	Anti-alias
+Tippen füllt ähnliche Farben mit der Vordergrundfarbe	Tap to fill similar colors with the foreground color
+Tippen macht ähnliche Farben transparent	Tap to make similar colors transparent
+Über den Bereich malen · weitere Striche fügen hinzu	Paint over the area · further strokes add to it
+Füllen …	Fill …
+Inhalt	Contents
+Transparenz erhalten	Preserve transparency
+Das Füllwerkzeug braucht eine Pixelebene.	The paint bucket needs a pixel layer.
+Der Magische Radiergummi braucht eine Pixelebene.	The magic eraser needs a pixel layer.
+Schnellauswahl braucht eine Pixelebene oder „Alle Ebenen“.	Quick selection needs a pixel layer or “Sample all layers”.
+Linealwerkzeug	Ruler
+Zoom	Zoom
+Verlauf und Füllen	Gradient and fill
+B: {0} px  H: {1} px  L: {2} px  W: {3}°	W: {0} px  H: {1} px  L: {2} px  A: {3}°
+Linie ziehen, um zu messen	Drag a line to measure
+Bild drehen, sodass die Linie waagerecht bzw. senkrecht wird (Eingabe)	Rotate the image so the line becomes horizontal or vertical (Enter)
+Klicken: vergrößern · Alt+Klick: verkleinern · Rahmen ziehen: Bereich einpassen	Click: zoom in · Alt+click: zoom out · drag a rectangle: zoom to area

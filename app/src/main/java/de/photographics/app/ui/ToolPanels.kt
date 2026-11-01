@@ -4,10 +4,18 @@ import de.photographics.core.tr
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FormatColorReset
+import androidx.compose.material.icons.filled.CleaningServices
+import androidx.compose.material.icons.filled.FormatColorFill
+import de.photographics.core.render.BlendMode
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material.icons.filled.GridOn
+import androidx.compose.material.icons.filled.Pentagon
+import androidx.compose.material.icons.filled.Polyline
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -112,6 +120,12 @@ val Tool.icon: ImageVector
         Tool.AI_REMOVE -> Icons.Filled.AutoAwesome
         Tool.LIQUIFY -> Icons.Filled.Waves
         Tool.GRADIENT -> Icons.Filled.Gradient
+        Tool.SHAPE -> Icons.Filled.Pentagon
+        Tool.PEN -> Icons.Filled.Polyline
+        Tool.PENCIL -> Icons.Filled.Edit
+        Tool.BG_ERASER -> Icons.Filled.FormatColorReset
+        Tool.MAGIC_ERASER -> Icons.Filled.CleaningServices
+        Tool.BUCKET -> Icons.Filled.FormatColorFill
     }
 
 /** Kurzname für Segmented Buttons. */
@@ -126,6 +140,9 @@ private val Tool.shortLabel: String
         Tool.AI_REMOVE -> tr("KI")
         Tool.RED_EYE -> tr("Rote Augen")
         Tool.TRANSFORM -> tr("Transformieren")
+        Tool.BG_ERASER -> tr("Hintergrund")
+        Tool.MAGIC_ERASER -> tr("Magisch")
+        Tool.BUCKET -> tr("Füllen")
         else -> label
     }
 
@@ -134,11 +151,13 @@ enum class ToolGroup(val label: String, val tools: List<Tool>) {
     MOVE(tr("Bewegen"), listOf(Tool.MOVE, Tool.TRANSFORM)),
     SELECT(tr("Auswahl"), listOf(Tool.SELECT)),
     CROP(tr("Zuschnitt"), listOf(Tool.CROP)),
-    PAINT(tr("Malen"), listOf(Tool.BRUSH, Tool.ERASER, Tool.GRADIENT, Tool.EYEDROPPER)),
+    PAINT(tr("Malen"), listOf(Tool.BRUSH, Tool.PENCIL, Tool.GRADIENT, Tool.BUCKET, Tool.EYEDROPPER)),
+    ERASE(tr("Radiergummi"), listOf(Tool.ERASER, Tool.BG_ERASER, Tool.MAGIC_ERASER)),
     RETOUCH(tr("Retusche"), listOf(Tool.SPOT_HEAL, Tool.AI_REMOVE, Tool.HEAL, Tool.CLONE, Tool.PATCH, Tool.RED_EYE)),
     FOCUS(tr("Schärfe"), listOf(Tool.BLUR, Tool.SHARPEN, Tool.SMUDGE, Tool.LIQUIFY)),
     LIGHT(tr("Licht"), listOf(Tool.DODGE, Tool.BURN, Tool.SPONGE)),
-    TEXT(tr("Text"), listOf(Tool.TEXT));
+    TEXT(tr("Text"), listOf(Tool.TEXT)),
+    SHAPE(tr("Formen & Pfade"), listOf(Tool.SHAPE, Tool.PEN));
 
     val icon: ImageVector get() = tools.first().icon
 }
@@ -265,7 +284,7 @@ private fun CropOptions(state: EditorUiState, vm: EditorViewModel, onTargetSize:
 
 /** Schwebende Optionsleiste (Material „Floating Toolbar“) für das aktive Werkzeug. */
 @Composable
-fun ToolOptionsBar(state: EditorUiState, vm: EditorViewModel, onFeatherClick: () -> Unit, onManageAi: () -> Unit, onBrushSettings: () -> Unit = {}, onTargetSize: () -> Unit = {}, modifier: Modifier = Modifier) {
+fun ToolOptionsBar(state: EditorUiState, vm: EditorViewModel, onFeatherClick: () -> Unit, onManageAi: () -> Unit, onBrushSettings: () -> Unit = {}, onTargetSize: () -> Unit = {}, onFillClick: () -> Unit = {}, modifier: Modifier = Modifier) {
     Surface(
         modifier,
         shape = RoundedCornerShape(28.dp),
@@ -305,7 +324,7 @@ fun ToolOptionsBar(state: EditorUiState, vm: EditorViewModel, onFeatherClick: ()
                 }
                 OptionSlider(tr("Härte"), "${(b.hardness * 100).roundToInt()} %", b.hardness, 0f..1f) { vm.updateBrush(b.copy(hardness = it)) }
                 OptionSlider(tr("Deckkraft"), "${(b.opacity * 100).roundToInt()} %", b.opacity, 0.01f..1f) { vm.updateBrush(b.copy(opacity = it)) }
-                if (state.tool in setOf(Tool.BRUSH, Tool.ERASER, Tool.CLONE)) {
+                if (state.tool in setOf(Tool.BRUSH, Tool.PENCIL, Tool.ERASER, Tool.CLONE)) {
                     OptionSlider(tr("Fluss"), "${(b.flow * 100).roundToInt()} %", b.flow, 0.01f..1f) { vm.updateBrush(b.copy(flow = it)) }
                 }
                 OptionSlider(tr("Glättung"), "${(b.smoothing * 100).roundToInt()} %", b.smoothing, 0f..0.9f) { vm.updateBrush(b.copy(smoothing = it)) }
@@ -314,8 +333,24 @@ fun ToolOptionsBar(state: EditorUiState, vm: EditorViewModel, onFeatherClick: ()
                 }
             }
 
+            val ft = state.fillTool
             when (state.tool) {
-                Tool.BRUSH, Tool.ERASER -> {
+                Tool.BG_ERASER -> {
+                    OptionSlider(tr("Toleranz"), "${ft.bgEraserTolerance}", ft.bgEraserTolerance.toFloat(), 0f..255f) { v -> vm.setFillTool { it.copy(bgEraserTolerance = v.roundToInt()) } }
+                    Segmented(listOf(tr("Kontinuierlich") to false, tr("Einmal") to true), ft.bgEraserOnce) { v -> vm.setFillTool { it.copy(bgEraserOnce = v) } }
+                    ToggleChip(tr("Vordergrundfarbe schützen"), ft.bgEraserProtect) { vm.setFillTool { it.copy(bgEraserProtect = !it.bgEraserProtect) } }
+                }
+                Tool.BUCKET, Tool.MAGIC_ERASER -> {
+                    Divider()
+                    if (state.tool == Tool.BUCKET) BlendChoice(ft.blend) { v -> vm.setFillTool { it.copy(blend = v) } }
+                    OptionSlider(tr("Deckkraft"), "${(ft.opacity * 100).roundToInt()} %", ft.opacity, 0.01f..1f) { v -> vm.setFillTool { it.copy(opacity = v) } }
+                    OptionSlider(tr("Toleranz"), "${ft.tolerance}", ft.tolerance.toFloat(), 0f..255f) { v -> vm.setFillTool { it.copy(tolerance = v.roundToInt()) } }
+                    ToggleChip(tr("Glätten"), ft.antiAlias) { vm.setFillTool { it.copy(antiAlias = !it.antiAlias) } }
+                    ToggleChip(tr("Benachbart"), ft.contiguous) { vm.setFillTool { it.copy(contiguous = !it.contiguous) } }
+                    ToggleChip(tr("Alle Ebenen"), state.sampleAllLayers) { vm.setSampleAll(!state.sampleAllLayers) }
+                    Hint(if (state.tool == Tool.BUCKET) tr("Tippen füllt ähnliche Farben mit der Vordergrundfarbe") else tr("Tippen macht ähnliche Farben transparent"))
+                }
+                Tool.BRUSH, Tool.PENCIL, Tool.ERASER -> {
                     val hasMask = state.layers.firstOrNull { it.id == state.activeLayerId }?.hasMask == true
                     if (hasMask) {
                         Segmented(
@@ -377,6 +412,40 @@ fun ToolOptionsBar(state: EditorUiState, vm: EditorViewModel, onFeatherClick: ()
                     Segmented(listOf(tr("Entsättigen") to false, tr("Sättigen") to true), state.spongeSaturate) { vm.setSpongeSaturate(it) }
                     OptionSlider(tr("Fluss"), "${(state.toolStrength * 100).roundToInt()} %", state.toolStrength, 0.05f..1f) { vm.setToolStrength(it) }
                 }
+                Tool.SHAPE, Tool.PEN -> {
+                    val o = state.shapeOptions
+                    Divider()
+                    Segmented(listOf(tr("Form") to true, tr("Pfad") to false), o.layerMode) { v -> vm.setShapeOptions { it.copy(layerMode = v) } }
+                    if (state.tool == Tool.SHAPE) Segmented(de.photographics.app.ShapeKind.entries.map { it.label to it }, o.kind) { v -> vm.setShapeOptions { it.copy(kind = v) } }
+                    if (o.layerMode) {
+                        ToggleChip(tr("Füllung"), o.fill) { vm.setShapeOptions { it.copy(fill = !it.fill) } }
+                        ToggleChip(tr("Kontur"), o.stroke) { vm.setShapeOptions { it.copy(stroke = !it.stroke) } }
+                        if (o.stroke) {
+                            OptionSlider(tr("Konturbreite"), tr("{0} px", o.strokeWidth.roundToInt()), o.strokeWidth, 1f..100f) { v -> vm.setShapeOptions { it.copy(strokeWidth = v) } }
+                            Segmented(de.photographics.core.vector.ShapeStroke.Align.entries.map { it.label to it }, o.strokeAlign) { v -> vm.setShapeOptions { it.copy(strokeAlign = v) } }
+                            AssistChip(onClick = { vm.setShapeOptions { it.copy(strokeColor = state.bgColor) } }, label = { Text(tr("Konturfarbe = Hintergrundfarbe")) },
+                                leadingIcon = { Box(Modifier.size(14.dp).background(androidx.compose.ui.graphics.Color(o.strokeColor), RoundedCornerShape(3.dp))) })
+                        }
+                    }
+                    if (state.tool == Tool.SHAPE) when (o.kind) {
+                        de.photographics.app.ShapeKind.RECT -> OptionSlider(tr("Eckenradius"), tr("{0} px", o.cornerRadius.roundToInt()), o.cornerRadius, 0f..500f) { v -> vm.setShapeOptions { it.copy(cornerRadius = v) } }
+                        de.photographics.app.ShapeKind.POLYGON -> {
+                            OptionSlider(tr("Seiten"), "${o.sides}", o.sides.toFloat(), 3f..24f) { v -> vm.setShapeOptions { it.copy(sides = v.roundToInt()) } }
+                            OptionSlider(tr("Stern"), "${o.starIndent} %", o.starIndent.toFloat(), 0f..95f) { v -> vm.setShapeOptions { it.copy(starIndent = v.roundToInt()) } }
+                        }
+                        de.photographics.app.ShapeKind.LINE -> OptionSlider(tr("Stärke"), tr("{0} px", o.lineWidth.roundToInt()), o.lineWidth, 1f..200f) { v -> vm.setShapeOptions { it.copy(lineWidth = v) } }
+                        else -> {}
+                    }
+                    if (state.layers.firstOrNull { it.id == state.activeLayerId }?.type == de.photographics.app.LayerType.SHAPE)
+                        AssistChip(onClick = { vm.applyShapeStyleToActive() }, label = { Text(tr("Auf aktive Form anwenden")) })
+                    if (state.tool == Tool.SHAPE) Hint(tr("Aufziehen · Umschalt: gleichseitig · Alt: von der Mitte"))
+                    else {
+                        Hint(tr("Tippen: Ecke · Ziehen: Kurve · Startpunkt: schließen · Anker der Form oder des Pfads verschieben"))
+                        AssistChip(onClick = { vm.penFinish(false) }, label = { Text(tr("Fertig")) }, enabled = state.penAnchors.size >= 2)
+                        AssistChip(onClick = { vm.penUndo() }, label = { Text(tr("Letzten Anker entfernen")) }, enabled = state.penAnchors.isNotEmpty())
+                        AssistChip(onClick = { vm.penCancel() }, label = { Text(tr("Abbrechen")) }, enabled = state.penAnchors.isNotEmpty())
+                    }
+                }
                 Tool.SELECT -> {
                     Divider()
                     Segmented(SelectionShape.entries.map { it.label to it }, state.selectionShape) { vm.setSelectionShape(it) }
@@ -391,6 +460,17 @@ fun ToolOptionsBar(state: EditorUiState, vm: EditorViewModel, onFeatherClick: ()
                             ToggleChip(tr("Alle Ebenen"), state.sampleAllLayers) { vm.setSampleAll(!state.sampleAllLayers) }
                         }
                         SelectionShape.OBJECT -> Hint(tr("Rechteck um das Objekt ziehen"))
+                        SelectionShape.QUICK -> {
+                            OptionSlider(tr("Größe"), tr("{0} px", b.size.roundToInt()), kotlin.math.sqrt((b.size - 1f) / 499f), 0f..1f) { vm.updateBrush(b.copy(size = 1f + 499f * it * it)) }
+                            ToggleChip(tr("Alle Ebenen"), state.sampleAllLayers) { vm.setSampleAll(!state.sampleAllLayers) }
+                            Hint(tr("Über den Bereich malen · weitere Striche fügen hinzu"))
+                        }
+                        SelectionShape.POLYGON -> {
+                            Hint(tr("Tippen setzt Ecken · auf den Startpunkt tippen schließt · Umschalt: 45°"))
+                            AssistChip(onClick = { vm.polyClose() }, label = { Text(tr("Schließen")) }, enabled = state.polyPoints.size >= 6)
+                            AssistChip(onClick = { vm.polyUndo() }, label = { Text(tr("Letzte Ecke entfernen")) }, enabled = state.polyPoints.isNotEmpty())
+                            AssistChip(onClick = { vm.polyCancel() }, label = { Text(tr("Abbrechen")) }, enabled = state.polyPoints.isNotEmpty())
+                        }
                         else -> {}
                     }
                     OptionSlider(tr("Weiche Kante"), tr("{0} px", state.featherRadius.roundToInt()), state.featherRadius, 0f..100f) { vm.setFeather(it) }
@@ -399,7 +479,7 @@ fun ToolOptionsBar(state: EditorUiState, vm: EditorViewModel, onFeatherClick: ()
                     AssistChip(onClick = { vm.invertSelection() }, label = { Text(tr("Umkehren")) }, enabled = state.hasSelection)
                     AssistChip(onClick = onFeatherClick, label = { Text(tr("Kante verbessern")) }, enabled = state.hasSelection)
                     AssistChip(onClick = { vm.clearSelected() }, label = { Text(tr("Löschen")) }, enabled = state.hasSelection)
-                    AssistChip(onClick = { vm.fillSelected() }, label = { Text(tr("Füllen")) })
+                    AssistChip(onClick = onFillClick, label = { Text(tr("Füllen …")) })
                     AssistChip(onClick = { vm.layerViaCopy() }, label = { Text(tr("Ebene durch Kopie")) })
                     AssistChip(onClick = { vm.deselect() }, label = { Text(tr("Aufheben")) }, enabled = state.hasSelection)
                 }
@@ -465,5 +545,17 @@ private fun OptionSlider(label: String, display: String, value: Float, range: Cl
             Text(display, style = MaterialTheme.typography.labelMedium)
         }
         Slider(value, onChange, valueRange = range)
+    }
+}
+
+/** Mischmodus als Auswahlknopf mit Menü. */
+@Composable
+private fun BlendChoice(mode: BlendMode, onChange: (BlendMode) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(onClick = { open = true }) { Text(mode.label) }
+        DropdownMenu(open, { open = false }) {
+            for (m in de.photographics.core.doc.LayerStyles.blendModes) DropdownMenuItem(text = { Text(m.label) }, onClick = { open = false; onChange(m) })
+        }
     }
 }

@@ -21,7 +21,7 @@ class I18nTest {
     /** Schlüssel wie tools: tr("…") überall, dazu Namen, die erst bei der Anzeige übersetzt werden. */
     private fun keys(): Set<String> {
         val root = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "settings.gradle.kts").exists() }
-        val files = listOf("core/src/main/kotlin", "app/src/main/java").flatMap { File(root, it).walkTopDown().filter { f -> f.extension == "kt" }.toList() }
+        val files = listOf("core/src/main/kotlin", "app/src/main/java", "gnome/src/main/kotlin").flatMap { File(root, it).walkTopDown().filter { f -> f.extension == "kt" }.toList() }
         val out = LinkedHashSet<String>()
         val trCall = Regex("\\btr\\($lit")
         val named = listOf(Regex("\\bLook\\($lit"), Regex("\\($lit to tr\\("), Regex("\\bBrushPreset\\($lit"), Regex("\\badd\\($lit\\)"),

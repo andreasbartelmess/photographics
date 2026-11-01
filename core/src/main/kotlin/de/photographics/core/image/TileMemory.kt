@@ -95,13 +95,16 @@ class Tile internal constructor(
     fun pin(forWrite: Boolean = true): IntArray {
         if (forWrite) version++
         val o = owner ?: return array!!
-        val a = o.makeHot(this)
-        pins++
-        if (forWrite) dirty = true
-        return a
+        // Der Kachel-Cache (LRU) wird von Rechen-Threads gleichzeitig benutzt
+        synchronized(o) {
+            val a = o.makeHot(this)
+            pins++
+            if (forWrite) dirty = true
+            return a
+        }
     }
 
-    fun unpin() { if (owner != null && pins > 0) pins-- }
+    fun unpin() { val o = owner ?: return; synchronized(o) { if (pins > 0) pins-- } }
 
     companion object {
         const val SIZE = TileGrid.TILE * TileGrid.TILE
@@ -136,6 +139,12 @@ abstract class TileMemory {
         @JvmStatic
         @Volatile
         var current: TileMemory = HeapTileMemory()
+
+        /**
+         * Bei vollem Kachelspeicher aufgerufen, bevor eine Anforderung scheitert: neu berechenbare
+         * Zwischenspeicher (z. B. Ebeneneffekte) freigeben. Darf selbst keine Kacheln anfordern.
+         */
+        val onPressure = java.util.concurrent.CopyOnWriteArrayList<() -> Unit>()
     }
 }
 
@@ -182,7 +191,6 @@ class SlabTileMemory(
 
     /** Kachel-Cache: zuletzt benutzte heiße Kacheln (Einfügereihenfolge = LRU). */
     private val hot = LinkedHashMap<Tile, Unit>(hotCapacity * 2, 0.75f, true)
-    private val arrayPool = ArrayDeque<IntArray>()
 
     override val usedBytes: Long get() = usedTiles * Tile.BYTES
     val slabCount get() = slabs.size
@@ -197,7 +205,8 @@ class SlabTileMemory(
         var place = findFree()
         if (place == null && reservedBytes + tilesPerSlab * Tile.BYTES <= limitBytes) place = grow()
         if (place == null) {
-            // Unerreichbare Kacheln einsammeln lassen und noch einmal versuchen
+            // Zwischenspeicher freigeben, unerreichbare Kacheln einsammeln lassen und noch einmal versuchen
+            onPressure.forEach { runCatching { it() } }
             repeat(3) { attempt ->
                 if (place != null) return@repeat
                 System.gc()
@@ -250,9 +259,10 @@ class SlabTileMemory(
         }
     }
 
+    /** Nur unter der Sperre dieses Speichers aufrufen ([Tile.pin]). */
     internal fun makeHot(t: Tile): IntArray {
         t.array?.let { hot[t] = Unit; return it }
-        val a = arrayPool.removeFirstOrNull() ?: IntArray(Tile.SIZE)
+        val a = IntArray(Tile.SIZE)
         val b = t.buffer!!.duplicate(); b.position(0); b.get(a, 0, Tile.SIZE)
         t.array = a; t.dirty = false
         hot[t] = Unit
@@ -274,13 +284,14 @@ class SlabTileMemory(
         val a = t.array ?: return
         if (t.dirty) { val b = t.buffer!!.duplicate(); b.position(0); b.put(a, 0, Tile.SIZE) }
         t.array = null; t.dirty = false
-        if (arrayPool.size < 16) arrayPool.addLast(a)
+        // Nicht wiederverwenden: ein Rechen-Thread kann das Array gerade noch ungepinnt lesen und
+        // sähe sonst die Pixel einer fremden Kachel (der GC gibt es frei, sobald niemand mehr liest)
     }
 
     /** Alle Arbeitskopien zurückschreiben und den Cache leeren. */
+    @Synchronized
     override fun flush() {
         val it = hot.keys.iterator()
         while (it.hasNext()) { val t = it.next(); if (t.pins == 0) { it.remove(); cool(t) } }
-        arrayPool.clear()
     }
 }

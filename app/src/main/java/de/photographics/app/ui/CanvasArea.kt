@@ -185,13 +185,45 @@ fun CanvasArea(
     }
     // Laufende Ameisen: nur animieren, solange eine Auswahl oder ein Rahmen zu sehen ist, und mit
     // 20 Schritten/s statt der Bildwiederholrate – jeder Schritt zeichnet die Überlagerungen neu
-    val needAnts = state.selectionOutlines.isNotEmpty() || dragStart != null || pathPoints.isNotEmpty()
+    val needAnts = state.selectionOutlines.isNotEmpty() || dragStart != null || pathPoints.isNotEmpty() || state.polyPoints.isNotEmpty()
     var antPhase by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(needAnts) { while (needAnts) { kotlinx.coroutines.delay(50); antPhase = (antPhase + 1f) % 16f } }
 
     // ------------------------------------------------------------ Werkzeugaktionen
     // Werkzeug des laufenden Strichs (kann vom Stift-Radierer/der Seitentaste überschrieben sein)
     val activeToolRef = remember { arrayOf(Tool.BRUSH) }
+
+    /** Zeichenstift: gezogener Anker eines vorhandenen Pfads (Teilpfad, Anker) und der Arbeitsstand. */
+    var anchorEdit by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var anchorWork by remember { mutableStateOf<de.photographics.core.vector.VectorPath?>(null) }
+    /** Zeichenstift: gerade gesetzter Anker (Ziehen formt die Kurve) bzw. Klick auf den Startpunkt. */
+    var penDown by remember { mutableStateOf<Offset?>(null) }
+
+    /** Auswahlwerkzeug in der Auswahl gezogen: nur den Auswahlrahmen verschieben (wie Photoshop). */
+    var movingSelection by remember { mutableStateOf(false) }
+
+    fun insideOutlines(outlines: List<FloatArray>, p: Offset): Boolean {
+        var inside = false
+        for (poly in outlines) {
+            var j = poly.size - 2
+            var i = 0
+            while (i < poly.size) {
+                val xi = poly[i]; val yi = poly[i + 1]; val xj = poly[j]; val yj = poly[j + 1]
+                if ((yi > p.y) != (yj > p.y) && p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi) inside = !inside
+                j = i; i += 2
+            }
+        }
+        return inside
+    }
+
+    /** Polygon-Lasso: Umschalt hält die neue Kante in 45°-Schritten zur letzten Ecke. */
+    fun polyConstrain(pp: List<Float>, p: Offset): Offset {
+        if (!mods.shift || pp.size < 2) return p
+        val l = Offset(pp[pp.size - 2], pp[pp.size - 1])
+        val ang = Math.round(kotlin.math.atan2(p.y - l.y, p.x - l.x) / (Math.PI / 4)) * (Math.PI / 4)
+        val len = (p - l).getDistance() * kotlin.math.cos(kotlin.math.atan2(p.y - l.y, p.x - l.x) - ang).toFloat()
+        return Offset(l.x + (len * kotlin.math.cos(ang)).toFloat(), l.y + (len * kotlin.math.sin(ang)).toFloat())
+    }
 
     fun toolStart(p: Offset, pressure: Float, override: Tool? = null) {
         val s = current
@@ -202,7 +234,23 @@ fun CanvasArea(
             (tool == Tool.CLONE || tool == Tool.HEAL) && (s.settingCloneSource || mods.alt) -> vm.setCloneSource(p.x, p.y)
             tool == Tool.BRUSH && mods.alt -> { activeToolRef[0] = Tool.EYEDROPPER; vm.pickColor(p.x, p.y) }
             tool == Tool.TEXT -> vm.textTap(p.x, p.y)
+            tool == Tool.SHAPE -> { dragStart = p; dragNow = p }
+            tool == Tool.PEN -> {
+                val tol = 24f * density.density / viewport.scale
+                val pen = s.penAnchors
+                val target = if (pen.isEmpty()) vm.targetPath() else null
+                // Anker eines vorhandenen Pfads anfassen (Direktauswahl)
+                val hit = target?.subpaths?.withIndex()?.flatMap { (si, sp) -> sp.anchors.withIndex().map { (ai, a) -> Triple(si, ai, kotlin.math.hypot(a.x - p.x, a.y - p.y)) } }
+                    ?.minByOrNull { it.third }?.takeIf { it.third < tol }
+                when {
+                    hit != null -> { anchorEdit = hit.first to hit.second; anchorWork = target }
+                    pen.size >= 2 && kotlin.math.hypot(pen[0].x - p.x, pen[0].y - p.y) < tol -> { vm.penFinish(true); penDown = null }
+                    else -> { vm.penAdd(p.x.toDouble(), p.y.toDouble()); penDown = p }
+                }
+            }
             tool == Tool.RED_EYE -> vm.redEye(p.x, p.y)
+            tool == Tool.BUCKET -> vm.bucketFill(p.x, p.y)
+            tool == Tool.MAGIC_ERASER -> vm.magicErase(p.x, p.y)
             tool == Tool.TRANSFORM -> {
                 val box = s.transform
                 if (box != null) {
@@ -231,10 +279,16 @@ fun CanvasArea(
                 else {
                     dragStart = p
                     // Strg/Cmd kehrt „Automatisch auswählen“ für diesen Zug um (wie in Photoshop)
-                    if (s.autoSelectLayer != mods.ctrl) vm.moveBegin(p.x, p.y) else vm.moveBegin()
+                    // In der Auswahl: die ausgewählten Pixel verschieben (Alt: Kopie)
+                    if (s.autoSelectLayer != mods.ctrl) vm.moveBegin(p.x, p.y, at = p, duplicate = mods.alt) else vm.moveBegin(at = p, duplicate = mods.alt)
                 }
             }
             tool == Tool.SELECT && s.selectionShape == SelectionShape.WAND -> vm.magicWand(p.x, p.y)
+            // Polygon-Lasso: die Ecke folgt dem Finger und wird beim Loslassen gesetzt
+            tool == Tool.SELECT && s.selectionShape == SelectionShape.POLYGON -> dragNow = polyConstrain(s.polyPoints, p)
+            tool == Tool.SELECT && s.selectionShape.isShape && !mods.shift && !mods.alt && s.hasSelection && insideOutlines(s.selectionOutlines, p) -> {
+                movingSelection = true; dragStart = p; dragNow = p
+            }
             tool == Tool.SELECT || tool == Tool.GRADIENT -> { dragStart = p; dragNow = p; pathPoints = listOf(p) }
             tool == Tool.CROP -> {
                 dragStart = p; dragNow = p
@@ -289,13 +343,25 @@ fun CanvasArea(
                 } ?: p else p
             }
             tool == Tool.SELECT && s.selectionShape == SelectionShape.WAND -> {}
+            tool == Tool.SELECT && s.selectionShape == SelectionShape.POLYGON -> dragNow = polyConstrain(s.polyPoints, p)
+            tool == Tool.SELECT && movingSelection -> dragNow = p
+            tool == Tool.SHAPE -> dragNow = p
+            tool == Tool.PEN -> {
+                val ae = anchorEdit; val w = anchorWork
+                if (ae != null && w != null) {
+                    val (si, ai) = ae
+                    val a = w.subpaths[si].anchors[ai]
+                    val na = a.moved(p.x - a.x, p.y - a.y)
+                    anchorWork = de.photographics.core.vector.VectorPath(w.subpaths.mapIndexed { i, sp -> if (i != si) sp else sp.copy(anchors = sp.anchors.mapIndexed { k, o -> if (k == ai) na else o }) })
+                } else penDown?.let { d -> if ((p - d).getDistance() * viewport.scale > 4f * density.density) vm.penHandle(p.x.toDouble(), p.y.toDouble()) }
+            }
             tool == Tool.SELECT -> {
                 // Shift: Quadrat/Kreis
                 dragNow = if (s.selectionShape != SelectionShape.LASSO && mods.shift) dragStart?.let { a ->
                     val d = max(abs(p.x - a.x), abs(p.y - a.y))
                     Offset(a.x + d * kotlin.math.sign(p.x - a.x), a.y + d * kotlin.math.sign(p.y - a.y))
                 } ?: p else p
-                if (s.selectionShape == SelectionShape.LASSO) pathPoints = pathPoints + p
+                if (s.selectionShape == SelectionShape.LASSO || s.selectionShape == SelectionShape.QUICK) pathPoints = pathPoints + p
             }
             tool == Tool.CROP -> {
                 dragNow = p
@@ -336,6 +402,39 @@ fun CanvasArea(
                     }
                 }
             }
+            tool == Tool.SELECT && s.selectionShape == SelectionShape.POLYGON -> {
+                val p = dragNow
+                val pp = s.polyPoints
+                if (!cancelled && p != null) {
+                    // Auf den Startpunkt tippen (24 dp Fangbereich) schließt das Polygon
+                    val closes = pp.size >= 6 && (viewport.toScreen(p) - viewport.toScreen(Offset(pp[0], pp[1]))).getDistance() < 24f * density.density
+                    if (closes) vm.polyClose()
+                    else if (pp.size < 2 || (viewport.toScreen(p) - viewport.toScreen(Offset(pp[pp.size - 2], pp[pp.size - 1]))).getDistance() > 2f) vm.polyAdd(p.x, p.y)
+                }
+            }
+            tool == Tool.SHAPE -> {
+                val a = dragStart; val b = dragNow
+                if (!cancelled && a != null && b != null && (b - a).getDistance() * viewport.scale >= 4f)
+                    vm.createShape(vm.shapeFromDrag(a.x.toDouble(), a.y.toDouble(), b.x.toDouble(), b.y.toDouble(), mods.shift, mods.alt))
+            }
+            tool == Tool.PEN -> {
+                val w = anchorWork
+                if (!cancelled && anchorEdit != null && w != null) vm.commitTargetPath(w)
+                anchorEdit = null; anchorWork = null; penDown = null
+            }
+            tool == Tool.SELECT && movingSelection -> {
+                movingSelection = false
+                val a = dragStart; val b = dragNow
+                if (!cancelled && a != null && b != null) {
+                    val dx = (b.x - a.x).roundToInt(); val dy = (b.y - a.y).roundToInt()
+                    if (abs(b.x - a.x) * viewport.scale < 6 && abs(b.y - a.y) * viewport.scale < 6) vm.deselect() else vm.moveSelection(dx, dy)
+                }
+            }
+            tool == Tool.SELECT && s.selectionShape == SelectionShape.QUICK -> if (!cancelled && pathPoints.isNotEmpty()) {
+                val pts = FloatArray(pathPoints.size * 2)
+                pathPoints.forEachIndexed { i, o -> pts[i * 2] = o.x; pts[i * 2 + 1] = o.y }
+                vm.quickSelect(pts)
+            }
             tool == Tool.SELECT -> {
                 val a = dragStart; val b = dragNow
                 if (!cancelled && a != null && b != null) {
@@ -371,7 +470,7 @@ fun CanvasArea(
                     spacePressed -> PointerIcon.Hand
                     state.tool == Tool.TEXT -> PointerIcon.Text
                     state.tool == Tool.MOVE || state.tool == Tool.TRANSFORM -> PointerIcon.Hand
-                    state.tool.isPaintTool || state.tool in setOf(Tool.SELECT, Tool.GRADIENT, Tool.CROP, Tool.EYEDROPPER, Tool.RED_EYE, Tool.PATCH) -> PointerIcon.Crosshair
+                    state.tool.isPaintTool || state.tool in setOf(Tool.SELECT, Tool.GRADIENT, Tool.CROP, Tool.EYEDROPPER, Tool.RED_EYE, Tool.PATCH, Tool.BUCKET, Tool.MAGIC_ERASER) -> PointerIcon.Crosshair
                     else -> PointerIcon.Default
                 },
             )
@@ -597,13 +696,16 @@ fun CanvasArea(
 
             fun s(p: Offset) = viewport.toScreen(p)
 
-            // Auswahl ("laufende Ameisen")
+            // Auswahl ("laufende Ameisen"); beim Verschieben des Rahmens folgen sie dem Finger
+            val sa = dragStart; val sb = dragNow
+            val selOff = if (movingSelection && sa != null && sb != null) Offset((sb.x - sa.x).roundToInt() * scale, (sb.y - sa.y).roundToInt() * scale) else Offset.Zero
             for (poly in state.selectionOutlines) {
                 if (poly.size < 6) continue
+                val ox = offset.x + selOff.x; val oy = offset.y + selOff.y
                 val path = Path().apply {
-                    moveTo(poly[0] * scale + offset.x, poly[1] * scale + offset.y)
+                    moveTo(poly[0] * scale + ox, poly[1] * scale + oy)
                     var i = 2
-                    while (i + 1 < poly.size) { lineTo(poly[i] * scale + offset.x, poly[i + 1] * scale + offset.y); i += 2 }
+                    while (i + 1 < poly.size) { lineTo(poly[i] * scale + ox, poly[i + 1] * scale + oy); i += 2 }
                     close()
                 }
                 marchingAnts(path, antPhase)
@@ -611,7 +713,13 @@ fun CanvasArea(
 
             // Auswahl während des Ziehens
             val a = dragStart; val b = dragNow
-            if (state.tool == Tool.SELECT && a != null && b != null) {
+            if (state.tool == Tool.SELECT && state.selectionShape == SelectionShape.QUICK && a != null && pathPoints.isNotEmpty()) {
+                // Schnellauswahl: die Pinselspur zeigen, ausgewählt wird beim Loslassen
+                val path = Path()
+                pathPoints.forEachIndexed { i, p -> if (i == 0) path.moveTo(s(p).x, s(p).y) else path.lineTo(s(p).x, s(p).y) }
+                if (pathPoints.size == 1) path.lineTo(s(pathPoints[0]).x + 0.1f, s(pathPoints[0]).y)
+                drawPath(path, Color(0x593F8CF2), style = Stroke(state.brush.size * scale, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+            } else if (state.tool == Tool.SELECT && !movingSelection && a != null && b != null) {
                 val path = Path()
                 when (state.selectionShape) {
                     SelectionShape.ELLIPSE -> path.addOval(rectBetween(s(a), s(b)))
@@ -619,6 +727,52 @@ fun CanvasArea(
                     else -> path.addRect(rectBetween(s(a), s(b)))
                 }
                 marchingAnts(path, antPhase)
+            }
+
+            // Formen und Pfade: gezogene Form, Pfad mit Ankern (Zeichenstift), laufender Teilpfad
+            fun vPath(vp: de.photographics.core.vector.VectorPath): Path = Path().apply {
+                for ((pts, closed) in vp.flatten(0.5 / scale)) {
+                    moveTo(pts[0] * scale + offset.x, pts[1] * scale + offset.y)
+                    var i = 2
+                    while (i + 1 < pts.size) { lineTo(pts[i] * scale + offset.x, pts[i + 1] * scale + offset.y); i += 2 }
+                    if (closed) close()
+                }
+            }
+            val accent = Color(0xFF3584E4)
+            if (state.tool == Tool.SHAPE && a != null && b != null)
+                drawPath(vPath(vm.shapeFromDrag(a.x.toDouble(), a.y.toDouble(), b.x.toDouble(), b.y.toDouble(), mods.shift, mods.alt)), accent, style = Stroke(1.5f * density.density))
+            if (state.tool == Tool.PEN || state.tool == Tool.SHAPE) {
+                val target = anchorWork ?: vm.targetPath()
+                if (target != null) {
+                    drawPath(vPath(target), accent, style = Stroke(1.5f * density.density))
+                    if (state.tool == Tool.PEN) for (sp in target.subpaths) for (an in sp.anchors) {
+                        val c = s(Offset(an.x.toFloat(), an.y.toFloat()))
+                        drawRect(Color.White, c - Offset(5f, 5f) * density.density, Size(10f, 10f) * density.density)
+                        drawRect(accent, c - Offset(5f, 5f) * density.density, Size(10f, 10f) * density.density, style = Stroke(1.5f * density.density))
+                    }
+                }
+                val pen = state.penAnchors
+                if (pen.isNotEmpty()) {
+                    drawPath(vPath(de.photographics.core.vector.VectorPath(listOf(de.photographics.core.vector.SubPath(pen, false)))), Color.White, style = Stroke(2f * density.density))
+                    for (an in pen) drawCircle(accent, 5f * density.density, s(Offset(an.x.toFloat(), an.y.toFloat())))
+                    pen.last().takeIf { !it.isCorner }?.let { l ->
+                        drawLine(accent, s(Offset(l.inX.toFloat(), l.inY.toFloat())), s(Offset(l.outX.toFloat(), l.outY.toFloat())), strokeWidth = 1.5f * density.density)
+                    }
+                }
+            }
+
+            // Polygon-Lasso: gesetzte Kanten, Linie zum Finger bzw. Mauszeiger, Startpunkt
+            val pp = state.polyPoints
+            if (pp.isNotEmpty()) {
+                val path = Path()
+                path.moveTo(pp[0] * scale + offset.x, pp[1] * scale + offset.y)
+                var i = 2
+                while (i + 1 < pp.size) { path.lineTo(pp[i] * scale + offset.x, pp[i + 1] * scale + offset.y); i += 2 }
+                (b ?: hover)?.let { e -> s(e).let { path.lineTo(it.x, it.y) } }
+                marchingAnts(path, antPhase)
+                val start = Offset(pp[0] * scale + offset.x, pp[1] * scale + offset.y)
+                drawCircle(Color.White, 6f * density.density, start)
+                drawCircle(Color.Black, 6f * density.density, start, style = Stroke(1.5f * density.density))
             }
 
             // Verlaufslinie während des Ziehens: Start- und Endpunkt mit Linie

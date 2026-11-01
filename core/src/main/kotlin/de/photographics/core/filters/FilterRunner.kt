@@ -18,6 +18,8 @@ object FilterRunner {
     private const val BAND_PIXELS = 2_000_000
 
     fun apply(doc: Document, layer: PixelLayer, filter: ImageFilter): Pair<TileTransaction, IntRect> {
+        val low = layer.low
+        if (filter is PixelAdjustment && low != null && doc.bitDepth == 16) return apply16(doc, layer, low, filter)
         val tx = TileTransaction(layer.pixels)
         val content = layer.pixels.contentBounds()
         val ra = filter is RandomAccessFilter
@@ -66,6 +68,46 @@ object FilterRunner {
                 BandResult(band, read, src, filter.process(src, read.width, read.height, read.left, read.top, doc.width, doc.height))
             }
         }, consume = { _, r -> writeBack(layer, r.band, r.read, r.src, r.out, sel) })
+        return tx to region
+    }
+
+    /**
+     * Korrektur in 16 Bit: jeder Kanalwert (0..65535) geht ohne Rundung auf 8 Bit durch die Abbildung
+     * (zwischen den 8-Bit-Stützstellen interpoliert); obere und untere Bits werden geschrieben.
+     */
+    private fun apply16(doc: Document, layer: PixelLayer, low: TileGrid, filter: PixelAdjustment): Pair<TileTransaction, IntRect> {
+        val tx = TileTransaction(layer.pixels)
+        val ltx = TileTransaction(low).also { tx.linked = it }
+        var region = layer.pixels.contentBounds().intersect(layer.pixels.extent)
+        val sel = doc.selection
+        sel?.let { region = region.intersect(it.bounds) }
+        if (region.isEmpty) return tx to IntRect.EMPTY
+        tx.touch(region); ltx.touch(region)
+        val map = de.photographics.core.adjust.RgbMap { rgb -> filter.map(0xFF000000.toInt() or rgb) and 0xFFFFFF }
+        val bandH = maxOf(1, 65_536 / region.width)
+        val count = (region.height + bandH - 1) / bandH
+        Parallel.bands(count, region.width.toLong() * bandH * 24, compute = { i ->
+            val band = IntRect(region.left, region.top + i * bandH, region.right, minOf(region.bottom, region.top + (i + 1) * bandH))
+            val h = IntArray(band.width * band.height); tx.readOriginal(band, h)
+            val l = IntArray(band.width * band.height); ltx.readOriginal(band, l)
+            val out = FloatArray(3)
+            for (k in h.indices) {
+                if ((h[k] ushr 24) == 0 && (l[k] ushr 24) == 0) continue
+                fun v(s: Int) = ((((h[k] shr s) and 0xFF) shl 8) or ((l[k] shr s) and 0xFF)) / 257f
+                de.photographics.core.render.Compositor.mapSmooth(map, v(16), v(8), v(0), out)
+                val s = sel?.at(band.left + k % band.width, band.top + k / band.width) ?: 255
+                var ch = h[k] and 0xFF000000.toInt(); var cl = l[k] and 0xFF000000.toInt()
+                for (j in 0 until 3) {
+                    val sh = de.photographics.core.image.Colors.SHIFTS_RGB[j]
+                    val orig = v(sh)
+                    val nv = orig + (out[j] - orig) * s / 255f
+                    val q = (nv * 257f + 0.5f).toInt().coerceIn(0, 65535)
+                    ch = ch or ((q ushr 8) shl sh); cl = cl or ((q and 0xFF) shl sh)
+                }
+                h[k] = ch; l[k] = cl
+            }
+            Triple(band, h, l)
+        }, consume = { _, (band, h, l) -> layer.pixels.writeRect(band, h); low.writeRect(band, l) })
         return tx to region
     }
 

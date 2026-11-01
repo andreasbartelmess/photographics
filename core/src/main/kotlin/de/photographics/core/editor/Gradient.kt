@@ -90,4 +90,45 @@ class Gradient(
             grid.writeRect(r, px)
         }
     }
+
+    /**
+     * 16 Bit: Verlauf ohne Dithering in [hi]/[lo] (obere/untere Bits) schreiben – stufenlos, auch
+     * nach starken Korrekturen. Sonst wie [apply] (Pixel, nicht Maske).
+     */
+    fun apply16(hi: TileGrid, lo: TileGrid, area: IntRect, opacity: Float, sel: TileGrid?, lockAlpha: Boolean) {
+        val band = TileGrid.TILE
+        val a0 = (c0 ushr 24) / 255f; val a1 = (c1 ushr 24) / 255f
+        var y = Math.floorDiv(area.top, band) * band
+        while (y < area.bottom) {
+            val r = IntRect(area.left, maxOf(area.top, y), area.right, minOf(area.bottom, y + band))
+            y += band
+            if (r.isEmpty) continue
+            val n = r.width * r.height
+            val ph = IntArray(n); hi.readRect(r, ph)
+            val pl = IntArray(n); lo.readRect(r, pl)
+            val sv = sel?.let { IntArray(n).also { s -> it.readRect(r, s) } }
+            for (k in 0 until n) {
+                val amount = opacity * (if (sv != null) sv[k] / 255f else 1f)
+                if (amount <= 0f) continue
+                val x = r.left + k % r.width; val yy = r.top + k / r.width
+                val t = t(x, yy)
+                val sa = (a0 + (a1 - a0) * t) * amount
+                if (sa <= 0f) continue
+                // Ziel in 0..1
+                val h = ph[k]; val l = pl[k]
+                fun d(s: Int) = ((((h shr s) and 0xFF) shl 8) or ((l shr s) and 0xFF)) / 65535f
+                fun c(s: Int): Float { val v0 = ((c0 shr s) and 0xFF) * a0; val v1 = ((c1 shr s) and 0xFF) * a1; val a = a0 + (a1 - a0) * t; return if (a <= 0f) 0f else (v0 + (v1 - v0) * t) / a / 255f }
+                val da = d(24)
+                val oa = if (lockAlpha) da else sa + da * (1 - sa)
+                var outH = 0; var outL = 0
+                for (s in de.photographics.core.image.Colors.SHIFTS_ARGB) {
+                    val v = if (s == 24) oa else if (oa <= 0f) 0f else (c(s) * sa + d(s) * da * (1 - sa)) / (sa + da * (1 - sa)).coerceAtLeast(1e-6f)
+                    val q = (v * 65535f + 0.5f).toInt().coerceIn(0, 65535)
+                    outH = outH or ((q ushr 8) shl s); outL = outL or ((q and 0xFF) shl s)
+                }
+                ph[k] = outH; pl[k] = outL
+            }
+            hi.writeRect(r, ph); lo.writeRect(r, pl)
+        }
+    }
 }

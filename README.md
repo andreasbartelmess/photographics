@@ -2,18 +2,23 @@
 
 <h1 align="center">photographics</h1>
 
-<p align="center"><b>A layer-based photo editor for Android tablets.</b><br>
+<p align="center"><b>A layer-based photo editor for Android tablets and Linux.</b><br>
 Layers, masks and retouching with the pen. Opens and saves PSD, TIFF and GIMP files with all their layers.</p>
 
 <p align="center"><a href="https://photographics.andreasbartelmess.de/en/">Website</a> · <a href="README.de.md">Deutsch</a> · <a href="../../releases">Download</a> · <a href="CONTRIBUTING.md">Contributing</a></p>
 
-> **This is an early preview (version 0.3).** Most of it works, some things are missing or still change.
+> **This is an early preview (version 0.4).** Most of it works, some things are missing or still change.
 > Please keep a backup of important files. Feedback, bug reports and people who want to help build it
 > are very welcome: open an [issue](../../issues/new/choose) or write to info@andreasbartelmess.de.
 
 ![photographics on a tablet: a landscape photo with curves, hue/saturation and a film look as adjustment layers](docs/screenshots/editor-ebenen.png)
 
-Retouch on a tablet with a pen, then continue on the desktop with the same file. The user interface is
+Retouch on a tablet with a pen, then continue on the desktop with the same file – since 0.4 also in
+photographics itself: the **Linux version** (GNOME, Flatpak) shares the same core.
+
+![photographics for Linux (GNOME): layers panel and tools](docs/screenshots/gnome-ebenen.png)
+
+ The user interface is
 available in **English and German**; more translations are one of the easiest ways to help.
 
 ## Features
@@ -93,6 +98,17 @@ with the debug key.
 
 **Use release builds for testing performance** – debug builds are several times slower on Android.
 
+**Linux (GNOME):** module `:gnome` (Kotlin + GTK 4/libadwaita via java-gi, needs Java 25 at runtime).
+
+```bash
+./gradlew :gnome:run --args="image.psd"   # run from source
+gnome/install.sh                          # install for the current user (~/.local)
+gnome/flatpak/build.sh                    # Flatpak bundle dist/photographics-<version>.flatpak
+```
+
+`gnome/flatpak/build.sh` needs `org.gnome.Sdk//51` and `org.freedesktop.Sdk.Extension.openjdk25//26.08`
+from Flathub; the manifest for a Flathub-style build is `gnome/flatpak/de.andreasbartelmess.Photographics.yml`.
+
 ## Project layout
 
 ```
@@ -126,15 +142,18 @@ report (`report.html`, `report.csv`) with side-by-side previews of every file th
 
 No fixed dates, and the order may change. Suggestions are welcome.
 
+- **Done in 0.4:** Linux (GNOME) version as Flatpak; editable layer styles incl. bevel, satin and
+  gradient overlay; shape layers, pen tool, paths and alpha channels; filter gallery (47 effects);
+  16-bit editing; paint bucket, fill command, pencil, background and magic eraser; quick selection,
+  polygonal lasso; copy/paste and floating selections
 - **Done in 0.3:** GPU preview for moving, transforming and opacity; rendering layer effects; English
   user interface; liquify; gradient tool, magic wand, object selection and auto-select; per-channel
   curves with histogram; better content-aware fill
 - **Next:** autosave and crash recovery; custom fonts (TTF/OTF); history panel with snapshots; select
   subject and sky with an on-device model; refine edge for hair
-- **After that:** frequency separation helper; editing and creating layer
-  effects; batch export (several sizes and formats at once); pen tool and paths
-- **Later:** 16-bit editing; CMYK documents and export; display colour management; full GPU
-  compositing; Linux (GNOME) and iPad
+- **After that:** frequency separation helper; batch export (several sizes and formats at once);
+  patterns and pattern overlay
+- **Later:** CMYK documents and export; display colour management; full GPU compositing; iPad
 
 ## Help wanted
 
@@ -146,8 +165,8 @@ photographics is a one-person project so far. If any of this sounds like you, I'
 - **Translations.** English and German exist. Translations are plain tab-separated text files in
   `core/src/main/resources/i18n/` (German text → translation, see `en.tsv`).
 - **GPU compositing.** Live previews run on the GPU, the final composite still runs on the CPU.
-- **Layer effects.** Rendered, but not editable yet; bevel, satin and gradient/pattern overlay are missing.
-- **Ports.** Linux (GNOME) and iOS are planned; the core is plain Kotlin/JVM without Android dependencies.
+- **Layer effects.** Rendered and editable; pattern overlay is still missing.
+- **Ports.** Linux (GNOME) exists since 0.4; iOS is planned. The core is plain Kotlin/JVM without Android dependencies.
 
 Bug reports, PSD compatibility reports and pull requests are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
 

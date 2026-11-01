@@ -54,10 +54,45 @@ object PsdEffects {
                 },
             )
         }
+        fun angle(e: PsdDescriptor, key: String, def: Double) = e.double(key) ?: def
+        fun enumOf(e: PsdDescriptor, key: String) = (e[key] as? PsdDescriptor.EnumValue)?.value
+        val bevel = list("ebbl", "bevelEmbossMulti").firstOrNull()?.let { e ->
+            LayerEffects.Bevel(
+                style = when (enumOf(e, "bvlS")) {
+                    "OtrB" -> LayerEffects.BevelStyle.OUTER; "Embs" -> LayerEffects.BevelStyle.EMBOSS
+                    "PlEb" -> LayerEffects.BevelStyle.PILLOW; else -> LayerEffects.BevelStyle.INNER
+                },
+                depth = (e.double("srgR") ?: 100.0) / 100.0, up = enumOf(e, "bvlD") != "Out ",
+                size = (e.double("blur") ?: 5.0) * scale, soften = (e.double("Sftn") ?: 0.0) * scale,
+                angle = angle(e, "lagl", 120.0), useGlobalAngle = e.bool("uglg") ?: true, altitude = angle(e, "Lald", 30.0),
+                highlightColor = e.descriptor("hglC")?.let { color(it) } ?: 0xFFFFFF,
+                highlightOpacity = ((e.double("hglO") ?: 75.0) / 100.0).toFloat().coerceIn(0f, 1f),
+                highlightBlend = (e["hglM"] as? PsdDescriptor.EnumValue)?.value?.let { BLEND[it] } ?: BlendMode.SCREEN,
+                shadowColor = e.descriptor("sdwC")?.let { color(it) } ?: 0,
+                shadowOpacity = ((e.double("sdwO") ?: 75.0) / 100.0).toFloat().coerceIn(0f, 1f),
+                shadowBlend = (e["sdwM"] as? PsdDescriptor.EnumValue)?.value?.let { BLEND[it] } ?: BlendMode.MULTIPLY,
+            )
+        }
+        val satin = list("ChFX", "satinMulti").firstOrNull()?.let { e ->
+            LayerEffects.Satin(
+                color = color(e.descriptor("Clr ")), opacity = opacity(e), blend = blend(e, BlendMode.MULTIPLY),
+                angle = angle(e, "lagl", 19.0), distance = (e.double("Dstn") ?: 11.0) * scale,
+                size = (e.double("blur") ?: 14.0) * scale, invert = e.bool("Invr") ?: true,
+            )
+        }
+        val gradient = list("GrFl", "gradientFillMulti").firstOrNull()?.let { e ->
+            // Verlauf mit zwei Farben: erster und letzter Farbunterbrechungspunkt
+            val stops = (e.descriptor("Grad")?.get("Clrs") as? List<*>)?.filterIsInstance<PsdDescriptor>()
+                ?.sortedBy { it.int("Lctn") ?: 0 }.orEmpty()
+            LayerEffects.GradientOverlay(
+                color0 = stops.firstOrNull()?.let { color(it.descriptor("Clr ")) } ?: 0,
+                color1 = stops.lastOrNull()?.let { color(it.descriptor("Clr ")) } ?: 0xFFFFFF,
+                opacity = opacity(e), blend = blend(e, BlendMode.NORMAL), angle = angle(e, "Angl", 90.0),
+                radial = enumOf(e, "Type") == "Rdl ", reverse = e.bool("Rvrs") ?: false,
+                scale = (e.double("Scl ") ?: 100.0) / 100.0,
+            )
+        }
         val unsupported = buildList {
-            if (list("ebbl", "bevelEmbossMulti").isNotEmpty()) add("Abgeflachte Kante und Relief")
-            if (list("ChFX", "satinMulti").isNotEmpty()) add("Glanz")
-            if (list("GrFl", "gradientFillMulti").isNotEmpty()) add("Verlaufsüberlagerung")
             if (list("patternFill", "patternFillMulti").isNotEmpty()) add("Musterüberlagerung")
         }
         return LayerEffects(
@@ -68,6 +103,7 @@ object PsdEffects {
             innerGlow = list("IrGl", "innerGlowMulti").firstOrNull()?.let { glow(it, inner = true) },
             strokes = strokes,
             colorOverlays = list("SoFi", "solidFillMulti").map { LayerEffects.ColorOverlay(color(it.descriptor("Clr ")), opacity(it), blend(it, BlendMode.NORMAL)) },
+            bevel = bevel, satin = satin, gradientOverlay = gradient,
             unsupported = unsupported,
         )
     }
@@ -80,27 +116,70 @@ object PsdEffects {
             this["Rd  "] = ((c shr 16) and 0xFF).toDouble(); this["Grn "] = ((c shr 8) and 0xFF).toDouble(); this["Bl  "] = (c and 0xFF).toDouble()
         }
         fun md(m: BlendMode) = PsdDescriptor.EnumValue("BlnM", BLEND.entries.firstOrNull { it.value == m }?.key ?: "Nrml")
+        fun ang(v: Double) = PsdDescriptor.UnitFloat("#Ang", v)
+        // Kontur „Linear“; Photoshop erwartet sie bei Schatten, Schein, Kante und Glanz
+        fun contour() = PsdDescriptor("ShpC").apply {
+            this["Nm  "] = "Linear"
+            this["Crv "] = listOf(0.0 to 0.0, 255.0 to 255.0).map { (x, y) -> PsdDescriptor("CrPt").apply { this["Hrzn"] = x; this["Vrtc"] = y } }
+        }
+        fun PsdDescriptor.head() { this["enab"] = true; this["present"] = true; this["showInDialog"] = true }
         fun shadow(cls: String, s: LayerEffects.Shadow) = PsdDescriptor(cls).apply {
-            this["enab"] = true; this["Md  "] = md(s.blend); this["Clr "] = clr(s.color); this["Opct"] = pct(s.opacity * 100.0)
-            this["uglg"] = s.useGlobalAngle; this["lagl"] = PsdDescriptor.UnitFloat("#Ang", s.angle); this["Dstn"] = px(s.distance)
-            this["Ckmt"] = px(s.spread * 100.0); this["blur"] = px(s.size); if (cls == "DrSh") this["layerConceals"] = s.knockOut
+            head(); this["Md  "] = md(s.blend); this["Clr "] = clr(s.color); this["Opct"] = pct(s.opacity * 100.0)
+            this["uglg"] = s.useGlobalAngle; this["lagl"] = ang(s.angle); this["Dstn"] = px(s.distance)
+            this["Ckmt"] = px(s.spread * 100.0); this["blur"] = px(s.size); this["Nose"] = pct(0.0); this["AntA"] = false
+            this["TrnS"] = contour(); if (cls == "DrSh") this["layerConceals"] = s.knockOut
         }
         fun glow(cls: String, g: LayerEffects.Glow) = PsdDescriptor(cls).apply {
-            this["enab"] = true; this["Md  "] = md(g.blend); this["Clr "] = clr(g.color); this["Opct"] = pct(g.opacity * 100.0)
-            this["Ckmt"] = px(g.spread * 100.0); this["blur"] = px(g.size)
+            head(); this["Md  "] = md(g.blend); this["Clr "] = clr(g.color); this["Opct"] = pct(g.opacity * 100.0)
+            this["GlwT"] = PsdDescriptor.EnumValue("BETE", "SfBL"); this["Ckmt"] = px(g.spread * 100.0); this["blur"] = px(g.size)
+            this["Nose"] = pct(0.0); this["ShdN"] = pct(0.0); this["AntA"] = false; this["TrnS"] = contour(); this["Inpr"] = pct(50.0)
             if (cls == "IrGl") this["glwS"] = PsdDescriptor.EnumValue("IGSr", if (g.fromEdge) "SrcE" else "SrcC")
         }
         val d = PsdDescriptor("null").apply {
-            this["Scl "] = pct(100.0); this["masterFXSwitch"] = fx.enabled
+            // Reihenfolge wie Photoshop im Block lfx2: erst der Hauptschalter, dann die Skalierung
+            this["masterFXSwitch"] = fx.enabled; this["Scl "] = pct(100.0)
             fx.dropShadows.firstOrNull()?.let { this["DrSh"] = shadow("DrSh", it) }
             fx.innerShadows.firstOrNull()?.let { this["IrSh"] = shadow("IrSh", it) }
             fx.outerGlow?.let { this["OrGl"] = glow("OrGl", it) }
             fx.innerGlow?.let { this["IrGl"] = glow("IrGl", it) }
+            fx.bevel?.let { b -> this["ebbl"] = PsdDescriptor("ebbl").apply {
+                head()
+                this["hglM"] = md(b.highlightBlend); this["hglC"] = clr(b.highlightColor); this["hglO"] = pct(b.highlightOpacity * 100.0)
+                this["sdwM"] = md(b.shadowBlend); this["sdwC"] = clr(b.shadowColor); this["sdwO"] = pct(b.shadowOpacity * 100.0)
+                this["bvlT"] = PsdDescriptor.EnumValue("bvlT", "SfBL")
+                this["bvlS"] = PsdDescriptor.EnumValue("BESl", when (b.style) {
+                    LayerEffects.BevelStyle.INNER -> "InrB"; LayerEffects.BevelStyle.OUTER -> "OtrB"
+                    LayerEffects.BevelStyle.EMBOSS -> "Embs"; LayerEffects.BevelStyle.PILLOW -> "PlEb"
+                })
+                this["uglg"] = b.useGlobalAngle; this["lagl"] = ang(b.angle); this["Lald"] = ang(b.altitude)
+                this["srgR"] = pct(b.depth * 100.0); this["blur"] = px(b.size)
+                this["bvlD"] = PsdDescriptor.EnumValue("BESs", if (b.up) "In  " else "Out ")
+                this["TrnS"] = contour(); this["antialiasGloss"] = false; this["Sftn"] = px(b.soften)
+                this["useShape"] = false; this["useTexture"] = false
+            } }
             fx.colorOverlays.firstOrNull()?.let { o -> this["SoFi"] = PsdDescriptor("SoFi").apply {
-                this["enab"] = true; this["Md  "] = md(o.blend); this["Opct"] = pct(o.opacity * 100.0); this["Clr "] = clr(o.color)
+                head(); this["Md  "] = md(o.blend); this["Opct"] = pct(o.opacity * 100.0); this["Clr "] = clr(o.color)
+            } }
+            fx.gradientOverlay?.let { g -> this["GrFl"] = PsdDescriptor("GrFl").apply {
+                head(); this["Md  "] = md(g.blend); this["Opct"] = pct(g.opacity * 100.0)
+                this["Grad"] = PsdDescriptor("Grdn").apply {
+                    this["Nm  "] = "Custom"; this["GrdF"] = PsdDescriptor.EnumValue("GrdF", "CstS"); this["Intr"] = 4096.0
+                    this["Clrs"] = listOf(0 to g.color0, 4096 to g.color1).map { (loc, c) -> PsdDescriptor("Clrt").apply {
+                        this["Clr "] = clr(c); this["Type"] = PsdDescriptor.EnumValue("Clry", "UsrS"); this["Lctn"] = loc; this["Mdpn"] = 50
+                    } }
+                    this["Trns"] = listOf(0, 4096).map { loc -> PsdDescriptor("TrnS").apply { this["Opct"] = pct(100.0); this["Lctn"] = loc; this["Mdpn"] = 50 } }
+                }
+                this["Angl"] = ang(g.angle); this["Type"] = PsdDescriptor.EnumValue("GrdT", if (g.radial) "Rdl " else "Lnr ")
+                this["Rvrs"] = g.reverse; this["Dthr"] = false; this["Algn"] = true; this["Scl "] = pct(g.scale * 100.0)
+                this["Ofst"] = PsdDescriptor("Pnt ").apply { this["Hrzn"] = pct(0.0); this["Vrtc"] = pct(0.0) }
+            } }
+            fx.satin?.let { s -> this["ChFX"] = PsdDescriptor("ChFX").apply {
+                head(); this["Md  "] = md(s.blend); this["Clr "] = clr(s.color); this["AntA"] = true; this["Invr"] = s.invert
+                this["Opct"] = pct(s.opacity * 100.0); this["lagl"] = ang(s.angle); this["Dstn"] = px(s.distance); this["blur"] = px(s.size)
+                this["MpgS"] = contour()
             } }
             fx.strokes.firstOrNull()?.let { k -> this["FrFX"] = PsdDescriptor("FrFX").apply {
-                this["enab"] = true
+                head()
                 this["Styl"] = PsdDescriptor.EnumValue("FStl", when (k.position) {
                     LayerEffects.StrokePosition.OUTSIDE -> "OutF"; LayerEffects.StrokePosition.INSIDE -> "InsF"; LayerEffects.StrokePosition.CENTER -> "CtrF"
                 })

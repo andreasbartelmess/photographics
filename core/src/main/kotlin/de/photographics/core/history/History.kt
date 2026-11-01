@@ -99,8 +99,10 @@ class History(
     /**
      * Sorgt vor einer großen Aktion für [bytes] freien Arbeitsspeicher, indem Verlaufsschritte
      * (auch der jüngste) ausgelagert bzw. ohne Arbeitsvolume die ältesten verworfen werden.
+     * [mayDrop] = false: nur auslagern, nichts verwerfen (während Rückgängig/Wiederholen).
      */
-    fun makeRoom(bytes: Long) {
+    /** [keep]: dieser Schritt wird gleich angewendet – nicht auslagern (würde sofort zurückgelesen). */
+    fun makeRoom(bytes: Long, mayDrop: Boolean = true, keep: HistoryEntry? = null) {
         fun free(): Long { (memory as? SlabTileMemory)?.reclaim(); return memory.freeBytes }
         val reserve = bytes + memory.limitBytes / 10
         if (free() >= reserve) return
@@ -108,27 +110,32 @@ class History(
         if (free() >= reserve) return
         scratch?.let { disk ->
             for (c in undoStack.toList() + redoStack.toList()) {
-                if (c.byteSize == 0L || !disk.hasRoom(c.byteSize)) continue
+                if (c === keep || c.byteSize == 0L || !disk.hasRoom(c.byteSize)) continue
                 try { c.spill(disk) } catch (_: java.io.IOException) { break }
             }
             System.gc()
             if (free() >= reserve) return
         }
-        while (undoStack.isNotEmpty() && free() < reserve) {
+        while (mayDrop && undoStack.isNotEmpty() && free() < reserve) {
             redoStack.forEach { it.dispose() }; redoStack.clear()
             undoStack.removeFirst().dispose(); System.gc()
         }
     }
 
     fun undo(doc: Document): HistoryEntry? {
-        val e = undoStack.removeLastOrNull() ?: return null
+        val e = undoStack.lastOrNull() ?: return null
+        // Rückgängig kann so viele Kacheln brauchen, wie der Schritt belegt: vorher Platz schaffen
+        makeRoom(e.byteSize, mayDrop = false, keep = e)
+        undoStack.removeLastOrNull()
         e.undo(doc); redoStack.addLast(e)
         enforceBudget()
         return e
     }
 
     fun redo(doc: Document): HistoryEntry? {
-        val e = redoStack.removeLastOrNull() ?: return null
+        val e = redoStack.lastOrNull() ?: return null
+        makeRoom(e.byteSize, mayDrop = false, keep = e)
+        redoStack.removeLastOrNull()
         e.redo(doc); undoStack.addLast(e)
         enforceBudget()
         return e
@@ -176,6 +183,12 @@ class History(
 class TileTransaction(val grid: TileGrid) {
     private val originals = HashMap<Int, Tile?>()
 
+    /**
+     * Gekoppelte Transaktion (16 Bit: das Raster der unteren Bits): wird mit gesichert, zurückgerollt
+     * und als Teil desselben Verlaufsschritts übernommen.
+     */
+    var linked: TileTransaction? = null
+
     /** Sichert alle Kacheln im Rechteck, bevor sie verändert werden. */
     fun touch(rect: IntRect) {
         grid.forTilesIn(rect) { tx, ty ->
@@ -220,13 +233,15 @@ class TileTransaction(val grid: TileGrid) {
 
     /** Schließt die Transaktion ab. Der Patch hält nur die Originalkacheln (keine zweite Kopie). */
     fun commit(label: String): TilePatch? {
-        if (originals.isEmpty()) return null
-        val patch = TilePatch(label, grid, HashMap(originals))
+        val extra = linked?.commit(label)
+        if (originals.isEmpty()) return extra
+        val patch = TilePatch(label, grid, HashMap(originals), extra)
         originals.clear()
         return patch
     }
 
     fun rollback() {
+        linked?.rollback()
         for ((key, t) in originals) grid.setTile(key % grid.tilesX, key / grid.tilesX, t)
         originals.clear()
     }
@@ -240,13 +255,15 @@ class TilePatch(
     override val label: String,
     private val grid: TileGrid,
     private var stash: HashMap<Int, Tile?>,
+    /** Mitgetauschte Änderung eines gekoppelten Rasters (16 Bit: untere Bits). */
+    private val extra: TilePatch? = null,
 ) : HistoryEntry {
     private val keys = stash.keys.toIntArray()
     private var file: java.io.File? = null
     private var disk: ScratchDisk? = null
 
     override val byteSize: Long
-        get() = stash.values.count { it != null }.toLong() * Tile.BYTES
+        get() = stash.values.count { it != null }.toLong() * Tile.BYTES + (extra?.byteSize ?: 0L)
 
     /** Betroffener Bereich in Dokumentkoordinaten (zum Neuzeichnen). */
     val bounds: IntRect
@@ -256,15 +273,17 @@ class TilePatch(
     override fun redo(doc: Document) = swap()
 
     override fun spill(disk: ScratchDisk): Boolean {
-        if (file != null) return false
+        val e = extra?.spill(disk) == true
+        if (file != null) return e
         file = disk.writeTiles(stash); this.disk = disk
         stash = HashMap()
         return true
     }
 
-    override fun dispose() { file?.delete(); file = null }
+    override fun dispose() { extra?.dispose(); file?.delete(); file = null }
 
     private fun swap() {
+        extra?.swap()
         file?.let { f -> stash = disk!!.readTiles(f); f.delete(); file = null }
         for (key in stash.keys.toList()) {
             val tx = key % grid.tilesX; val ty = key / grid.tilesX
@@ -322,13 +341,13 @@ class DocumentChangeEntry(
         this.disk = disk
         for ((key, g) in grids) spilled[key] = disk.writeGrid(g)
         stash = mapStash { id, d ->
-            Document.LayerData(if ((id to false) in spilled) null else d.pixels, if ((id to true) in spilled) null else d.mask, d.transform, d.style, d.warp)
+            Document.LayerData(if ((id to false) in spilled) null else d.pixels, if ((id to true) in spilled) null else d.mask, d.transform, d.style, d.warp, d.low)
         }
         return true
     }
 
     private fun mapStash(f: (Int, Document.LayerData) -> Document.LayerData) =
-        Document.Snapshot(stash.width, stash.height, stash.layers.mapValues { (id, d) -> f(id, d) }, stash.selection, stash.guides)
+        Document.Snapshot(stash.width, stash.height, stash.layers.mapValues { (id, d) -> f(id, d) }, stash.selection, stash.guides, stash.paths, stash.workPath, stash.channels)
 
     private fun swap(doc: Document) {
         if (spilled.isNotEmpty()) {
@@ -337,7 +356,7 @@ class DocumentChangeEntry(
                 Document.LayerData(
                     spilled[id to false]?.let(d0::readGrid) ?: d.pixels,
                     spilled[id to true]?.let(d0::readGrid) ?: d.mask,
-                    d.transform, d.style, d.warp,
+                    d.transform, d.style, d.warp, d.low,
                 )
             }
             dispose()
@@ -357,8 +376,8 @@ class DocumentChangeEntry(
             val live = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<TileGrid, Boolean>())
             for (d in other.layers.values) { d.pixels?.let(live::add); d.mask?.let(live::add) }
             return Document.Snapshot(s.width, s.height, s.layers.mapValues { (_, d) ->
-                Document.LayerData(d.pixels?.takeIf { it !in live }, d.mask?.takeIf { it !in live }, d.transform, d.style, d.warp)
-            }, s.selection, s.guides)
+                Document.LayerData(d.pixels?.takeIf { it !in live }, d.mask?.takeIf { it !in live }, d.transform, d.style, d.warp, d.low)
+            }, s.selection, s.guides, s.paths, s.workPath, s.channels)
         }
     }
 }

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>photographics</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="Free photo editor with layers for Android tablets. Opens and saves PSD, TIFF and GIMP files with all their layers.">
+<meta name="description" content="Free photo editor with layers for Android tablets and Linux. Opens and saves PSD, TIFF and GIMP files with all their layers.">
 <link rel="icon" href="../img/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../fonts/roboto.css">
 <link rel="alternate" hreflang="de" href="../">
@@ -89,6 +89,12 @@ nav .btn { padding: 7px 16px; font-size: 14px; }
 .stage figcaption { position: absolute; right: 0; bottom: 0; width: 32%; text-align: right; }
 .chapter.flip .stage figcaption { right: auto; left: 0; text-align: left; }
 .copy { display: grid; gap: 16px; min-width: 0; }
+/* Desktop chapter: window instead of tablet */
+.stage.desk { padding-bottom: 22%; }
+.stage.desk .window { width: 100%; border-radius: 10px; box-shadow: 0 0 0 1px #0000001f, 0 22px 50px #00000033; }
+.stage.desk .pane { position: absolute; bottom: 0; right: -5%; width: 58%; border-radius: 9px; box-shadow: 0 0 0 1px #0000002a, 0 28px 60px #00000045, 0 4px 12px #00000026; }
+.stage.desk figcaption { right: auto; left: 0; text-align: left; width: 38%; }
+@media (max-width: 860px) { .stage.desk { padding-bottom: 0; } .stage.desk .pane { position: relative; right: auto; margin: -18% 0 0 auto; width: 70%; } }
 .copy > p { color: var(--text); max-width: 50ch; }
 .copy ul { margin: 0; padding-left: 1.1em; color: var(--text); display: grid; gap: 6px; font-size: 16px; }
 @media (max-width: 860px) {
@@ -163,6 +169,7 @@ footer a:hover { color: var(--ink); }
       <li><a href="#layers">Layers</a></li>
       <li><a href="#retouching">Retouching</a></li>
       <li><a href="#colour">Colour</a></li>
+      <li><a href="#linux">Linux</a></li>
       <li><a href="#files">Files</a></li>
       <li><a href="#roadmap">Roadmap</a></li>
       <li><a href="../" lang="de" hreflang="de">Deutsch</a></li>
@@ -174,9 +181,9 @@ footer a:hover { color: var(--ink); }
 <header class="hero" id="top">
   <img src="../img/alpen-abend.jpg" alt="Snow-covered peaks in the last evening light under dark clouds" fetchpriority="high">
   <div class="wrap">
-    <span class="status">Preview · version 0.3 · Android 8.1 and newer</span>
-    <h1>A photo editor with layers for Android tablets</h1>
-    <p class="lead">photographics opens PSD, TIFF and GIMP files with all their layers and saves them the same way. You retouch with the pen, and colour profiles are kept. Free, open source and no account needed.</p>
+    <span class="status">Preview · version 0.4 · Android 8.1 and newer, and Linux</span>
+    <h1>A photo editor with layers for Android tablets and Linux</h1>
+    <p class="lead">photographics opens PSD, TIFF and GIMP files with all their layers and saves them the same way. You retouch with the pen on the tablet or with mouse and graphics tablet on a Linux desktop, and colour profiles are kept. Free, open source and no account needed.</p>
     <div class="ctas">
       <a class="btn light" href="#download">Download</a>
       <a class="btn on-photo" href="#layers">See more</a>
@@ -199,7 +206,9 @@ footer a:hover { color: var(--ink); }
         <li>Pixel, text and smart object layers, groups</li>
         <li>12 adjustment layers, including per-channel curves with histogram, levels, colour balance and black &amp; white</li>
         <li>All 27 Photoshop blend modes</li>
-        <li>Layer masks and clipping masks; Photoshop layer effects are rendered</li>
+        <li>Layer masks and clipping masks</li>
+        <li>Photoshop layer styles: shadows, glows, stroke, bevel, satin and overlays, rendered and editable</li>
+        <li>Shape layers, pen tool, paths and alpha channels</li>
         <li>Transform with skew, distort and perspective, lossless as a smart object</li>
       </ul>
     </div>
@@ -219,7 +228,8 @@ footer a:hover { color: var(--ink); }
       <ul>
         <li>Spot healing, healing brush, patch, clone stamp and content-aware fill</li>
         <li>Dodge, burn, sponge, smudge and liquify</li>
-        <li>Brushes with custom tips, scattering and smoothing</li>
+        <li>Brushes with custom tips, scattering and smoothing, pencil</li>
+        <li>Paint bucket, fill command, background and magic eraser</li>
         <li>Retouch on an empty layer and leave the original untouched</li>
       </ul>
     </div>
@@ -246,6 +256,26 @@ footer a:hover { color: var(--ink); }
   </div>
 </section>
 
+<section class="chapter flip" id="linux">
+  <div class="wrap">
+    <figure class="stage desk">
+      <img class="window" src="../img/gnome-ebenen.jpg" alt="photographics for Linux: the Dolomites photo with tool bar, menus and the layers panel" loading="lazy">
+      <img class="pane" src="../img/gnome-filter.jpg" alt="The filter gallery with the Stamp sketch filter on the studio photo" loading="lazy">
+      <figcaption>Layers and the filter gallery in the GNOME version (interface shown in German). Photos: Janine Joles and Vitaly Gariev / Unsplash</figcaption>
+    </figure>
+    <div class="copy">
+      <h2>New: continue on a Linux desktop</h2>
+      <p>Since version 0.4, photographics is also available for Linux, as a GNOME app with menus, tool options and a layers panel that work like Photoshop. It shares its core with the tablet version, so files, tools and results are identical.</p>
+      <ul>
+        <li>Ships as a Flatpak for any distribution, Java included</li>
+        <li>Photoshop shortcuts; brush size and hardness with Alt + right mouse button</li>
+        <li>Select several layers, reorder them by dragging, group and merge</li>
+        <li>Filter gallery with 47 effects, layer style dialog, printing and soft proofing</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
 <section class="files" id="files" style="margin-top: clamp(72px, 9vw, 128px)">
   <div class="wrap">
     <figure>
@@ -255,13 +285,13 @@ footer a:hover { color: var(--ink); }
     <div class="cols">
       <div class="copy">
         <h2>The same file, on the road and at the desk</h2>
-        <p>A PSD from the studio opens on the tablet with its layers, masks, groups and adjustment layers. Whatever photographics cannot display yet, layer effects for example, stays in the file and is written back unchanged when you save.</p>
+        <p>A PSD from the studio opens on the tablet with its layers, masks, groups and adjustment layers. Whatever photographics cannot display yet, pattern overlays for example, stays in the file and is written back unchanged when you save.</p>
       </div>
       <dl>
         <dt>Open</dt><dd>PSD and PSB, TIFF, GIMP (XCF), PNG, JPEG, WebP and HEIF</dd>
         <dt>Save</dt><dd>PSD, TIFF and XCF with all layers</dd>
         <dt>Export</dt><dd>PNG and JPEG, with colour profile or converted to sRGB</dd>
-        <dt>Bit depth</dt><dd>Reads 8, 16 and 32 bit, edits internally with 8 bit</dd>
+        <dt>Bit depth</dt><dd>Reads 8, 16 and 32 bit, edits with 8 or 16 bit per channel</dd>
       </dl>
     </div>
   </div>
@@ -277,8 +307,9 @@ footer a:hover { color: var(--ink); }
       <div><h3>Swatches</h3><p>Load and save swatches from Photoshop, Illustrator and GIMP (.aco, .ase, .gpl).</p></div>
       <div><h3>Keyboard and mouse</h3><p>With a keyboard cover, a Chromebook or Samsung DeX, the familiar Photoshop shortcuts work.</p></div>
       <div><h3>Large files</h3><p>Image data lives outside the app memory limit, filters run on all cores, and moving and transforming run on the GPU.</p></div>
-      <div><h3>Selections</h3><p>Magic wand, object selection with a box, and lasso. The move tool can pick the layer you tap.</p></div>
+      <div><h3>Selections</h3><p>Magic wand, quick selection, object selection, lasso and polygonal lasso. Selections can be lifted, moved and freely transformed.</p></div>
       <div><h3>Gradients</h3><p>Linear, radial and reflected, on layers or straight into masks, for example as a graduated filter for the sky.</p></div>
+      <div><h3>Filter gallery</h3><p>47 artistic effects in six groups, combinable as a stack, with a preview of the whole image.</p></div>
       <div><h3>English and German</h3><p>The interface follows the system language and can be switched in the settings.</p></div>
     </div>
   </div>
@@ -288,7 +319,7 @@ footer a:hover { color: var(--ink); }
   <div class="wrap">
     <header>
       <h2>Roadmap</h2>
-      <p>What is planned next. The order may change and there are no fixed dates. Suggestions are welcome. New in 0.3: GPU preview, layer effects, English interface, liquify, gradients, magic wand, object selection and per-channel curves.</p>
+      <p>What is planned next. The order may change and there are no fixed dates. Suggestions are welcome. New in 0.4: the Linux version, editable layer styles, shapes, pen tool and paths, filter gallery, 16-bit editing, paint bucket and more erasers, quick selection, and copy and paste.</p>
     </header>
     <div class="stages">
       <div>
@@ -304,19 +335,17 @@ footer a:hover { color: var(--ink); }
         <h3>After that</h3>
         <ul>
           <li>Frequency separation as a retouching helper</li>
-          <li>Editing and creating layer effects</li>
           <li>Batch export in several sizes and formats</li>
-          <li>Pen tool and paths</li>
+          <li>Patterns and pattern overlay</li>
         </ul>
       </div>
       <div>
         <h3>Later</h3>
         <ul>
-          <li>16-bit editing</li>
           <li>CMYK documents and CMYK export</li>
           <li>Display colour management</li>
           <li>Full compositing on the GPU</li>
-          <li>Versions for Linux (GNOME) and iPad</li>
+          <li>Version for iPad</li>
         </ul>
       </div>
     </div>
@@ -326,12 +355,13 @@ footer a:hover { color: var(--ink); }
 <section class="download" id="download">
   <div class="wrap">
     <h2>Download photographics</h2>
-    <p>The app is available as an APK on GitHub. For almost all current tablets and phones, the arm64 version is the right one.</p>
+    <p>Both versions are available on GitHub. On Android, the arm64 APK is the right one for almost all current tablets and phones. For Linux there is a Flatpak; install it with <code>flatpak install --user photographics-0.4.0.flatpak</code> or by double-clicking it.</p>
     <div class="actions">
-      <a class="btn primary" data-repo="/releases/latest" href="#download">APK on GitHub</a>
+      <a class="btn primary" data-repo="/releases/latest" href="#download">APK for Android</a>
+      <a class="btn primary" data-repo="/releases/latest" href="#download">Flatpak for Linux</a>
       <a class="btn outline" data-repo="" href="#download">Source code</a>
     </div>
-    <p class="req">Android 8.1 or newer. A tablet with a pen is recommended. The interface is currently in German; an English version is in progress.</p>
+    <p class="req">Android 8.1 or newer, a tablet with a pen is recommended. Linux with Flatpak, x86_64. The interface is available in English and German.</p>
   </div>
 </section>
 
