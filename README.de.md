@@ -47,6 +47,11 @@ gnome/install.sh                         # für den aktuellen Benutzer installie
 gnome/flatpak/build.sh                   # Flatpak dist/photographics-<version>.flatpak
 ```
 
+Installiert wird aus dem eigenen Flatpak-Repository (mit automatischen Updates):
+`flatpak install --user https://photographics.andreasbartelmess.de/flatpak/photographics.flatpakref`.
+Nach einem GitHub-Release baut, signiert (Schlüssel in `flatpak-signing/`, nicht im Repository) und
+lädt `gnome/flatpak/publish.sh` das Repository hoch; der Website-Workflow stellt es unter `/flatpak/repo/` bereit.
+
 Für das Flatpak werden `org.gnome.Sdk//51` und `org.freedesktop.Sdk.Extension.openjdk25//26.08` von
 Flathub gebraucht; das Manifest für einen Flathub-Build liegt in `gnome/flatpak/`.
 

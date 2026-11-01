@@ -106,6 +106,11 @@ gnome/install.sh                          # install for the current user (~/.loc
 gnome/flatpak/build.sh                    # Flatpak bundle dist/photographics-<version>.flatpak
 ```
 
+Users install it from the project's own Flatpak repository (with automatic updates):
+`flatpak install --user https://photographics.andreasbartelmess.de/flatpak/photographics.flatpakref`.
+After a GitHub release, `gnome/flatpak/publish.sh` builds, signs (key in `flatpak-signing/`, git-ignored)
+and uploads the repository; the website workflow serves it under `/flatpak/repo/`.
+
 `gnome/flatpak/build.sh` needs `org.gnome.Sdk//51` and `org.freedesktop.Sdk.Extension.openjdk25//26.08`
 from Flathub; the manifest for a Flathub-style build is `gnome/flatpak/de.andreasbartelmess.Photographics.yml`.
 

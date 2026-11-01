@@ -1,10 +1,14 @@
 name: Website
 
-# Veröffentlicht den Ordner website/ auf GitHub Pages (photographics.andreasbartelmess.de)
+# Veröffentlicht den Ordner website/ auf GitHub Pages (photographics.andreasbartelmess.de), dazu das
+# Flatpak-Repository unter /flatpak/repo/ aus dem Anhang photographics-flatpak-repo.tar des neuesten
+# Releases (hochgeladen von gnome/flatpak/publish.sh, das diesen Workflow auch anstößt).
 on:
   push:
     branches: [main]
     paths: ['website/**', '.github/workflows/pages.yml']
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -24,6 +28,17 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Flatpak repository from the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release download --repo "${{ github.repository }}" --pattern photographics-flatpak-repo.tar --dir "$RUNNER_TEMP/fp"; then
+            mkdir -p website/flatpak
+            tar -xf "$RUNNER_TEMP/fp/photographics-flatpak-repo.tar" -C website/flatpak
+            du -sh website/flatpak/repo
+          else
+            echo "::warning::Kein Flatpak-Repository im neuesten Release"
+          fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

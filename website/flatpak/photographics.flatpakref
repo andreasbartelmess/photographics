@@ -1,0 +1,12 @@
+[Flatpak Ref]
+Name=de.andreasbartelmess.Photographics
+Branch=stable
+Title=photographics
+Comment=Layer-based photo editor
+Url=https://photographics.andreasbartelmess.de/flatpak/repo/
+RuntimeRepo=https://dl.flathub.org/repo/flathub.flatpakrepo
+IsRuntime=false
+SuggestRemoteName=photographics
+Homepage=https://photographics.andreasbartelmess.de
+Icon=https://photographics.andreasbartelmess.de/img/logo.svg
+GPGKey=mDMEaucnzRYJKwYBBAHaRw8BAQdAlikwMgwcWMnq3/hVFsYlC68j9H/7SLcJxsCL34cN4GS0MXBob3RvZ3JhcGhpY3MgRmxhdHBhayA8aW5mb0BhbmRyZWFzYmFydGVsbWVzcy5kZT6IkwQTFgoAOxYhBL+Yk6YD4elhyBKews5bIBbFboOrBQJq5yfNAhsDBQsJCAcCAiICBhUKCQgLAgQWAgMBAh4HAheAAAoJEM5bIBbFboOrYsYBAM6r+GZqCYPY7BHnoliPBbKdKEtM194hgFdPFGgLzPADAQCKi/YnZ7OtxmC2M3MNCSuC4aSztdyBpgFGnGKQmmcYAg==

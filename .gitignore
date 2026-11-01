@@ -19,3 +19,6 @@ keystore.properties
 
 # Eigene Testdateien (z. B. PSD-Sammlung für den Kompatibilitätstest)
 /testdata/
+
+# Signierschlüssel des Flatpak-Repositorys (GnuPG-Ordner) – niemals ins Repository
+/flatpak-signing/
