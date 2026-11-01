@@ -1,0 +1,1 @@
+Layer-based photo editor: PSD, TIFF and GIMP files with layers, masks and pen

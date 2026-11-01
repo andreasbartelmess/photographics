@@ -1,0 +1,28 @@
+<p>photographics ist ein ebenenbasierter Fotoeditor für Android-Tablets, gemacht für professionelle Arbeitsabläufe unterwegs. Er öffnet und speichert Photoshop- (PSD/PSB), TIFF- und GIMP-Dateien (XCF) mit allen Ebenen – retuschieren auf dem Tablet, weiterarbeiten am Rechner mit derselben Datei.</p>
+
+<p><b>Ebenen und Masken</b></p>
+<ul>
+<li>Pixel-, Text-, Form- und Smartobjekt-Ebenen, Gruppen, alle 27 Mischmodi aus Photoshop</li>
+<li>Einstellungsebenen, darunter Kurven je Farbkanal mit Histogramm, Tonwert, Farbton/Sättigung, Farbbalance und Schwarzweiß</li>
+<li>Ebenenmasken, Schnittmasken und bearbeitbare Ebenenstile (Schatten, Schein, Kontur, Abgeflachte Kante, Glanz, Überlagerungen)</li>
+<li>Transformieren mit Neigen, Verzerren und Perspektive</li>
+</ul>
+
+<p><b>Retusche mit dem Stift</b></p>
+<ul>
+<li>Der Stiftdruck steuert Größe, Deckkraft und Fluss; die Hand darf auf dem Display liegen</li>
+<li>Bereichsreparatur, Reparatur-Pinsel, Ausbessern, Kopierstempel, inhaltsbasiertes Füllen</li>
+<li>Abwedeln, Nachbelichten, Schwamm, Wischfinger, Verflüssigen, Füllwerkzeug, Radiergummis</li>
+<li>Auswahl: Zauberstab, Schnell- und Objektauswahl, Lasso, Pfade mit dem Zeichenstift</li>
+</ul>
+
+<p><b>Farbe und Dateien</b></p>
+<ul>
+<li>Farbprofile (sRGB, Display P3, Adobe RGB, ProPhoto, eigene ICC-Profile), Softproof</li>
+<li>Farbtabellen (.cube, .3dl), Film-Looks, Filtergalerie mit 47 Effekten</li>
+<li>8 und 16 Bit pro Kanal</li>
+</ul>
+
+<p><b>Optionale KI-Funktionen</b> (Objekte entfernen, Hochskalieren) rechnen auf dem Gerät. Die Modelle sind nicht enthalten und werden erst auf Wunsch von Hugging Face geladen.</p>
+
+<p>photographics ist eine frühe Vorschau. Bitte an wichtigen Dateien nur mit Sicherungskopie arbeiten. Die Oberfläche gibt es auf Deutsch und Englisch. Eine Linux-Version (GNOME) nutzt denselben Kern.</p>

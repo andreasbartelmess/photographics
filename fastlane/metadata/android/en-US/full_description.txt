@@ -1,0 +1,28 @@
+<p>photographics is a layer-based photo editor for Android tablets, designed for professional workflows on the go. It opens and saves Photoshop (PSD/PSB), TIFF and GIMP (XCF) files with all their layers, so you can retouch on the tablet and continue on the desktop with the same file.</p>
+
+<p><b>Layers and masks</b></p>
+<ul>
+<li>Pixel, text, shape and smart object layers, groups, all 27 Photoshop blend modes</li>
+<li>Adjustment layers such as per-channel curves with histogram, levels, hue/saturation, colour balance and black &amp; white</li>
+<li>Layer masks, clipping masks and editable layer styles (shadows, glows, stroke, bevel, satin, overlays)</li>
+<li>Transform with skew, distort and perspective</li>
+</ul>
+
+<p><b>Retouching with the pen</b></p>
+<ul>
+<li>Pen pressure controls size, opacity and flow; palm rejection</li>
+<li>Spot healing, healing brush, patch, clone stamp, content-aware fill</li>
+<li>Dodge, burn, sponge, smudge, liquify, paint bucket, erasers</li>
+<li>Selections: magic wand, quick and object selection, lasso, pen paths</li>
+</ul>
+
+<p><b>Colour and files</b></p>
+<ul>
+<li>Colour profiles (sRGB, Display P3, Adobe RGB, ProPhoto, custom ICC), soft proofing</li>
+<li>Colour lookup tables (.cube, .3dl), film looks, filter gallery with 47 effects</li>
+<li>8 and 16 bits per channel</li>
+</ul>
+
+<p><b>Optional AI functions</b> (object removal, upscaling) run on the device. Their models are not included; they are downloaded from Hugging Face only when you ask for them.</p>
+
+<p>photographics is an early preview. Please keep backups of important files. The interface is available in English and German. A Linux (GNOME) version shares the same core.</p>

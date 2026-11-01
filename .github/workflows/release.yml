@@ -1,6 +1,6 @@
 name: Release
 
-# Neue Version veröffentlichen: versionName/versionCode in app/build.gradle.kts erhöhen, dann
+# Neue Version veröffentlichen: versionName/baseVersionCode in app/build.gradle.kts erhöhen, dann
 #   git tag v0.3.0 && git push origin v0.3.0
 # Signiert wird mit den Repository-Secrets PG_KEYSTORE_BASE64, PG_KEYSTORE_PASSWORD, PG_KEY_ALIAS,
 # PG_KEY_PASSWORD (siehe tools/create_release_key.sh). Ohne Secrets bricht der Workflow ab.

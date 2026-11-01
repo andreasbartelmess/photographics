@@ -6,6 +6,13 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// F-Droid baut eine APK je Architektur: -Pphotographics.abi=arm64-v8a (bzw. armeabi-v7a, x86_64).
+// Dann eigener versionCode je Architektur (10 × Basis + 1/2/3) und unsigniert (F-Droid signiert selbst).
+val singleAbi: String? = providers.gradleProperty("photographics.abi").orNull
+val abis = listOf("armeabi-v7a", "arm64-v8a", "x86_64")
+val baseVersionCode = 3
+require(singleAbi == null || singleAbi in abis) { "photographics.abi muss eine von $abis sein" }
+
 android {
     namespace = "de.photographics.app"
     compileSdk = 36
@@ -14,7 +21,7 @@ android {
         applicationId = "de.photographics.app"
         minSdk = 27 // SharedMemory für den nativen Kachelspeicher
         targetSdk = 36
-        versionCode = 3
+        versionCode = if (singleAbi == null) baseVersionCode else baseVersionCode * 10 + abis.indexOf(singleAbi) + 1
         versionName = "0.4.0"
         // Adresse des Quellcodes (in gradle.properties: photographics.sourceUrl=https://github.com/…)
         buildConfigField("String", "SOURCE_URL", "\"${providers.gradleProperty("photographics.sourceUrl").getOrElse("")}\"")
@@ -26,8 +33,8 @@ android {
         abi {
             isEnable = true
             reset()
-            include("arm64-v8a", "armeabi-v7a", "x86_64")
-            isUniversalApk = true
+            if (singleAbi != null) include(singleAbi) else include(*abis.toTypedArray())
+            isUniversalApk = singleAbi == null
         }
     }
 
@@ -48,7 +55,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = if (releaseKey != null) signingConfigs.getByName("release") else {
+            signingConfig = if (releaseKey != null) signingConfigs.getByName("release") else if (singleAbi != null) null else {
                 logger.warn("Kein Release-Schlüssel (keystore.properties) – Release wird mit dem Debug-Schlüssel signiert.")
                 signingConfigs.getByName("debug")
             }

@@ -1,0 +1,1 @@
+Fotoeditor mit Ebenen: PSD, TIFF und GIMP-Dateien mit Ebenen, Masken und Stift
