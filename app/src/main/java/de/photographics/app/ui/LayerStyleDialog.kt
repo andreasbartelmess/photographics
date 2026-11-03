@@ -132,7 +132,7 @@ fun LayerStyleDialog(
                         VerticalDivider()
                         params(Modifier.weight(1f))
                     } else Column(Modifier.fillMaxSize()) {
-                        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(Modifier.scrollRow().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             for ((i, e) in LayerStyles.effects.withIndex()) {
                                 val on = e.get(fx) != null
                                 FilterChip(i == selected, { if (i == selected) toggle(i, !on) else selected = i }, label = { Text(e.label) },

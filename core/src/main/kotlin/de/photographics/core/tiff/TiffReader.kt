@@ -387,6 +387,7 @@ object TiffReader {
             8 -> ed.rotate(false)
         }
         ed.history.clear()
+        ed.history.markSaved()
     }
 
     // ---------------------------------------------------------------- Dateistruktur

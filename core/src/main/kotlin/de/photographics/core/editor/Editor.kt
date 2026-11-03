@@ -59,6 +59,7 @@ class Editor(doc: Document) {
     fun replaceDocument(d: Document) {
         doc = d
         history.clear()
+        history.markSaved()   // frisch geöffnet/angelegt = unverändert
         layerCounter = d.allLayers().size
     }
 
@@ -287,13 +288,16 @@ class Editor(doc: Document) {
         history.makeRoom(doc.width.toLong() * doc.height * 12)
         val tmp = Document(doc.width, doc.height)
         var area = doc.bounds
+        // Nur beschnittene Ebenen (ohne ihre Basis): unbeschnitten zusammenrechnen und das Ergebnis
+        // wieder auf die Basis beschneiden – wie Photoshop; sonst ragte der Inhalt über die Basis hinaus
+        val allClipped = src.all { it.clipped }
         for (l in src) {
             if (!l.visible) continue
-            tmp.root.add(l.deepCopy().also { c -> c.name = l.name })
+            tmp.root.add(l.deepCopy().also { c -> c.name = l.name; if (allClipped) c.clipped = false })
             if (l is RasterLayer) area = area.union(l.raster.extent)
         }
         val top = src.last()
-        val merged = renderedLayer(top.name, tmp, area)
+        val merged = renderedLayer(top.name, tmp, area).also { if (allClipped) it.clipped = true }
         val p = doc.parentOf(top)
         val before = src.map { doc.parentOf(it) to doc.parentOf(it).children.indexOf(it) }
         layerOperation(tr("Auf eine Ebene reduzieren"), src + merged, {

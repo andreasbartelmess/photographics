@@ -477,6 +477,7 @@ Auflösung (dpi)	Resolution (dpi)
 Der Rahmen bekommt dieses Seitenverhältnis; nach dem Freistellen wird genau auf diese Größe umgerechnet.	The frame gets this aspect ratio; after cropping, the image is resampled to exactly this size.
 Bild drehen	Rotate image
 Gegen UZS	Counter-clockwise
+Im UZS	Clockwise
 Die Arbeitsfläche wächst mit; freie Ecken der Hintergrundebene bekommen die Hintergrundfarbe.	The canvas grows with it; empty corners of the background layer get the background color.
 Drehen	Rotate
 Senkrecht	Vertical
@@ -1577,3 +1578,11 @@ B: {0} px  H: {1} px  L: {2} px  W: {3}°	W: {0} px  H: {1} px  L: {2} px  A: {3
 Linie ziehen, um zu messen	Drag a line to measure
 Bild drehen, sodass die Linie waagerecht bzw. senkrecht wird (Eingabe)	Rotate the image so the line becomes horizontal or vertical (Enter)
 Klicken: vergrößern · Alt+Klick: verkleinern · Rahmen ziehen: Bereich einpassen	Click: zoom in · Alt+click: zoom out · drag a rectangle: zoom to area
+Als PSD speichern …	Save as PSD …
+Strg+⇧+S	Ctrl+⇧+S
+Speichern fehlgeschlagen: {0}	Saving failed: {0}
+Ungespeicherte Arbeit wiederherstellen?	Restore unsaved work?
+„{0}“ ({1} × {2} px) wurde am {3} automatisch gesichert, aber nicht gespeichert.	“{0}” ({1} × {2} px) was backed up automatically on {3} but not saved.
+Wiederherstellen	Restore
+Wiederhergestellt – noch nicht gespeichert.	Restored – not saved yet.
+Die Sicherung konnte nicht gelesen werden: {0}	The backup could not be read: {0}

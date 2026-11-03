@@ -100,6 +100,19 @@ fun StartScreen(
                     }
                 }
             }
+            // Zuletzt verwendet zuerst: das braucht man am häufigsten
+            if (recent.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) { SectionTitle(tr("Zuletzt verwendet")) }
+                // Eine seitlich scrollende Reihe: schiebt „Neues Dokument“ auch auf dem Handy nicht weit nach unten
+                item(span = { GridItemSpan(maxLineSpan) }, key = "zuletzt") {
+                    val row = androidx.compose.foundation.lazy.rememberLazyListState()
+                    LazyRow(Modifier.overflowHint(row), state = row, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        rowItems(recent, key = { it.uri.toString() }) { e ->
+                            Box(Modifier.width(220.dp)) { RecentCard(e, loadThumb, { onOpenRecent(e) }, { onRemoveRecent(e) }) }
+                        }
+                    }
+                }
+            }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
                     Text(tr("Neues Dokument"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
@@ -111,15 +124,12 @@ fun StartScreen(
                 item(span = { GridItemSpan(maxLineSpan) }, key = "gruppe-$group") {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(group, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        val row = androidx.compose.foundation.lazy.rememberLazyListState()
+                        LazyRow(Modifier.overflowHint(row), state = row, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             rowItems(presets) { p -> PresetCard(p) { onNew(p.w, p.h, p.dpi) } }
                         }
                     }
                 }
-            }
-            if (recent.isNotEmpty()) {
-                item(span = { GridItemSpan(maxLineSpan) }) { SectionTitle(tr("Zuletzt verwendet")) }
-                items(recent, key = { it.uri.toString() }) { e -> RecentCard(e, loadThumb, { onOpenRecent(e) }, { onRemoveRecent(e) }) }
             }
         }
     }

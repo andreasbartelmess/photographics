@@ -227,8 +227,7 @@ private fun <T> Choice(label: String, items: List<T>, selected: T, name: (T) -> 
         SingleChoiceSegmentedButtonRow(Modifier.weight(1f)) {
             items.forEachIndexed { i, item ->
                 SegmentedButton(selected = item == selected, onClick = { onSelect(item) }, shape = SegmentedButtonDefaults.itemShape(i, items.size)) {
-                    Text(name(item), maxLines = 1)
-                }
+                    Text(name(item), maxLines = 1, softWrap = false) }
             }
         }
     }

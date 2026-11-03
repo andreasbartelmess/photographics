@@ -78,7 +78,7 @@ fun SwatchesDialog(vm: EditorViewModel, onImport: () -> Unit, onExport: (String)
                 Column(Modifier.padding(end = 12.dp).verticalScroll(rememberScrollState())) {
                     if (state.recentColors.isNotEmpty()) {
                         Text(tr("Zuletzt verwendet"), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp, bottom = 6.dp))
-                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(Modifier.scrollRow(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             for (c in state.recentColors) Field(c, onClick = { vm.setColor(c) }, onLong = { vm.setBgColor(c) })
                         }
                     }

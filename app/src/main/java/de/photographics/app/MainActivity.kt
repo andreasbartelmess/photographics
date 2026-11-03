@@ -41,6 +41,12 @@ class MainActivity : ComponentActivity() {
         window.setBackgroundDrawable(null)
     }
 
+    override fun onStop() {
+        super.onStop()
+        // Im Hintergrund kann Android die App jederzeit beenden: ungespeicherte Arbeit sichern
+        if (!isChangingConfigurations && !automated) vm.onBackground()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIntent(intent)

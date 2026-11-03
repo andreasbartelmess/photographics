@@ -43,11 +43,34 @@ class History(
     val redoLabel get() = redoStack.lastOrNull()?.label
     val entries: List<String> get() = undoStack.map { it.label }
 
+    // ------------------------------------------------ Gespeicherter Stand
+    /** Oberster Schritt beim letzten Speichern (null = Anfangszustand). */
+    private var savedTop: HistoryEntry? = null
+    /** false, wenn der gespeicherte Stand nicht mehr erreichbar ist (Anfang verworfen, Verlauf geleert). */
+    private var savedReachable = true
+
+    /** Dokument entspricht dem zuletzt gespeicherten (bzw. geöffneten) Stand. */
+    val atSavedState: Boolean get() = savedReachable && undoStack.lastOrNull() === savedTop
+
+    /** Aktuellen Stand als gespeichert merken (nach Speichern, Öffnen, neuem Dokument). */
+    fun markSaved() { savedTop = undoStack.lastOrNull(); savedReachable = true }
+
+    /** Aktuellen Stand als ungespeichert kennzeichnen (z. B. wiederhergestellte Sicherung). */
+    fun markUnsaved() { savedReachable = false }
+
+    /** Zählt jede Änderung des Verlaufs (Schritt, Rückgängig, Wiederholen, Leeren) – für automatisches Sichern. */
+    var changeCount = 0L
+        private set
+
+    /** Ältesten Schritt verwerfen; war der Anfangszustand der gespeicherte Stand, ist er damit unerreichbar. */
+    private fun dropOldest(): HistoryEntry? = undoStack.removeFirstOrNull()?.also { if (savedTop == null) savedReachable = false }
+
     fun push(e: HistoryEntry) {
+        changeCount++
         undoStack.addLast(e)
         redoStack.forEach { it.dispose() }
         redoStack.clear()
-        while (undoStack.size > maxEntries) undoStack.removeFirst().dispose()
+        while (undoStack.size > maxEntries) dropOldest()?.dispose()
         enforceBudget()
     }
 
@@ -75,7 +98,7 @@ class History(
         // Nur von vorn verwerfen (der Verlauf muss lückenlos bleiben).
         val dropAbove = if (scratch == null || total > budget && realPressure() > 0.85) budget else Long.MAX_VALUE
         while (total > dropAbove && undoStack.size > 1) {
-            val e = undoStack.removeFirst(); total -= e.byteSize; e.dispose()
+            val e = dropOldest()!!; total -= e.byteSize; e.dispose()
             // Ein verworfener, ausgelagerter Schritt gibt Platz im Arbeitsvolume frei: damit die
             // Schritte im Speicher auslagern, statt weiter (womöglich den ganzen) Verlauf zu verwerfen
             val disk = scratch ?: continue
@@ -118,7 +141,7 @@ class History(
         }
         while (mayDrop && undoStack.isNotEmpty() && free() < reserve) {
             redoStack.forEach { it.dispose() }; redoStack.clear()
-            undoStack.removeFirst().dispose(); System.gc()
+            dropOldest()?.dispose(); System.gc()
         }
     }
 
@@ -127,6 +150,7 @@ class History(
         // Rückgängig kann so viele Kacheln brauchen, wie der Schritt belegt: vorher Platz schaffen
         makeRoom(e.byteSize, mayDrop = false, keep = e)
         undoStack.removeLastOrNull()
+        changeCount++
         e.undo(doc); redoStack.addLast(e)
         enforceBudget()
         return e
@@ -136,6 +160,7 @@ class History(
         val e = redoStack.lastOrNull() ?: return null
         makeRoom(e.byteSize, mayDrop = false, keep = e)
         redoStack.removeLastOrNull()
+        changeCount++
         e.redo(doc); undoStack.addLast(e)
         enforceBudget()
         return e
@@ -144,6 +169,8 @@ class History(
     fun clear() {
         undoStack.forEach { it.dispose() }; redoStack.forEach { it.dispose() }
         undoStack.clear(); redoStack.clear()
+        savedTop = null; savedReachable = false
+        changeCount++
     }
 
     /** Ungefährer Speicherbedarf aller Schritte. */
@@ -170,7 +197,7 @@ class History(
             if (bytes < before) return true
         }
         redoStack.forEach { it.dispose() }; redoStack.clear()
-        repeat(undoStack.size / 2 + 1) { undoStack.removeFirstOrNull()?.dispose() }
+        repeat(undoStack.size / 2 + 1) { dropOldest()?.dispose() }
         return true
     }
 }

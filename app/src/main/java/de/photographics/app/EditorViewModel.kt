@@ -252,6 +252,12 @@ data class EditorUiState(
     val spongeSaturate: Boolean = false,
     val liquifyMode: de.photographics.core.tools.LiquifyMode = de.photographics.core.tools.LiquifyMode.PUSH,
     val canUndo: Boolean = false,
+    /** Änderungen seit dem letzten Speichern/Öffnen. */
+    val unsaved: Boolean = false,
+    /** Datei, in die Strg+S direkt speichert (null = „Speichern unter“ nötig). */
+    val saveTarget: String? = null,
+    /** Automatische Sicherung vom letzten Mal, über die noch entschieden werden muss. */
+    val recovery: Recovery.Info? = null,
     val canRedo: Boolean = false,
     val undoLabel: String? = null,
     val redoLabel: String? = null,
@@ -369,6 +375,8 @@ data class IccEntry(val fileName: String, val description: String, val colorSpac
 class EditorViewModel(app: Application) : AndroidViewModel(app) {
     /** Alle Zugriffe auf Dokument und Editor laufen über diesen einen Thread. */
     private val engine = Executors.newSingleThreadExecutor { r -> Thread(r, "photographics-engine") }.asCoroutineDispatcher()
+    /** Automatische Sicherung (siehe [autosaveNow]). */
+    private val recovery = Recovery(java.io.File(app.filesDir, "recovery"))
 
     private val _state = MutableStateFlow(EditorUiState())
     val state: StateFlow<EditorUiState> = _state.asStateFlow()
@@ -605,7 +613,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     init {
         app.registerComponentCallbacks(memoryCallbacks)
         TextRasterizer.current = AndroidTextRasterizer
-        _state.update { it.copy(recent = recentFiles.list()) }
+        _state.update { it.copy(recent = recentFiles.list(), recovery = recovery.info()) }
         newDocument(2000, 1500, transparent = false, showEditor = false)
         loadLutLibrary()
         loadIccLibrary()
@@ -642,7 +650,10 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val doc = Document.blank(w, h, if (transparent) null else 0xFFFFFFFF.toInt())
         doc.dpi = dpi
         doc.colorProfile = settings.value.workingRgb.profile
+        docTarget = null
+        if (showEditor) dropAutosave()
         setDocument(doc, tr("Unbenannt"), emptyList())
+        _state.update { it.copy(saveTarget = null) }
         rebuildProof()
         if (showEditor) _state.update { it.copy(showStart = false) }
     }
@@ -653,7 +664,12 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val cr = getApplication<Application>().contentResolver
         try {
             // Dauerhafte Leseberechtigung, damit die Datei unter „Zuletzt verwendet“ wieder geöffnet werden kann
-            if (remember) runCatching { cr.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            // Mit Schreibrecht (über „Öffnen“ gewählte Dateien), damit Strg+S in dieselbe Datei speichern kann
+            val rw = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            val writable = runCatching { cr.takePersistableUriPermission(uri, rw); true }.getOrElse {
+                if (remember) runCatching { cr.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                false
+            }
             // Altes Dokument samt Verlauf vorher freigeben – sonst liegen beim Laden zwei Dokumente im Speicher
             editor?.history?.clear()
             System.gc()
@@ -661,7 +677,10 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             val working = s.workingRgb.profile
             val loaded = ImageIO.open(cr, uri, getApplication<Application>().cacheDir, working)
             val warnings = loaded.doc.importWarnings.toMutableList()
+            docTarget = SaveFormat.of(loaded.name)?.takeIf { writable }?.let { uri to it }
+            dropAutosave()
             setDocument(loaded.doc, loaded.name, emptyList())
+            _state.update { it.copy(saveTarget = docTarget?.let { loaded.name }) }
             // Farbmanagement-Richtlinie: abweichendes Profil beibehalten oder in den Arbeitsfarbraum umwandeln
             val docProfile = loaded.doc.colorProfile
             if (!docProfile.bytes.contentEquals(working.bytes) && s.profilePolicy == ProfilePolicy.CONVERT) {
@@ -749,39 +768,74 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun savePsd(uri: Uri) = withEditor { ed ->
-        settleFloating(ed, commit = true)
-        busy(true)
-        try {
-            val app = getApplication<Application>()
-            ImageIO.savePsd(app.contentResolver, uri, ed.doc, java.io.File(app.cacheDir, "psd-write"))
-            message(tr("Als PSD gespeichert."))
-        } finally {
-            busy(false)
+    /** Formate, in die Strg+S direkt zurückspeichern kann (mit Ebenen, verlustfrei). */
+    enum class SaveFormat {
+        PSD, TIFF, XCF;
+        companion object {
+            fun of(name: String) = when (name.substringAfterLast('.', "").lowercase()) {
+                "psd" -> PSD; "tif", "tiff" -> TIFF; "xcf" -> XCF; else -> null
+            }
         }
     }
 
-    fun saveXcf(uri: Uri) = withEditor { ed ->
-        settleFloating(ed, commit = true)
-        busy(true)
-        try {
-            val app = getApplication<Application>()
-            val warnings = ImageIO.saveXcf(app.contentResolver, uri, ed.doc, java.io.File(app.cacheDir, "xcf-write"))
-            if (warnings.isEmpty()) message(tr("Als GIMP-Datei gespeichert."))
-            else _state.update { it.copy(warnings = listOf(tr("Als GIMP-Datei gespeichert.")) + warnings) }
-        } finally {
-            busy(false)
-        }
+    /** Datei, in die Strg+S speichert (geöffnet mit Schreibrecht oder zuletzt gespeichert). */
+    @Volatile private var docTarget: Pair<Uri, SaveFormat>? = null
+
+    /**
+     * Strg+S: in die Datei des Dokuments speichern. false = kein Ziel (Aufrufer startet „Speichern unter“).
+     * [then] läuft nach erfolgreichem Speichern auf dem Hauptthread.
+     */
+    fun save(then: (() -> Unit)? = null): Boolean {
+        val (uri, fmt) = docTarget ?: return false
+        writeDocument(uri, fmt, inPlace = true, then = then)
+        return true
     }
 
-    fun saveTiff(uri: Uri) = withEditor { ed ->
+    fun savePsd(uri: Uri, then: (() -> Unit)? = null) = writeDocument(uri, SaveFormat.PSD, inPlace = false, then = then)
+    fun saveXcf(uri: Uri, then: (() -> Unit)? = null) = writeDocument(uri, SaveFormat.XCF, inPlace = false, then = then)
+    fun saveTiff(uri: Uri, then: (() -> Unit)? = null) = writeDocument(uri, SaveFormat.TIFF, inPlace = false, then = then)
+
+    private fun writeDocument(uri: Uri, fmt: SaveFormat, inPlace: Boolean, then: (() -> Unit)?) = withEditor { ed ->
         settleFloating(ed, commit = true)
         busy(true)
         try {
             val app = getApplication<Application>()
+            val cr = app.contentResolver
             val s = settings.value
-            ImageIO.saveTiff(app.contentResolver, uri, ed.doc, java.io.File(app.cacheDir, "tiff-write"), s.tiffCompression, s.tiffLayers)
-            message(tr("Als TIFF gespeichert ({0}{1}).", tr(s.tiffCompression.label), if (s.tiffLayers) tr(", mit Ebenen") else ""))
+            var warnings = emptyList<String>()
+            // In die eigene Datei erst vollständig in eine temporäre Datei schreiben: bricht das
+            // Schreiben ab, bleibt das Original unversehrt
+            val tmp = if (inPlace) java.io.File(app.cacheDir, "save-inplace.tmp") else null
+            val target: Uri = tmp?.let { Uri.fromFile(it) } ?: uri
+            when (fmt) {
+                SaveFormat.PSD -> ImageIO.savePsd(cr, target, ed.doc, java.io.File(app.cacheDir, "psd-write"))
+                SaveFormat.XCF -> warnings = ImageIO.saveXcf(cr, target, ed.doc, java.io.File(app.cacheDir, "xcf-write"))
+                SaveFormat.TIFF -> ImageIO.saveTiff(cr, target, ed.doc, java.io.File(app.cacheDir, "tiff-write"), s.tiffCompression, s.tiffLayers)
+            }
+            if (tmp != null) try {
+                (cr.openOutputStream(uri, "wt") ?: throw java.io.IOException(tr("Speichern nicht möglich"))).use { out ->
+                    tmp.inputStream().use { it.copyTo(out, 1 shl 16) }
+                }
+            } finally { tmp.delete() }
+            // Gespeicherter Stand, neuer Name, künftiges Ziel für Strg+S
+            ed.history.markSaved()
+            dropAutosave()
+            val name = ImageIO.displayName(cr, uri)
+            docTarget = uri to fmt
+            runCatching { cr.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
+            _state.update { it.copy(fileName = name, saveTarget = name) }
+            refreshLayers()
+            runCatching { addRecent(uri, name, ed.doc) }
+            val msg = when (fmt) {
+                SaveFormat.PSD -> tr("Als PSD gespeichert.")
+                SaveFormat.XCF -> tr("Als GIMP-Datei gespeichert.")
+                SaveFormat.TIFF -> tr("Als TIFF gespeichert ({0}{1}).", tr(s.tiffCompression.label), if (s.tiffLayers) tr(", mit Ebenen") else "")
+            }
+            if (warnings.isEmpty()) message(msg) else _state.update { it.copy(warnings = listOf(msg) + warnings) }
+            then?.let { viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) { it() } }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            message(tr("Speichern fehlgeschlagen: {0}", e.message ?: e.javaClass.simpleName))
         } finally {
             busy(false)
         }
@@ -807,7 +861,83 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun busy(b: Boolean) = _state.update { it.copy(busy = b) }
 
+    private companion object { const val AUTOSAVE_IDLE_MS = 120_000L }
+
     private fun withEditor(block: suspend (Editor) -> Unit) = onEngine { editor?.let { block(it) } }
+
+    // ---------------------------------------------------------------- Automatische Sicherung
+
+    /** [Editor.history].changeCount beim letzten Sichern (-1 = nichts gesichert). */
+    private var autosavedAt = -1L
+    private var autosaveJob: Job? = null
+    private var autosaveScheduledFor = -1L
+
+    /** Nach einer Änderung: sichern, wenn zwei Minuten lang nichts mehr geändert wurde. */
+    private fun scheduleAutosave() {
+        autosaveJob?.cancel()
+        autosaveJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(AUTOSAVE_IDLE_MS)
+            onEngine { autosaveNow() }
+        }
+    }
+
+    /** App geht in den Hintergrund: jetzt sichern (Android kann sie danach jederzeit beenden). */
+    fun onBackground() { autosaveJob?.cancel(); onEngine { autosaveNow() } }
+
+    private fun autosaveNow() {
+        val ed = editor ?: return
+        if (_state.value.recovery != null) return   // alte Sicherung noch nicht entschieden: nicht überschreiben
+        if (ed.history.atSavedState && floating == null) { dropAutosave(); return }
+        if (ed.history.changeCount == autosavedAt) return
+        if (stroke != null) { scheduleAutosave(); return }   // mitten im Pinselstrich: später
+        val app = getApplication<Application>()
+        try {
+            val t = docTarget
+            recovery.write(ed.doc, _state.value.fileName, t?.first?.toString(), t?.second?.name, java.io.File(app.cacheDir, "psd-write"))
+            autosavedAt = ed.history.changeCount
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            android.util.Log.w("photographics", "Automatische Sicherung fehlgeschlagen", e)
+        } catch (e: OutOfMemoryError) {
+            android.util.Log.w("photographics", "Automatische Sicherung: zu wenig Speicher")
+        }
+    }
+
+    private fun dropAutosave() {
+        autosaveJob?.cancel(); autosavedAt = -1
+        if (_state.value.recovery == null) recovery.clear()
+    }
+
+    /** Sicherung vom letzten Mal öffnen – als ungespeichertes Dokument mit dem alten Namen und Speicherziel. */
+    fun restoreRecovery() = onEngine {
+        val info = _state.value.recovery ?: return@onEngine
+        busy(true)
+        try {
+            val app = getApplication<Application>()
+            val buf = java.io.RandomAccessFile(recovery.file, "r").use { f -> f.channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 0, f.length()) }
+            val doc = de.photographics.core.psd.PsdReader.read(buf, settings.value.workingRgb.profile)
+            // Speicherziel nur, wenn das Schreibrecht noch besteht
+            val target = info.target?.let { Uri.parse(it) }?.takeIf { u -> app.contentResolver.persistedUriPermissions.any { it.uri == u && it.isWritePermission } }
+            docTarget = target?.let { u -> runCatching { SaveFormat.valueOf(info.format ?: "") }.getOrNull()?.let { u to it } }
+            _state.update { it.copy(recovery = null) }
+            setDocument(doc, info.name, emptyList())
+            editor?.history?.markUnsaved()
+            autosavedAt = editor?.history?.changeCount ?: -1   // die Sicherung entspricht genau diesem Stand
+            rebuildProof()
+            _state.update { it.copy(saveTarget = docTarget?.let { info.name }, showStart = false) }
+            refreshLayers()
+            message(tr("Wiederhergestellt – noch nicht gespeichert."))
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            _state.update { it.copy(recovery = null) }
+            recovery.clear()
+            message(tr("Die Sicherung konnte nicht gelesen werden: {0}", e.message ?: e.javaClass.simpleName))
+        } finally {
+            busy(false)
+        }
+    }
+
+    fun discardRecovery() = onEngine { _state.update { it.copy(recovery = null) }; recovery.clear() }
 
     private fun setDocument(doc: Document, name: String, warnings: List<String>) {
         val ed = editor
@@ -1536,12 +1666,18 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 layers = items, activeLayerId = floating?.takeIf { it.layer === doc.activeLayer }?.source?.id ?: doc.activeLayer?.id,
                 docWidth = doc.width, docHeight = doc.height,
                 canUndo = h.canUndo, canRedo = h.canRedo, undoLabel = h.undoLabel, redoLabel = h.redoLabel,
+                unsaved = !h.atSavedState || floating != null,
                 hasSelection = sel != null, selectionOutlines = sel?.outlines ?: emptyList(),
                 paintTarget = if (doc.activeLayer?.mask == null) PaintTarget.PIXELS else it.paintTarget,
                 workPath = doc.workPath, paths = doc.paths, channelNames = doc.channels.map { c -> c.name }, bitDepth = doc.bitDepth,
                 shapePath = (doc.activeLayer as? de.photographics.core.doc.ShapeLayer)?.docPath(),
                 selectedPath = it.selectedPath.takeIf { i -> i < doc.paths.size } ?: -1,
             )
+        }
+        // Automatisch sichern: Zeitgeber nur bei echten Änderungen neu starten (nicht beim bloßen Auswählen)
+        if (h.changeCount != autosaveScheduledFor) {
+            autosaveScheduledFor = h.changeCount
+            if (!h.atSavedState && h.changeCount != autosavedAt) scheduleAutosave()
         }
     }
 
@@ -2471,6 +2607,45 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         fullRefresh()
     }
 
+    /** Ablageort beim Ziehen im Ebenenbedienfeld, bezogen auf die Zielzeile. */
+    enum class LayerDrop { ABOVE, BELOW, INTO }
+
+    /**
+     * Drag & Drop im Ebenenbedienfeld: Ebene [id] über/unter die Zeile [targetId] oder in die
+     * Gruppe [targetId] (oben) legen. Unter einer aufgeklappten Gruppe heißt optisch: oberste Ebene darin.
+     */
+    fun dropLayer(id: Int, targetId: Int, where: LayerDrop) = withEditor { ed ->
+        if (id == targetId) return@withEditor
+        val l = layerById(ed, id) ?: return@withEditor
+        val t = layerById(ed, targetId) ?: return@withEditor
+        val tp = ed.doc.parentOf(t)
+        val (parent, index) = when {
+            where == LayerDrop.INTO && t is GroupLayer -> t to t.children.size
+            where == LayerDrop.BELOW && t is GroupLayer && t.expanded -> t to t.children.size
+            where == LayerDrop.ABOVE -> tp to tp.children.indexOf(t) + 1
+            else -> tp to tp.children.indexOf(t)
+        }
+        if (ed.moveLayersTo(listOf(l), parent, index)) {
+            if (parent !== ed.doc.root) (parent as? GroupLayer)?.expanded = true
+            fullRefresh()
+        }
+    }
+
+    /** Aktive Ebene ganz nach oben/unten innerhalb ihrer Gruppe (Strg+Umschalt+] / [). */
+    fun moveLayerToEdge(front: Boolean) = withEditor { ed ->
+        val l = ed.doc.activeLayer ?: return@withEditor
+        val p = ed.doc.parentOf(l)
+        if (ed.moveLayersTo(listOf(l), p, if (front) p.children.size else 0)) fullRefresh()
+    }
+
+    /** Ebene über/unter der aktiven in der Liste auswählen (Alt+] / [). */
+    fun selectAdjacentLayer(up: Boolean) {
+        val ls = _state.value.layers
+        val i = ls.indexOfFirst { it.id == _state.value.activeLayerId }
+        val j = if (i < 0) 0 else if (up) i - 1 else i + 1
+        ls.getOrNull(j)?.let { selectLayer(it.id) }
+    }
+
     fun toggleVisibility(id: Int) = withEditor { ed ->
         val l = layerById(ed, id) ?: return@withEditor
         ed.setProps(l, if (l.visible) tr("Ebene ausblenden") else tr("Ebene einblenden")) { visible = !visible }
@@ -2704,20 +2879,34 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     /** Ausgangsbild der Galerie-Vorschau: ARGB, Größe, Lage im Dokument, Maßstab (verkleinert < 1). */
     class GallerySource(val px: IntArray, val w: Int, val h: Int, val ox: Int, val oy: Int, val scale: Float)
 
-    /** Aktive Pixelebene verkleinert (ganzes Bild) und als 100-%-Ausschnitt um die Ansichtsmitte; null = keine Pixelebene. */
-    suspend fun gallerySources(): Pair<GallerySource, GallerySource>? = kotlinx.coroutines.withContext(engine) {
+    /**
+     * Aktive Pixelebene verkleinert auf die Vorschaufläche [boxW]×[boxH] (ganzes Bild) und als
+     * 100-%-Ausschnitt in Größe der Fläche um die Ansichtsmitte; null = keine Pixelebene.
+     */
+    suspend fun gallerySources(boxW: Int, boxH: Int): Pair<GallerySource, GallerySource>? = kotlinx.coroutines.withContext(engine) {
         val ed = editor ?: return@withContext null
         val l = ed.doc.activeLayer as? PixelLayer ?: run {
             message(tr("Filter benötigen eine Pixelebene (Text/Smartobjekt ggf. rastern oder eine Einstellungsebene verwenden)."))
             return@withContext null
         }
         val d = ed.doc
+        val bw = boxW.coerceIn(64, 4096); val bh = boxH.coerceIn(64, 4096)
+        // Zielgröße in Pixeln der Fläche; über die größte Mip-Stufe, die noch nicht kleiner ist, dann gefiltert verkleinern
+        val s = minOf(1f, bw.toFloat() / d.width, bh.toFloat() / d.height)
+        val tw = maxOf(1, (d.width * s).roundToInt()); val th = maxOf(1, (d.height * s).roundToInt())
         var level = 0
-        while (maxOf(d.width, d.height) shr level > 1000) level++
+        while ((d.width shr (level + 1)) >= tw && (d.height shr (level + 1)) >= th) level++
         val m = if (level > 0) l.pixels.mip(level) else l.pixels
         val fw = (d.width + (1 shl level) - 1) shr level; val fh = (d.height + (1 shl level) - 1) shr level
-        val fit = GallerySource(IntArray(fw * fh).also { m.readRect(IntRect.ofSize(fw, fh), it) }, fw, fh, 0, 0, 1f / (1 shl level))
-        val cw = minOf(d.width, 900); val ch = minOf(d.height, 700)
+        val mipPx = IntArray(fw * fh).also { m.readRect(IntRect.ofSize(fw, fh), it) }
+        val fit = if (fw == tw && fh == th) GallerySource(mipPx, fw, fh, 0, 0, 1f / (1 shl level)) else {
+            val src = android.graphics.Bitmap.createBitmap(mipPx, fw, fh, android.graphics.Bitmap.Config.ARGB_8888)
+            val dst = android.graphics.Bitmap.createScaledBitmap(src, tw, th, true)
+            val px = IntArray(tw * th).also { dst.getPixels(it, 0, tw, 0, 0, tw, th) }
+            src.recycle(); if (dst !== src) dst.recycle()
+            GallerySource(px, tw, th, 0, 0, tw.toFloat() / d.width)
+        }
+        val cw = minOf(d.width, bw); val ch = minOf(d.height, bh)
         val v = viewVisible.takeIf { !it.isEmpty } ?: d.bounds
         val cx = ((v.left + v.right) / 2 - cw / 2).coerceIn(0, d.width - cw); val cy = ((v.top + v.bottom) / 2 - ch / 2).coerceIn(0, d.height - ch)
         fit to GallerySource(IntArray(cw * ch).also { l.pixels.readRect(IntRect(cx, cy, cx + cw, cy + ch), it) }, cw, ch, cx, cy, 1f)

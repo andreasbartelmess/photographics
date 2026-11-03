@@ -51,6 +51,30 @@ class LayerOpsTest {
         assertTrue(e.doc.root.children.contains(a))
     }
 
+    /** Beschnittene Ebenen ohne ihre Basis zusammenfügen: Ergebnis bleibt beschnitten, das Bild unverändert. */
+    @Test
+    fun mergeClippedLayersKeepsClipping() {
+        val (e, l) = setup()
+        val (_, a, b, c) = l
+        a.pixels.writeRect(IntRect(0, 0, 10, 10), IntArray(100) { 0xFF00FF00.toInt() })   // Basis: nur oben links
+        b.pixels.writeRect(IntRect(0, 0, 40, 30), IntArray(1200) { 0xFFFF0000.toInt() })
+        c.pixels.writeRect(IntRect(5, 0, 30, 10), IntArray(250) { 0xFF0000FF.toInt() })
+        b.clipped = true; c.clipped = true
+        val before = de.photographics.core.render.Compositor.renderGrid(e.doc)
+        assertTrue(e.mergeLayers(listOf(b, c)))
+        val m = e.doc.activeLayer!!
+        assertTrue("Ergebnis bleibt beschnitten", m.clipped)
+        val after = de.photographics.core.render.Compositor.renderGrid(e.doc)
+        for (y in 0 until 30) for (x in 0 until 40) assertEquals("($x,$y)", before[x, y], after[x, y])
+        e.undo()
+        // Auf darunterliegende reduzieren innerhalb der Schnittmaske ebenso
+        e.setActive(c)
+        assertTrue(e.mergeDown())
+        assertTrue(e.doc.activeLayer!!.clipped)
+        val down = de.photographics.core.render.Compositor.renderGrid(e.doc)
+        for (y in 0 until 30) for (x in 0 until 40) assertEquals("($x,$y)", before[x, y], down[x, y])
+    }
+
     @Test
     fun groupDeleteDuplicateMerge() {
         val (e, l) = setup()

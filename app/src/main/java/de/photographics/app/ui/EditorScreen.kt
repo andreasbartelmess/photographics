@@ -43,6 +43,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.SaveAs
+import androidx.compose.ui.draw.rotate
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.GridOn
+import androidx.compose.material.icons.filled.HorizontalRule
+import androidx.compose.material.icons.filled.BlurOn
+import androidx.compose.material.icons.filled.FlipToBack
+import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
@@ -77,6 +86,7 @@ import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -147,7 +157,7 @@ private val OPEN_TYPES = arrayOf(
     "image/*", "image/vnd.adobe.photoshop", "application/x-photoshop", "application/photoshop", "application/psd", "image/x-xcf", "application/octet-stream",
 )
 
-private enum class DialogKind { FILL, EXPORT, NEW, IMAGE_SIZE, CANVAS_SIZE, COLOR, TEXT_COLOR, FEATHER, SHORTCUTS, AI_MODELS, SETTINGS, ASSIGN_PROFILE, CONVERT_PROFILE, TIFF_OPTIONS, BG_COLOR, BRUSH, SWATCHES, CROP_SIZE, ROTATE, NEW_GUIDE, GUIDE_LAYOUT }
+private enum class DialogKind { UNSAVED, FILL, EXPORT, NEW, IMAGE_SIZE, CANVAS_SIZE, COLOR, TEXT_COLOR, FEATHER, SHORTCUTS, AI_MODELS, SETTINGS, ASSIGN_PROFILE, CONVERT_PROFILE, TIFF_OPTIONS, BG_COLOR, BRUSH, SWATCHES, CROP_SIZE, ROTATE, NEW_GUIDE, GUIDE_LAYOUT }
 
 /** Ab dieser Breite wird das Ebenen-Panel fest angedockt (Tablet quer, große Tablets hoch). */
 private val DOCK_WIDTH = 840.dp
@@ -193,7 +203,17 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
     val openLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(vm::open) }
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { it?.let(vm::open) }
     val placeLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(vm::placeAsLayer) }
-    val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/vnd.adobe.photoshop")) { it?.let(vm::savePsd) }
+    // Nach „Speichern unter“ ausführen (z. B. die Aktion, wegen der nach ungespeicherten Änderungen gefragt wurde)
+    var afterSave by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/vnd.adobe.photoshop")) { uri ->
+        val then = afterSave; afterSave = null
+        uri?.let { vm.savePsd(it, then) }
+    }
+    // Ungespeicherte Änderungen: vor dem Ersetzen des Dokuments nachfragen
+    var pendingReplace by remember { mutableStateOf<(() -> Unit)?>(null) }
+    fun guarded(action: () -> Unit) {
+        if (state.unsaved && state.hasDocument) { pendingReplace = action; dialog = DialogKind.UNSAVED } else action()
+    }
     val tiffLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/tiff")) { it?.let(vm::saveTiff) }
     val xcfLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/x-xcf")) { it?.let(vm::saveXcf) }
     val paletteImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(vm::importPalette) }
@@ -271,10 +291,13 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
         if (ctrl) {
             when (e.key) {
                 Key.Z -> if (shift) vm.redo() else vm.undo()
+                // Photoshop: Ebene eine Stufe / ganz nach oben bzw. unten
+                Key.RightBracket -> state.activeLayerId?.let { if (shift) vm.moveLayerToEdge(front = true) else vm.moveLayer(it, up = true) }
+                Key.LeftBracket -> state.activeLayerId?.let { if (shift) vm.moveLayerToEdge(front = false) else vm.moveLayer(it, up = false) }
                 Key.Y -> if (shift) vm.toggleGamutWarning() else vm.toggleProof()
-                Key.S -> saveLauncher.launch("$baseName.psd")
-                Key.O -> openLauncher.launch(OPEN_TYPES)
-                Key.N -> if (shift) vm.addLayer() else dialog = DialogKind.NEW
+                Key.S -> if (shift || !vm.save()) saveLauncher.launch("$baseName.psd")
+                Key.O -> guarded { openLauncher.launch(OPEN_TYPES) }
+                Key.N -> if (shift) vm.addLayer() else guarded { dialog = DialogKind.NEW }
                 Key.A -> vm.selectAll()
                 Key.D -> vm.deselect()
                 Key.Backspace, Key.Delete -> vm.fillSelected(background = true)
@@ -341,8 +364,8 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
         }
         if (tool != null) { vm.selectTool(tool); return true }
         when (e.key) {
-            Key.LeftBracket -> vm.stepBrushSize(up = false)
-            Key.RightBracket -> vm.stepBrushSize(up = true)
+            Key.LeftBracket -> if (alt) vm.selectAdjacentLayer(up = false) else vm.stepBrushSize(up = false)
+            Key.RightBracket -> if (alt) vm.selectAdjacentLayer(up = true) else vm.stepBrushSize(up = true)
             Key.Delete, Key.Backspace -> if (state.polyPoints.isNotEmpty()) vm.polyUndo() else vm.clearSelected()
             Key.Tab -> { layersDocked = !layersDocked; layersOverlay = !layersOverlay }
             Key.F -> fullscreen = !fullscreen
@@ -390,16 +413,31 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
         action()
     }
 
+    // Automatische Sicherung vom letzten Mal (App beendet, ohne zu speichern): entscheiden lassen
+    state.recovery?.let { r ->
+        AlertDialog(
+            onDismissRequest = {},
+            icon = { Icon(Icons.Filled.Restore, null) },
+            title = { Text(tr("Ungespeicherte Arbeit wiederherstellen?")) },
+            text = {
+                Text(tr("„{0}“ ({1} × {2} px) wurde am {3} automatisch gesichert, aber nicht gespeichert.", r.name, r.width, r.height,
+                    java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(java.util.Date(r.time))))
+            },
+            confirmButton = { Button(onClick = { vm.restoreRecovery() }) { Text(tr("Wiederherstellen")) } },
+            dismissButton = { TextButton(onClick = { vm.discardRecovery() }) { Text(tr("Verwerfen")) } },
+        )
+    }
+
     if (state.showStart) {
         StartScreen(
             recent = state.recent,
             hasDocument = state.hasDocument && state.fileName != tr("Unbenannt") || state.canUndo,
             loadThumb = vm::loadRecentThumb,
-            onNew = { w, h, dpi -> vm.newDocument(w, h, transparent = false, dpi = dpi) },
-            onCustomNew = { dialog = DialogKind.NEW },
-            onOpen = { openLauncher.launch(OPEN_TYPES) },
-            onGallery = { galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-            onOpenRecent = { vm.open(it.uri) },
+            onNew = { w, h, dpi -> guarded { vm.newDocument(w, h, transparent = false, dpi = dpi) } },
+            onCustomNew = { guarded { dialog = DialogKind.NEW } },
+            onOpen = { guarded { openLauncher.launch(OPEN_TYPES) } },
+            onGallery = { guarded { galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } },
+            onOpenRecent = { guarded { vm.open(it.uri) } },
             onRemoveRecent = { vm.removeRecent(it.uri) },
             onContinue = { vm.showStartScreen(false) },
         )
@@ -434,12 +472,13 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                         )
                         HorizontalDivider(Modifier.padding(vertical = 12.dp))
                         DrawerItem(Icons.Filled.Home, tr("Startbildschirm")) { closeDrawerThen { vm.showStartScreen(true) } }
-                        DrawerItem(Icons.Filled.Add, tr("Neues Dokument"), tr("Strg+N")) { closeDrawerThen { dialog = DialogKind.NEW } }
-                        DrawerItem(Icons.Filled.FolderOpen, tr("Öffnen"), tr("Strg+O")) { closeDrawerThen { openLauncher.launch(OPEN_TYPES) } }
+                        DrawerItem(Icons.Filled.Add, tr("Neues Dokument"), tr("Strg+N")) { closeDrawerThen { guarded { dialog = DialogKind.NEW } } }
+                        DrawerItem(Icons.Filled.FolderOpen, tr("Öffnen"), tr("Strg+O")) { closeDrawerThen { guarded { openLauncher.launch(OPEN_TYPES) } } }
                         DrawerItem(Icons.Filled.AddPhotoAlternate, tr("Als Ebene platzieren")) { closeDrawerThen { placeLauncher.launch(OPEN_TYPES) } }
                         HorizontalDivider(Modifier.padding(vertical = 12.dp))
                         Text(tr("Speichern & Ausgeben"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(16.dp, 0.dp, 16.dp, 8.dp))
-                        DrawerItem(Icons.Filled.Save, tr("Als PSD speichern"), tr("Strg+S")) { closeDrawerThen { saveLauncher.launch("$baseName.psd") } }
+                        if (state.saveTarget != null) DrawerItem(Icons.Filled.Save, tr("Speichern"), tr("Strg+S")) { closeDrawerThen { vm.save() } }
+                        DrawerItem(Icons.Filled.SaveAs, tr("Als PSD speichern …"), if (state.saveTarget != null) tr("Strg+⇧+S") else tr("Strg+S")) { closeDrawerThen { saveLauncher.launch("$baseName.psd") } }
                         DrawerItem(Icons.Filled.Layers, tr("Als TIFF speichern …")) { closeDrawerThen { dialog = DialogKind.TIFF_OPTIONS } }
                         DrawerItem(Icons.Filled.Pets, tr("Als GIMP-Datei speichern (.xcf)")) { closeDrawerThen { xcfLauncher.launch("$baseName.xcf") } }
                         DrawerItem(Icons.Filled.Photo, tr("Exportieren als …"), tr("Strg+Umschalt+E")) { closeDrawerThen { dialog = DialogKind.EXPORT } }
@@ -462,7 +501,8 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                         },
                         title = {
                             Column {
-                                Text(state.fileName, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                // Punkt = ungespeicherte Änderungen
+                                Text((if (state.unsaved) "• " else "") + state.fileName, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 if (!compact) Text(
                                     tr("{0} × {1} px", state.docWidth, state.docHeight) +
                                         " · ${state.docProfileName}" + (if (state.bitDepth == 16) tr(" · 16 Bit") else "") +
@@ -499,8 +539,8 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                                     Item(tr("Nach rechts drehen"), icon = Icons.Filled.Rotate90DegreesCw) { go { vm.rotate(true) } }
                                     Item(tr("Nach links drehen"), icon = Icons.Filled.Rotate90DegreesCcw) { go { vm.rotate(false) } }
                                     Item(tr("Horizontal spiegeln"), icon = Icons.Filled.Flip) { go { vm.flip(true) } }
-                                    Item(tr("Vertikal spiegeln")) { go { vm.flip(false) } }
-                                    Item(tr("Drehen um Winkel …")) { go { dialog = DialogKind.ROTATE } }
+                                    Item(tr("Vertikal spiegeln"), icon = Icons.Filled.Flip, iconRotation = 90f) { go { vm.flip(false) } }
+                                    Item(tr("Drehen um Winkel …"), icon = Icons.Filled.Straighten) { go { dialog = DialogKind.ROTATE } }
                                     Item(tr("Auf Hintergrund reduzieren"), icon = Icons.Filled.Layers) { go { vm.flatten() } }
                                     HorizontalDivider()
                                     MenuHeader(tr("Bearbeiten"))
@@ -512,8 +552,8 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                                     MenuHeader(tr("Auswahl"))
                                     Item(tr("Alles auswählen"), tr("Strg+A"), Icons.Filled.SelectAll) { go { vm.selectAll() } }
                                     Item(tr("Auswahl aufheben"), tr("Strg+D"), Icons.Filled.Deselect) { go { vm.deselect() } }
-                                    Item(tr("Auswahl umkehren"), tr("Strg+⇧+I")) { go { vm.invertSelection() } }
-                                    Item(tr("Weiche Auswahlkante …")) { go { dialog = DialogKind.FEATHER } }
+                                    Item(tr("Auswahl umkehren"), tr("Strg+⇧+I"), Icons.Filled.FlipToBack) { go { vm.invertSelection() } }
+                                    Item(tr("Weiche Auswahlkante …"), icon = Icons.Filled.BlurOn) { go { dialog = DialogKind.FEATHER } }
                                     HorizontalDivider()
                                     MenuHeader(tr("Ansicht"))
                                     CheckItem(tr("Farbproof"), tr("Strg+Y"), state.proofOn) { go { vm.toggleProof() } }
@@ -522,9 +562,9 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                                     CheckItem(tr("Hilfslinien"), tr("Strg+;"), settings.showGuides) { go { vm.updateSettings { it.copy(showGuides = !it.showGuides) } } }
                                     CheckItem(tr("Ausrichten"), tr("Strg+⇧+;"), settings.snap) { go { vm.updateSettings { it.copy(snap = !it.snap) } } }
                                     CheckItem(tr("Intelligente Hilfslinien"), null, settings.smartGuides) { go { vm.updateSettings { it.copy(smartGuides = !it.smartGuides) } } }
-                                    Item(tr("Neue Hilfslinie …")) { go { dialog = DialogKind.NEW_GUIDE } }
-                                    Item(tr("Hilfslinienlayout …")) { go { dialog = DialogKind.GUIDE_LAYOUT } }
-                                    Item(tr("Hilfslinien löschen")) { go { vm.clearGuides() } }
+                                    Item(tr("Neue Hilfslinie …"), icon = Icons.Filled.HorizontalRule) { go { dialog = DialogKind.NEW_GUIDE } }
+                                    Item(tr("Hilfslinienlayout …"), icon = Icons.Filled.GridOn) { go { dialog = DialogKind.GUIDE_LAYOUT } }
+                                    Item(tr("Hilfslinien löschen"), icon = Icons.Filled.Clear) { go { vm.clearGuides() } }
                                     Item(tr("Proof einrichten …"), icon = Icons.Filled.Palette) { go { settingsTab = SettingsTab.PROOF; dialog = DialogKind.SETTINGS } }
                                     Item(tr("Arbeitsbereich …"), icon = Icons.Filled.Dashboard) { go { settingsTab = SettingsTab.WORKSPACE; dialog = DialogKind.SETTINGS } }
                                     Item(tr("Vollbild"), "F", Icons.Filled.Fullscreen) { go { fullscreen = true } }
@@ -650,7 +690,7 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                             )
                             text != null -> TextPanel(
                                 text.style, onChange = vm::updateTextLive, onDone = vm::commitTextEdit, onCancel = vm::cancelTextEdit,
-                                onPickColor = { dialog = DialogKind.TEXT_COLOR }, modifier = panelModifier,
+                                onPickColor = { dialog = DialogKind.TEXT_COLOR }, modifier = panelModifier, sessionKey = text.layerId,
                             )
                         }
 
@@ -697,6 +737,24 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
     if (galleryOpen) FilterGalleryDialog(vm, state.color, state.bgColor, onDismiss = { galleryOpen = false })
 
     when (dialog) {
+        DialogKind.UNSAVED -> AlertDialog(
+            onDismissRequest = { dialog = null; pendingReplace = null },
+            title = { Text(tr("Änderungen speichern?")) },
+            text = { Text(tr("Ohne Speichern gehen die Änderungen an „{0}“ verloren.", state.fileName)) },
+            confirmButton = {
+                Button(onClick = {
+                    val action = pendingReplace; pendingReplace = null; dialog = null
+                    // Direkt in die Datei speichern, sonst „Speichern unter“; die Aktion folgt erst nach erfolgreichem Speichern
+                    if (!vm.save(then = action)) { afterSave = action; saveLauncher.launch("$baseName.psd") }
+                }) { Text(tr("Speichern")) }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { dialog = null; pendingReplace = null }) { Text(tr("Abbrechen")) }
+                    TextButton(onClick = { val action = pendingReplace; pendingReplace = null; dialog = null; action?.invoke() }) { Text(tr("Verwerfen")) }
+                }
+            },
+        )
         DialogKind.NEW -> NewDocumentDialog(onCreate = { w, h, t -> vm.newDocument(w, h, t); dialog = null }, onDismiss = { dialog = null })
         DialogKind.IMAGE_SIZE -> ImageSizeDialog(
             state.docWidth, state.docHeight, state.docDpi, aiReady = vm.ai.firstReady(AiPurpose.UPSCALE, state.aiUpscaleModel) != null,
@@ -734,6 +792,7 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
         )
         DialogKind.EXPORT -> ExportDialog(
             state.docWidth, state.docHeight, settings.exportJpeg, settings.jpegQuality, settings.exportToSrgb,
+            showSrgb = !state.docProfileIsSrgb,
             onConfirm = { jpeg, q, w, h, srgb ->
                 vm.updateSettings { it.copy(exportJpeg = jpeg, jpegQuality = q, exportToSrgb = srgb) }
                 vm.exportSize = w to h
@@ -794,9 +853,9 @@ private fun CheckItem(label: String, shortcut: String?, checked: Boolean, onClic
 )
 
 @Composable
-private fun Item(label: String, shortcut: String? = null, icon: ImageVector? = null, onClick: () -> Unit) = DropdownMenuItem(
+private fun Item(label: String, shortcut: String? = null, icon: ImageVector? = null, iconRotation: Float = 0f, onClick: () -> Unit) = DropdownMenuItem(
     text = { Text(label) },
-    leadingIcon = icon?.let { { Icon(it, null) } },
+    leadingIcon = icon?.let { { Icon(it, null, Modifier.rotate(iconRotation)) } },
     trailingIcon = shortcut?.let { { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
     onClick = onClick,
 )
@@ -816,8 +875,8 @@ private fun AdjustmentsSheet(
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             Text(tr("Korrekturen"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
             SingleChoiceSegmentedButtonRow(Modifier.padding(horizontal = 24.dp).fillMaxWidth()) {
-                SegmentedButton(asLayer, { onModeChange(true) }, SegmentedButtonDefaults.itemShape(0, 2)) { Text(tr("Als Einstellungsebene")) }
-                SegmentedButton(!asLayer, { onModeChange(false) }, SegmentedButtonDefaults.itemShape(1, 2)) { Text(tr("Direkt anwenden")) }
+                SegmentedButton(asLayer, { onModeChange(true) }, SegmentedButtonDefaults.itemShape(0, 2)) { Text(tr("Als Einstellungsebene"), maxLines = 1, softWrap = false) }
+                SegmentedButton(!asLayer, { onModeChange(false) }, SegmentedButtonDefaults.itemShape(1, 2)) { Text(tr("Direkt anwenden"), maxLines = 1, softWrap = false) }
             }
             Text(
                 if (asLayer) tr("Nicht-destruktiv: jederzeit änderbar, mit Maske, bleibt in der PSD erhalten.") else tr("Verändert die Pixel der aktiven Ebene."),

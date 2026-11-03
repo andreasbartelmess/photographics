@@ -43,6 +43,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -91,7 +92,9 @@ fun AdjustmentPanel(
     onToggleClip: () -> Unit = {},
 ) {
     val current by rememberUpdatedState(adjustment)
-    PanelCard(adjustment.type.icon, adjustment.label, modifier) {
+    PanelCard(adjustment.type.icon, adjustment.label, modifier, actions = {
+        PanelActions(onReset = { onChange(current.type.createDefault()) }, onCancel = null, onApply = onClose, applyLabel = tr("Fertig"))
+    }) {
         if (clipped != null) {
             // Photoshop: „Diese Einstellung wirkt sich nur auf die darunterliegende Ebene aus“
             FilterChip(
@@ -130,7 +133,6 @@ fun AdjustmentPanel(
             ParamControls(params.map { it.toFilterParam() }, values) { onChange(current.withValues(values.toFloatArray())) }
             if (params.isEmpty()) Text(tr("Diese Einstellung hat keine Regler."), style = MaterialTheme.typography.bodyMedium)
         }
-        PanelActions(onReset = { onChange(adjustment.type.createDefault()) }, onCancel = null, onApply = onClose, applyLabel = tr("Fertig"))
     }
 }
 
@@ -285,15 +287,27 @@ fun CurveEditor(points: List<Pair<Int, Int>>, onChange: (List<Pair<Int, Int>>) -
 /** Textbearbeitung: Inhalt, Schrift, Größe, Farbe, Stil, Ausrichtung – Änderungen erscheinen sofort. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TextPanel(style: TextStyle, onChange: (TextStyle) -> Unit, onDone: () -> Unit, onCancel: () -> Unit, onPickColor: () -> Unit, modifier: Modifier = Modifier) {
+fun TextPanel(style: TextStyle, onChange: (TextStyle) -> Unit, onDone: () -> Unit, onCancel: () -> Unit, onPickColor: () -> Unit, modifier: Modifier = Modifier, sessionKey: Any? = null) {
     var fontMenu by remember { mutableStateOf(false) }
-    PanelCard(Icons.Filled.TextFields, tr("Text"), modifier) {
+    // Sofort lostippen können: Feld fokussiert; der Platzhalter „Text“ einer neuen Ebene ist markiert
+    // und wird beim Tippen ersetzt, bestehender Text bekommt den Cursor ans Ende
+    var field by remember(sessionKey) {
+        val placeholder = style.text == tr("Text")
+        mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(style.text,
+            if (placeholder) androidx.compose.ui.text.TextRange(0, style.text.length) else androidx.compose.ui.text.TextRange(style.text.length)))
+    }
+    if (field.text != style.text) field = field.copy(text = style.text, selection = androidx.compose.ui.text.TextRange(style.text.length))
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    androidx.compose.runtime.LaunchedEffect(sessionKey) { runCatching { focus.requestFocus() } }
+    PanelCard(Icons.Filled.TextFields, tr("Text"), modifier, actions = {
+        PanelActions(onReset = null, onCancel = onCancel, onApply = onDone, applyLabel = tr("Fertig"))
+    }) {
         OutlinedTextField(
-            value = style.text,
-            onValueChange = { onChange(style.copy(text = it)) },
+            value = field,
+            onValueChange = { field = it; if (it.text != style.text) onChange(style.copy(text = it.text)) },
             label = { Text(tr("Text")) },
             minLines = 2, maxLines = 6,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().focusRequester(focus),
         )
         Spacer(Modifier.height(8.dp))
         ExposedDropdownMenuBox(expanded = fontMenu, onExpandedChange = { fontMenu = it }) {
@@ -327,7 +341,7 @@ fun TextPanel(style: TextStyle, onChange: (TextStyle) -> Unit, onDone: () -> Uni
             Text("${(style.letterSpacing * 1000).roundToInt()}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
         Slider(style.letterSpacing, { onChange(style.copy(letterSpacing = it)) }, valueRange = -0.1f..0.5f)
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth().scrollRow().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Box(Modifier.size(36.dp).background(Color(style.color), CircleShape).border(2.dp, MaterialTheme.colorScheme.outline, CircleShape).clickable(onClick = onPickColor))
             Spacer(Modifier.width(8.dp))
             IconToggleButton(style.bold, { onChange(style.copy(bold = it)) }) { Icon(Icons.Filled.FormatBold, tr("Fett")) }
@@ -337,7 +351,6 @@ fun TextPanel(style: TextStyle, onChange: (TextStyle) -> Unit, onDone: () -> Uni
             IconToggleButton(style.align == TextAlign.CENTER, { onChange(style.copy(align = TextAlign.CENTER)) }) { Icon(Icons.Filled.FormatAlignCenter, tr("Zentriert")) }
             IconToggleButton(style.align == TextAlign.RIGHT, { onChange(style.copy(align = TextAlign.RIGHT)) }) { Icon(Icons.AutoMirrored.Filled.FormatAlignRight, tr("Rechts")) }
         }
-        PanelActions(onReset = null, onCancel = onCancel, onApply = onDone, applyLabel = tr("Fertig"))
     }
 }
 

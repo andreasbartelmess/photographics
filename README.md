@@ -147,6 +147,8 @@ report (`report.html`, `report.csv`) with side-by-side previews of every file th
 
 No fixed dates, and the order may change. Suggestions are welcome.
 
+- **Done in 0.4.1 (Android):** autosave and crash recovery; unsaved-changes prompt and Ctrl+S back into the
+  opened PSD/TIFF/XCF; drag and drop in the layers panel; sharper filter gallery preview
 - **Done in 0.4:** Linux (GNOME) version as Flatpak; editable layer styles incl. bevel, satin and
   gradient overlay; shape layers, pen tool, paths and alpha channels; filter gallery (47 effects);
   16-bit editing; paint bucket, fill command, pencil, background and magic eraser; quick selection,
@@ -154,7 +156,7 @@ No fixed dates, and the order may change. Suggestions are welcome.
 - **Done in 0.3:** GPU preview for moving, transforming and opacity; rendering layer effects; English
   user interface; liquify; gradient tool, magic wand, object selection and auto-select; per-channel
   curves with histogram; better content-aware fill
-- **Next:** autosave and crash recovery; custom fonts (TTF/OTF); history panel with snapshots; select
+- **Next:** custom fonts (TTF/OTF); history panel with snapshots; select
   subject and sky with an on-device model; refine edge for hair
 - **After that:** frequency separation helper; batch export (several sizes and formats at once);
   patterns and pattern overlay

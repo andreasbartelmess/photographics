@@ -413,6 +413,9 @@ Druckerei. Der Proof betrifft nur die Anzeige – Export und gespeicherte Dateie
 
 Ohne feste Termine, die Reihenfolge kann sich ändern. Vorschläge sind willkommen.
 
+- **Erledigt in 0.4.1 (Android):** automatisches Sichern und Wiederherstellen nach Abstürzen; Nachfrage bei
+  ungespeicherten Änderungen und Strg+S zurück in die geöffnete PSD/TIFF/XCF; Ebenen per Drag & Drop
+  verschieben; schärfere Vorschau der Filtergalerie
 - **Erledigt in 0.4:** Linux-Version (GNOME) als Flatpak; Ebenenstile bearbeiten, auch Abgeflachte
   Kante, Glanz und Verlaufsüberlagerung; Formebenen, Zeichenstift, Pfade und Alphakanäle;
   Filtergalerie (47 Effekte); Bearbeitung mit 16 Bit; Füllwerkzeug, Fläche füllen, Buntstift,
@@ -421,8 +424,7 @@ Ohne feste Termine, die Reihenfolge kann sich ändern. Vorschläge sind willkomm
 - **Erledigt in 0.3:** Verschieben, Transformieren und Deckkraft live über die GPU; Ebeneneffekte
   anzeigen; Oberfläche auf Englisch; Verflüssigen; Verlauf, Zauberstab, Objektauswahl und automatische
   Ebenenauswahl; Kurven je Kanal mit Histogramm; besseres inhaltsbasiertes Füllen
-- **Als Nächstes:** automatisches Sichern und Wiederherstellen nach Abstürzen; eigene Schriften
-  (TTF/OTF); Protokoll-Panel mit Schnappschüssen; Motiv und Himmel per KI auswählen (Modell auf dem Gerät),
+- **Als Nächstes:** eigene Schriften (TTF/OTF); Protokoll-Panel mit Schnappschüssen; Motiv und Himmel per KI auswählen (Modell auf dem Gerät),
   Auswahlkante für Haare verbessern
 - **Danach:** Frequenztrennung als Retusche-Hilfe; Stapelexport (mehrere Größen/Formate auf einmal);
   Muster und Musterüberlagerung

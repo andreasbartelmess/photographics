@@ -86,8 +86,8 @@ fun ImageSizeDialog(
                 Text(tr("Aktuell: {0} × {1} px · {2} MP", width, height, "%.1f".format(width * height / 1e6)), style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(12.dp))
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    SegmentedButton(!percent, { if (percent) { w = width.toString(); h = height.toString(); percent = false } }, SegmentedButtonDefaults.itemShape(0, 2)) { Text(tr("Pixel")) }
-                    SegmentedButton(percent, { if (!percent) { w = "100"; h = "100"; percent = true } }, SegmentedButtonDefaults.itemShape(1, 2)) { Text(tr("Prozent")) }
+                    SegmentedButton(!percent, { if (percent) { w = width.toString(); h = height.toString(); percent = false } }, SegmentedButtonDefaults.itemShape(0, 2)) { Text(tr("Pixel"), maxLines = 1, softWrap = false) }
+                    SegmentedButton(percent, { if (!percent) { w = "100"; h = "100"; percent = true } }, SegmentedButtonDefaults.itemShape(1, 2)) { Text(tr("Prozent"), maxLines = 1, softWrap = false) }
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -272,6 +272,8 @@ fun AiModelsDialog(
 @Composable
 fun ExportDialog(
     width: Int, height: Int, jpeg0: Boolean, quality0: Int, srgb0: Boolean,
+    /** false bei sRGB-Dokumenten: Umwandeln wäre wirkungslos. */
+    showSrgb: Boolean = true,
     onConfirm: (jpeg: Boolean, quality: Int, w: Int, h: Int, srgb: Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -286,8 +288,8 @@ fun ExportDialog(
         text = {
             Column {
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                    SegmentedButton(selected = jpeg, onClick = { jpeg = true }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text("JPEG") }
-                    SegmentedButton(selected = !jpeg, onClick = { jpeg = false }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text("PNG") }
+                    SegmentedButton(selected = jpeg, onClick = { jpeg = true }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text("JPEG", maxLines = 1, softWrap = false) }
+                    SegmentedButton(selected = !jpeg, onClick = { jpeg = false }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text("PNG", maxLines = 1, softWrap = false) }
                 }
                 if (jpeg) {
                     Text(tr("Qualität: {0}", quality.roundToInt()), style = MaterialTheme.typography.bodyMedium)
@@ -296,7 +298,7 @@ fun ExportDialog(
                 }
                 Text(tr("Größe: {0} × {1} px ({2} %)", w, h, pct.roundToInt()), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
                 Slider(pct, { pct = it.roundToInt().toFloat() }, valueRange = 5f..100f)
-                Row(Modifier.fillMaxWidth().clickable { srgb = !srgb }.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (showSrgb) Row(Modifier.fillMaxWidth().clickable { srgb = !srgb }.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(srgb, { srgb = it })
                     Text(tr("In sRGB umwandeln (Web, Geräte ohne Farbmanagement)"), Modifier.padding(start = 8.dp))
                 }
@@ -326,7 +328,7 @@ fun TiffOptionsDialog(
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                     val all = de.photographics.core.tiff.TiffWriter.Compression.entries
                     all.forEachIndexed { i, v ->
-                        SegmentedButton(selected = c == v, onClick = { c = v }, shape = SegmentedButtonDefaults.itemShape(i, all.size)) { Text(v.label) }
+                        SegmentedButton(selected = c == v, onClick = { c = v }, shape = SegmentedButtonDefaults.itemShape(i, all.size)) { Text(v.label, maxLines = 1, softWrap = false) }
                     }
                 }
                 Text(
@@ -371,8 +373,8 @@ fun CropTargetDialog(current: de.photographics.app.CropTarget?, dpi: Float, onCo
         text = {
             Column {
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    SegmentedButton(selected = !cm, onClick = { cm = false }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text(tr("Pixel")) }
-                    SegmentedButton(selected = cm, onClick = { cm = true }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text("cm") }
+                    SegmentedButton(selected = !cm, onClick = { cm = false }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text(tr("Pixel"), maxLines = 1, softWrap = false) }
+                    SegmentedButton(selected = cm, onClick = { cm = true }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text("cm", maxLines = 1, softWrap = false) }
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -412,8 +414,8 @@ fun RotateDialog(onRotate: (Float) -> Unit, onDismiss: () -> Unit) {
                 NumberField(tr("Winkel (°)"), angle, { angle = it }, Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    SegmentedButton(selected = clockwise, onClick = { clockwise = true }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text("Im UZS") }
-                    SegmentedButton(selected = !clockwise, onClick = { clockwise = false }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text(tr("Gegen UZS")) }
+                    SegmentedButton(selected = clockwise, onClick = { clockwise = true }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text(tr("Im UZS"), maxLines = 1, softWrap = false) }
+                    SegmentedButton(selected = !clockwise, onClick = { clockwise = false }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text(tr("Gegen UZS"), maxLines = 1, softWrap = false) }
                 }
                 Text(
                     tr("Die Arbeitsfläche wächst mit; freie Ecken der Hintergrundebene bekommen die Hintergrundfarbe."),
@@ -439,8 +441,8 @@ fun NewGuideDialog(onAdd: (Boolean, Double) -> Unit, onDismiss: () -> Unit) {
         text = {
             Column {
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    SegmentedButton(selected = vertical, onClick = { vertical = true }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text(tr("Senkrecht")) }
-                    SegmentedButton(selected = !vertical, onClick = { vertical = false }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text(tr("Waagerecht")) }
+                    SegmentedButton(selected = vertical, onClick = { vertical = true }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text(tr("Senkrecht"), maxLines = 1, softWrap = false) }
+                    SegmentedButton(selected = !vertical, onClick = { vertical = false }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text(tr("Waagerecht"), maxLines = 1, softWrap = false) }
                 }
                 Spacer(Modifier.height(8.dp))
                 NumberField(tr("Position (px)"), pos, { pos = it }, Modifier.fillMaxWidth())

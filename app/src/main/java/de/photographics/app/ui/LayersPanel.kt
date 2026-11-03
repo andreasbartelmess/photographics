@@ -21,6 +21,24 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.zIndex
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -145,6 +163,9 @@ fun LayersPanel(
 
             // Neue/aktive Ebene immer sichtbar halten (z. B. nach dem Einfügen oberhalb)
             val listState = rememberLazyListState()
+            // Drag & Drop: langes Drücken auf eine Zeile hebt sie an
+            var drag by remember { mutableStateOf<LayerDragState?>(null) }
+            val layersNow = rememberUpdatedState(state.layers)
             LaunchedEffect(state.activeLayerId, state.layers.size) {
                 val idx = state.layers.indexOfFirst { it.id == state.activeLayerId }
                 if (idx >= 0) {
@@ -152,20 +173,82 @@ fun LayersPanel(
                     if (!visible) listState.animateScrollToItem(idx)
                 }
             }
+            val lineColor = MaterialTheme.colorScheme.primary
             LazyColumn(
-                Modifier.weight(1f).padding(horizontal = 8.dp),
+                Modifier.weight(1f).padding(horizontal = 8.dp).drawWithContent {
+                    drawContent()
+                    // Einfügestelle über allen Zeilen (auch über der gezogenen)
+                    val (tid, where) = drag?.target ?: return@drawWithContent
+                    val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == tid } ?: return@drawWithContent
+                    val w = 3.dp.toPx(); val inset = (8 + (layersNow.value.firstOrNull { it.id == tid }?.depth ?: 0) * 20).dp.toPx()
+                    val top = info.offset.toFloat(); val bottom = (info.offset + info.size).toFloat()
+                    when (where) {
+                        EditorViewModel.LayerDrop.ABOVE -> drawRoundRect(lineColor, Offset(inset, top - w / 2 - 1.dp.toPx()), Size(size.width - inset, w), CornerRadius(w / 2))
+                        EditorViewModel.LayerDrop.BELOW -> drawRoundRect(lineColor, Offset(inset, bottom - w / 2 + 1.dp.toPx()), Size(size.width - inset, w), CornerRadius(w / 2))
+                        EditorViewModel.LayerDrop.INTO -> drawRoundRect(lineColor, Offset(0f, top), Size(size.width, bottom - top), CornerRadius(16.dp.toPx()), style = Stroke(w))
+                    }
+                },
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 items(state.layers, key = { it.id }) { item ->
-                    LayerRow(
-                        item = item,
-                        selected = item.id == state.activeLayerId,
-                        maskTargeted = item.id == state.activeLayerId && state.paintTarget == PaintTarget.MASK,
-                        vm = vm,
-                        onRename = { renameTarget = item },
-                        onStyle = { openStyle(item.id) },
-                    )
+                    val d = drag
+                    val dragging = d?.id == item.id
+                    Box(
+                        Modifier
+                            .zIndex(if (dragging) 1f else 0f)
+                            .graphicsLayer {
+                                if (dragging && d != null) {
+                                    val cur = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == item.id }?.offset ?: 0
+                                    translationY = d.pointerY - d.grab - cur
+                                    shadowElevation = 8.dp.toPx(); this.shape = RoundedCornerShape(16.dp); clip = true
+                                    alpha = 0.92f
+                                }
+                            }
+                            .pointerInput(item.id) {
+                                // Maus: sofort ziehen (nach kurzer Mindeststrecke); Finger/Stift: erst nach langem
+                                // Drücken, damit die Liste mit dem Finger scrollbar bleibt
+                                fun start(y: Float): Boolean {
+                                    val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == item.id } ?: return false
+                                    vm.selectLayer(item.id)
+                                    drag = LayerDragState(item.id, info.offset + y, y, layersNow.value.descendantsOf(item.id))
+                                    return true
+                                }
+                                fun move(dy: Float) {
+                                    val st = drag ?: return
+                                    st.pointerY += dy
+                                        // Am Rand der Liste mitscrollen
+                                        val li = listState.layoutInfo
+                                        val edge = 56.dp.toPx()
+                                        val endY = li.viewportEndOffset.toFloat()
+                                        if (st.pointerY < edge) listState.dispatchRawDelta(-(edge - st.pointerY) / 4f)
+                                        else if (st.pointerY > endY - edge) listState.dispatchRawDelta((st.pointerY - (endY - edge)) / 4f)
+                                    st.target = dropTarget(listState, layersNow.value, st)
+                                }
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    val first = if (down.type == PointerType.Mouse) {
+                                        var acc = 0f
+                                        awaitTouchSlopOrCancellation(down.id) { c, over -> c.consume(); acc = over.y }?.also { start(down.position.y); move(acc) }
+                                    } else {
+                                        awaitLongPressOrCancellation(down.id)?.also { start(it.position.y) }
+                                    }
+                                    if (first == null || drag == null) return@awaitEachGesture
+                                    val done = drag(first.id) { c -> move(c.positionChange().y); c.consume() }
+                                    drag?.let { st -> if (done) st.target?.let { (t, w) -> vm.dropLayer(st.id, t, w) } }
+                                    drag = null
+                                }
+                            },
+                    ) {
+                        LayerRow(
+                            item = item,
+                            selected = item.id == state.activeLayerId,
+                            maskTargeted = item.id == state.activeLayerId && state.paintTarget == PaintTarget.MASK,
+                            vm = vm,
+                            onRename = { renameTarget = item },
+                            onStyle = { openStyle(item.id) },
+                        )
+                    }
                 }
             }
 
@@ -193,6 +276,39 @@ fun LayersPanel(
     styleTarget?.let { (id, fx) ->
         LayerStyleDialog(fx, onPreview = { vm.previewLayerStyle(id, it) }, onFinish = { vm.finishLayerStyle(id, it); styleTarget = null })
     }
+}
+
+/** Laufender Ziehvorgang: Zeiger-Y im Listen-Viewport, Griffpunkt in der Zeile, ungültige Ziele (eigene Unterebenen). */
+private class LayerDragState(val id: Int, pointerY: Float, val grab: Float, val excluded: Set<Int>) {
+    var pointerY by mutableFloatStateOf(pointerY)
+    var target by mutableStateOf<Pair<Int, EditorViewModel.LayerDrop>?>(null)
+}
+
+/** Ids der in der Liste unter einer aufgeklappten Gruppe [id] angezeigten Ebenen. */
+private fun List<LayerItem>.descendantsOf(id: Int): Set<Int> {
+    val i = indexOfFirst { it.id == id }
+    if (i < 0 || !this[i].isGroup) return emptySet()
+    val depth = this[i].depth
+    return drop(i + 1).takeWhile { it.depth > depth }.map { it.id }.toSet()
+}
+
+/** Zielzeile und Ablageort unter dem Zeiger; Gruppen nehmen im mittleren Bereich die Ebene auf. */
+private fun dropTarget(list: LazyListState, layers: List<LayerItem>, st: LayerDragState): Pair<Int, EditorViewModel.LayerDrop>? {
+    val vis = list.layoutInfo.visibleItemsInfo
+    if (vis.isEmpty()) return null
+    val y = st.pointerY
+    val info = vis.firstOrNull { y >= it.offset && y < it.offset + it.size }
+        ?: if (y < vis.first().offset) vis.first() else vis.last()
+    val id = info.key as? Int ?: return null
+    if (id == st.id || id in st.excluded) return null
+    val item = layers.firstOrNull { it.id == id } ?: return null
+    val rel = ((y - info.offset) / info.size).coerceIn(0f, 1f)
+    val where = when {
+        item.isGroup && rel in 0.3f..0.7f -> EditorViewModel.LayerDrop.INTO
+        rel < 0.5f -> EditorViewModel.LayerDrop.ABOVE
+        else -> EditorViewModel.LayerDrop.BELOW
+    }
+    return id to where
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -20,6 +20,9 @@ import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -282,6 +285,46 @@ private fun CropOptions(state: EditorUiState, vm: EditorViewModel, onTargetSize:
     if (state.cropStraighten) Hint(tr("Linie entlang des Horizonts ziehen"))
 }
 
+/**
+ * Seitlich scrollende Leiste: weicher Verlauf an der Kante, hinter der noch Inhalt liegt, und
+ * Mausrad scrollt seitlich (am Desktop/mit Maus sonst nicht erreichbar).
+ */
+fun Modifier.overflowHint(scroll: androidx.compose.foundation.gestures.ScrollableState, fade: androidx.compose.ui.unit.Dp = 32.dp): Modifier = this
+    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val f = fade.toPx()
+        if (scroll.canScrollBackward) drawRect(
+            androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(androidx.compose.ui.graphics.Color.Transparent, androidx.compose.ui.graphics.Color.Black), 0f, f),
+            size = androidx.compose.ui.geometry.Size(f, size.height), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+        )
+        if (scroll.canScrollForward) drawRect(
+            androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(androidx.compose.ui.graphics.Color.Black, androidx.compose.ui.graphics.Color.Transparent), size.width - f, size.width),
+            topLeft = androidx.compose.ui.geometry.Offset(size.width - f, 0f), size = androidx.compose.ui.geometry.Size(f, size.height),
+            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+        )
+    }
+    .pointerInput(scroll) {
+        awaitPointerEventScope {
+            while (true) {
+                val e = awaitPointerEvent()
+                if (e.type != androidx.compose.ui.input.pointer.PointerEventType.Scroll) continue
+                val d = e.changes.fold(0f) { acc, c -> acc + c.scrollDelta.y + c.scrollDelta.x }
+                if (d != 0f && (scroll.canScrollForward || scroll.canScrollBackward)) {
+                    scroll.dispatchRawDelta(d * 64.dp.toPx())
+                    e.changes.forEach { it.consume() }
+                }
+            }
+        }
+    }
+
+/** Seitlich scrollende Reihe mit Randverlauf und Mausrad (statt `horizontalScroll(rememberScrollState())`). */
+@Composable
+fun Modifier.scrollRow(): Modifier {
+    val scroll = rememberScrollState()
+    return this.overflowHint(scroll).horizontalScroll(scroll)
+}
+
 /** Schwebende Optionsleiste (Material „Floating Toolbar“) für das aktive Werkzeug. */
 @Composable
 fun ToolOptionsBar(state: EditorUiState, vm: EditorViewModel, onFeatherClick: () -> Unit, onManageAi: () -> Unit, onBrushSettings: () -> Unit = {}, onTargetSize: () -> Unit = {}, onFillClick: () -> Unit = {}, modifier: Modifier = Modifier) {
@@ -291,8 +334,9 @@ fun ToolOptionsBar(state: EditorUiState, vm: EditorViewModel, onFeatherClick: ()
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shadowElevation = 3.dp,
     ) {
+        val scroll = rememberScrollState()
         Row(
-            Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
+            Modifier.overflowHint(scroll).horizontalScroll(scroll).padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {

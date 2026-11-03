@@ -57,27 +57,38 @@ import kotlin.math.roundToInt
 fun FilterPanel(spec: FilterSpec, onPreview: (FloatArray) -> Unit, onApply: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     val values = remember(spec) { mutableStateListOf(*spec.params.map { it.default }.toTypedArray()) }
     LaunchedEffect(spec) { onPreview(values.toFloatArray()) }
-    PanelCard(spec.icon, spec.label, modifier) {
-        ParamControls(spec.params, values) { onPreview(values.toFloatArray()) }
+    PanelCard(spec.icon, spec.label, modifier, actions = {
         PanelActions(
             onReset = { for (i in values.indices) values[i] = spec.params[i].default; onPreview(values.toFloatArray()) },
             onCancel = onCancel, onApply = onApply,
         )
+    }) {
+        ParamControls(spec.params, values) { onPreview(values.toFloatArray()) }
     }
 }
 
 /** Gemeinsamer Rahmen der schwebenden Panels. */
 @Composable
-fun PanelCard(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+fun PanelCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, modifier: Modifier = Modifier,
+    /** Schaltflächen am unteren Rand – bleiben sichtbar, auch wenn der Inhalt scrollt. */
+    actions: (@Composable () -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
     Surface(modifier, color = MaterialTheme.colorScheme.surfaceContainerHigh, shadowElevation = 6.dp, shape = RoundedCornerShape(28.dp)) {
-        Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 12.dp)) {
+        Column(Modifier.heightIn(max = 720.dp).padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(12.dp))
                 Text(title, style = MaterialTheme.typography.titleLarge)
             }
             Spacer(Modifier.height(8.dp))
-            content()
+            val scroll = rememberScrollState()
+            Column(Modifier.weight(1f, fill = false).verticalScroll(scroll)) { content() }
+            if (actions != null) {
+                if (scroll.maxValue > 0) androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                actions()
+            }
         }
     }
 }
@@ -255,7 +266,7 @@ fun ColorPickerDialog(
                 val take = { c: Int -> val o = FloatArray(3); android.graphics.Color.colorToHSV(c, o); h = o[0]; s = o[1]; v = o[2] }
                 if (recent.isNotEmpty()) {
                     Text(tr("Zuletzt verwendet"), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(Modifier.scrollRow(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         for (c in recent) Swatch(c) { take(c) }
                     }
                 }

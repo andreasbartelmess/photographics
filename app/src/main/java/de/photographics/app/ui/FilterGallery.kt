@@ -65,6 +65,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
+import kotlinx.coroutines.yield
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
@@ -106,18 +110,32 @@ fun FilterGalleryDialog(vm: EditorViewModel, fg: Int, bg: Int, onDismiss: () -> 
     val thumbs = remember { mutableStateMapOf<String, ImageBitmap>() }
     var category by remember { mutableStateOf(effects.getOrNull(0)?.spec?.category ?: GalleryCategory.ARTISTIC) }
 
-    LaunchedEffect(Unit) { sources = vm.gallerySources() ?: run { onDismiss(); return@LaunchedEffect } }
+    // Pixelgröße der Vorschaufläche; die Quellen werden genau dafür erzeugt (scharf statt hochskaliert)
+    var boxPx by remember { mutableStateOf(IntSize.Zero) }
+    LaunchedEffect(boxPx) {
+        if (boxPx.width <= 0 || boxPx.height <= 0) return@LaunchedEffect
+        delay(if (sources == null) 0 else 150)   // Drehen/Größenänderung: kurz abwarten
+        sources = vm.gallerySources(boxPx.width, boxPx.height) ?: run { onDismiss(); return@LaunchedEffect }
+    }
     // Miniaturen aller Effekte aus einem verkleinerten Ausschnitt des eigenen Bildes
     LaunchedEffect(sources) {
         val f = sources?.first ?: return@LaunchedEffect
-        val tw = 200; val th = 136
-        val step = maxOf(1, minOf(f.w / tw, f.h / th))
-        val sw = minOf(f.w / step, tw); val sh = minOf(f.h / step, th)
-        val x0 = (f.w - sw * step) / 2; val y0 = (f.h - sh * step) / 2
-        val small = IntArray(sw * sh) { i -> f.px[(y0 + (i / sw) * step) * f.w + x0 + (i % sw) * step] }
+        if (thumbs.isNotEmpty()) return@LaunchedEffect
+        // Ausschnitt im Seitenverhältnis der Kachel, gefiltert verkleinert (kein Treppeneffekt)
+        val tw = 280; val th = 190
+        val k = minOf(f.w.toFloat() / tw, f.h.toFloat() / th).coerceAtLeast(1f)
+        val cw = minOf(f.w, (tw * k).roundToInt()); val ch = minOf(f.h, (th * k).roundToInt())
+        val sw = maxOf(1, (cw / k).roundToInt()); val sh = maxOf(1, (ch / k).roundToInt())
+        val small = withContext(Dispatchers.Default) {
+            val src = Bitmap.createBitmap(f.px, f.w, f.h, Bitmap.Config.ARGB_8888)
+            val crop = Bitmap.createBitmap(src, (f.w - cw) / 2, (f.h - ch) / 2, cw, ch)
+            val sc = Bitmap.createScaledBitmap(crop, sw, sh, true)
+            IntArray(sw * sh).also { sc.getPixels(it, 0, sw, 0, 0, sw, sh) }
+        }
+        val thumbScale = f.scale * sw / cw
         for (s in Gallery.specs) {
             val bmp = withContext(Dispatchers.Default) {
-                runCatching { GalleryChain(listOf(GalleryEffect(s, s.defaults())), GalleryContext(fg, bg, f.scale / step)).process(small.copyOf(), sw, sh, 0, 0, sw, sh) }.getOrNull()
+                runCatching { GalleryChain(listOf(GalleryEffect(s, s.defaults())), GalleryContext(fg, bg, thumbScale)).process(small.copyOf(), sw, sh, 0, 0, sw, sh) }.getOrNull()
                     ?.let { toBitmap(it, sw, sh) }
             }
             if (bmp != null) thumbs[s.id] = bmp
@@ -130,6 +148,17 @@ fun FilterGalleryDialog(vm: EditorViewModel, fg: Int, bg: Int, onDismiss: () -> 
         busy = true
         delay(60)
         effects.getOrNull(selected)?.let { remembered[it.spec.id] = it.values }
+        // Erst schnell in halber Auflösung (Regler bleiben flüssig), dann in voller
+        if (src.w * src.h > 400_000) {
+            val hw = maxOf(1, src.w / 2); val hh = maxOf(1, src.h / 2)
+            val half = withContext(Dispatchers.Default) {
+                val b = Bitmap.createScaledBitmap(Bitmap.createBitmap(src.px, src.w, src.h, Bitmap.Config.ARGB_8888), hw, hh, true)
+                val px = IntArray(hw * hh).also { b.getPixels(it, 0, hw, 0, 0, hw, hh) }
+                GalleryChain(key, GalleryContext(fg, bg, src.scale * hw / src.w)).process(px, hw, hh, src.ox / 2, src.oy / 2, hw, hh)
+            }
+            preview = toBitmap(half, hw, hh)
+            yield()
+        }
         val out = withContext(Dispatchers.Default) {
             GalleryChain(key, GalleryContext(fg, bg, src.scale)).process(src.px.copyOf(), src.w, src.h, src.ox, src.oy, src.w, src.h)
         }
@@ -152,8 +181,8 @@ fun FilterGalleryDialog(vm: EditorViewModel, fg: Int, bg: Int, onDismiss: () -> 
                         if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.width(12.dp))
                         SingleChoiceSegmentedButtonRow {
-                            SegmentedButton(!full, { full = false }, SegmentedButtonDefaults.itemShape(0, 2)) { Text(tr("Ganzes Bild")) }
-                            SegmentedButton(full, { full = true }, SegmentedButtonDefaults.itemShape(1, 2)) { Text(tr("100 %")) }
+                            SegmentedButton(!full, { full = false }, SegmentedButtonDefaults.itemShape(0, 2)) { Text(tr("Ganzes Bild"), maxLines = 1, softWrap = false) }
+                            SegmentedButton(full, { full = true }, SegmentedButtonDefaults.itemShape(1, 2)) { Text(tr("100 %"), maxLines = 1, softWrap = false) }
                         }
                         Spacer(Modifier.width(12.dp))
                         Button(onClick = { lastStack = effects.toList(); vm.applyGallery(effects.toList()); onDismiss() }, modifier = Modifier.padding(end = 12.dp)) { Text(tr("Anwenden")) }
@@ -162,8 +191,8 @@ fun FilterGalleryDialog(vm: EditorViewModel, fg: Int, bg: Int, onDismiss: () -> 
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val wide = maxWidth >= 840.dp
                     val previewBox: @Composable (Modifier) -> Unit = { m ->
-                        Box(m.background(MaterialTheme.colorScheme.surfaceContainerLowest).padding(16.dp), contentAlignment = Alignment.Center) {
-                            preview?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
+                        Box(m.background(MaterialTheme.colorScheme.surfaceContainerLowest).padding(16.dp).onSizeChanged { boxPx = it }, contentAlignment = Alignment.Center) {
+                            preview?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit, filterQuality = FilterQuality.High) }
                         }
                     }
                     val catalog: @Composable (Modifier) -> Unit = { m ->
@@ -174,9 +203,9 @@ fun FilterGalleryDialog(vm: EditorViewModel, fg: Int, bg: Int, onDismiss: () -> 
                             val specs = Gallery.specs.filter { it.category == category }
                             if (wide) LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize().padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 items(specs, key = { it.id }) { s -> GalleryThumb(s, thumbs[s.id], effects.getOrNull(selected)?.spec === s) { pick(s) } }
-                            } else LazyRow(Modifier.padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            } else { val row = androidx.compose.foundation.lazy.rememberLazyListState(); LazyRow(Modifier.padding(8.dp).overflowHint(row), state = row, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 items(specs, key = { it.id }) { s -> Box(Modifier.width(120.dp)) { GalleryThumb(s, thumbs[s.id], effects.getOrNull(selected)?.spec === s) { pick(s) } } }
-                            }
+                            } }
                         }
                     }
                     val controls: @Composable (Modifier) -> Unit = { m ->

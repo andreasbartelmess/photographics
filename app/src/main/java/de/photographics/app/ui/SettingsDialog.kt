@@ -448,8 +448,7 @@ private fun <T> Segmented(items: List<T>, selected: T, label: (T) -> String, onS
     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
         items.forEachIndexed { i, item ->
             SegmentedButton(selected = item == selected, onClick = { onSelect(item) }, shape = SegmentedButtonDefaults.itemShape(i, items.size)) {
-                Text(label(item), maxLines = 1)
-            }
+                Text(label(item), maxLines = 1, softWrap = false) }
         }
     }
 }
