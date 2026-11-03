@@ -1,5 +1,6 @@
 package de.photographics.gnome
 
+import de.photographics.core.editor.Recovery
 import de.photographics.core.adjust.AdjustmentType
 import de.photographics.core.color.IccProfiles
 import de.photographics.core.color.RenderingIntent
@@ -46,6 +47,9 @@ import org.gnome.gtk.Spinner
 import org.gnome.gtk.Stack
 import org.gnome.gtk.ToggleButton
 import java.io.File
+
+/** Automatisch sichern, wenn so lange nichts mehr geändert wurde (PG_AUTOSAVE_MS nur für Tests). */
+private val AUTOSAVE_IDLE_MS = System.getenv("PG_AUTOSAVE_MS")?.toIntOrNull() ?: 120_000
 
 /** Ein Fenster je Dokument. */
 class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
@@ -212,6 +216,8 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
         setupKeys()
         setupActions()
         window.onCloseRequest { if (closing || session?.dirty != true) { closing = true; false } else { askSaveThen { closing = true; window.close() }; true } }
+        // Fenster regulär geschlossen (gespeichert oder verworfen): Sicherung wird nicht mehr gebraucht
+        window.onDestroy { autosaveGen++; val r = recovery; Engine.post { r.delete() } }
         optionsChanged(c.opts)
         updateActions()
     }
@@ -848,6 +854,68 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
         updateTitle(); updateActions()
         requestThumbs()
         canvas.queueDraw()
+        planAutosave(st)
+    }
+
+    // ------------------------------------------------------------ Automatische Sicherung
+
+    /** Sicherung dieses Fensters (eigenes Verzeichnis; nach einer Wiederherstellung das alte). */
+    private var recovery = Recovery(File(FileIO.recoveryDir, "w-${ProcessHandle.current().pid()}-${System.nanoTime()}"))
+    private var autosaveGen = 0
+    private var autosavePlannedFor = -1L
+    /** Nur auf dem Engine-Thread: Änderungszähler beim letzten Sichern. */
+    @Volatile private var autosavedAt = -1L
+
+    /** Zwei Minuten nach der letzten echten Änderung sichern; gespeichert = Sicherung entfernen. */
+    private fun planAutosave(st: DocState) {
+        if (!st.dirty) {
+            if (autosavePlannedFor != -1L) { autosaveGen++; autosavePlannedFor = -1L; autosavedAt = -1L; val r = recovery; Engine.post { r.clear() } }
+            return
+        }
+        if (st.changes == autosavePlannedFor) return
+        autosavePlannedFor = st.changes
+        val gen = ++autosaveGen
+        org.gnome.glib.GLib.timeoutAddOnce(AUTOSAVE_IDLE_MS) { if (gen == autosaveGen) autosaveNow() }
+    }
+
+    private fun autosaveNow() {
+        val s = session ?: return
+        val r = recovery
+        Engine.post {
+            if (!s.dirty || s.editor.history.changeCount == autosavedAt) return@post
+            try {
+                val f = s.file
+                r.write(s.doc, s.name, f?.path, f?.let { FileIO.Format.of(it)?.name }, File(FileIO.cacheDir, "spool").apply { mkdirs() })
+                autosavedAt = s.editor.history.changeCount
+            } catch (e: Exception) {
+                System.err.println("Automatische Sicherung fehlgeschlagen: $e")
+            } catch (e: OutOfMemoryError) {
+                System.err.println("Automatische Sicherung: zu wenig Speicher")
+            }
+        }
+    }
+
+    /** Sicherung aus einem früheren Lauf öffnen – ungespeichert, mit altem Namen und Speicherort. */
+    fun openRecovery(r: Recovery, info: Recovery.Info) {
+        title.subtitle = tr("Wird geöffnet …")
+        busy(true)
+        Engine.call({
+            val doc = de.photographics.core.psd.PsdReader.read(java.io.RandomAccessFile(r.file, "r").use { f -> f.channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 0, f.length()) }, Settings.workingRgb.profile)
+            val target = info.target?.let { File(it) }?.takeIf { it.isFile && FileIO.Format.of(it)?.layered == true }
+            val s = Session(newEditor(doc), target, info.name, true)
+            s.editor.history.markUnsaved()
+            s to s.state()
+        }) { res ->
+            busy(false)
+            res.onSuccess { (s, st) ->
+                // Das alte Verzeichnis übernehmen: bis zum Speichern bleibt die Arbeit gesichert
+                val mine = recovery
+                recovery = r; autosavedAt = s.editor.history.changeCount
+                Engine.post { mine.delete() }
+                attach(s, st)
+                toast(tr("Wiederhergestellt – noch nicht gespeichert."))
+            }.onFailure { e -> updateTitle(); error(tr("Die Sicherung konnte nicht gelesen werden: {0}", e.message ?: ""), e) }
+        }
     }
 
     private var lastColor = 0xFF000000.toInt()
@@ -1170,7 +1238,7 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
     private fun writeTo(s: Session, f: File, format: FileIO.Format, then: () -> Unit) {
         title.subtitle = tr("Wird gespeichert …")
         busy(true)
-        Engine.call({ FileIO.save(s.doc, f, format); s.dirty = false; s.state() }) { r ->
+        Engine.call({ FileIO.save(s.doc, f, format); s.markSaved(); s.state() }) { r ->
             busy(false)
             r.onSuccess { st -> stateChanged(st, IntRect.EMPTY); toast(tr("Gespeichert: {0}", f.name)); app.recent(f); storeThumb(s, f); then() }
                 .onFailure { e -> updateTitle(); error(tr("Speichern fehlgeschlagen"), e) }

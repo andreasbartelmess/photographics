@@ -88,7 +88,6 @@ class Controller(private val canvas: CanvasView, private val ui: Ui) : CanvasInp
         Engine.call({
             gpuEnd()
             val rect = block(s.editor)
-            s.dirty = true
             rect to s.state()
         }) { r ->
             if (busy) ui.busy(false)
@@ -1288,7 +1287,6 @@ class Controller(private val canvas: CanvasView, private val ui: Ui) : CanvasInp
                 else -> { message(tr("Diese Ebene kann nicht transformiert werden.")); return@call null }
             }
             transformBeforeGeom = ed.geometryOf(l)
-            if (converted) s.dirty = true
             Triple(box, converted, s.state())
         }) { r ->
             val (box, converted, st) = r.getOrNull() ?: run { if (opts.tool == Tool.TRANSFORM) setOptions { it.copy(tool = Tool.MOVE) }; return@call }
@@ -1486,7 +1484,6 @@ class Controller(private val canvas: CanvasView, private val ui: Ui) : CanvasInp
             }
             ed.setActive(layer)
             eTextBefore = layer.style
-            s.dirty = true
             Triple(layer.id, layer.style, s.state())
         }) { r ->
             val (id, style, st) = r.getOrNull() ?: return@call
@@ -1605,7 +1602,6 @@ class Controller(private val canvas: CanvasView, private val ui: Ui) : CanvasInp
         Engine.call({
             val l = s.editor.addAdjustmentLayer(type.createDefault())
             eAdjustBefore = l.adjustment
-            s.dirty = true
             Triple(l, histogramFor(s, l), s.state())
         }) { r ->
             val (l, h, st) = r.getOrNull() ?: return@call

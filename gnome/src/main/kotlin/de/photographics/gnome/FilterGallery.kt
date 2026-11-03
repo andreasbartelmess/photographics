@@ -67,8 +67,11 @@ class FilterGallery(private val parent: Widget, private val session: Session, pr
         header.packStart(zoom)
 
         // Vorschau | Effekte | Regler und Stapel
+        // Feste Mindestgröße: ohne Bild hätte die Vorschau keine natürliche Breite, und ihre Größe
+        // bestimmt, in welcher Auflösung die Vorschau gerechnet wird
         val previewFrame = Box(Orientation.VERTICAL, 0).apply {
-            addCssClass("gallery-preview"); hexpand = true
+            addCssClass("gallery-preview"); hexpand = true; vexpand = true
+            setSizeRequest(560, 480)
             append(picture)
         }
         val catalog = Box(Orientation.VERTICAL, 6).apply { marginStart = 12; marginEnd = 12; marginTop = 12; marginBottom = 12 }
@@ -112,10 +115,27 @@ class FilterGallery(private val parent: Widget, private val session: Session, pr
         dialog.child = org.gnome.adw.ToolbarView().apply { addTopBar(header); content = body }
         dialog.onClosed { closed = true }
         refresh()
-        loadSource()
     }
 
-    fun present() = dialog.present(parent)
+    fun present() {
+        dialog.present(parent)
+        waitForSize(0, 0, 0)
+    }
+
+    /** Die Quellen werden in der Pixelgröße der Vorschaufläche gerechnet: erst messen, wenn sie zugeteilt ist. */
+    private fun waitForSize(tries: Int, lastW: Int, lastH: Int) {
+        org.gnome.glib.GLib.timeoutAddOnce(50) {
+            if (closed) return@timeoutAddOnce
+            // Während der Dialog eingeblendet wird, stimmt die Zuteilung noch nicht: auf zwei gleiche,
+            // plausible Messungen warten (höchstens etwa eine Sekunde)
+            val k = maxOf(1, picture.scaleFactor)
+            val w = picture.width; val h = picture.height
+            val plausible = w >= 64 && h >= 64 && h <= dialog.height && w <= dialog.width
+            if ((!plausible || w != lastW || h != lastH) && tries < 20) waitForSize(tries + 1, w, h)
+            else if (plausible) loadSource(w * k, h * k).also { if (System.getenv("PG_SCREENSHOT") != null) println("Galerie-Vorschau: ${w * k} × ${h * k} px") }
+            else loadSource(dialog.contentWidth * k / 2, dialog.contentHeight * k * 4 / 5)
+        }
+    }
 
     private fun chain(scale: Float, list: List<GalleryEffect> = effects) = GalleryChain(list, GalleryContext(fg, bg, scale))
 
@@ -208,20 +228,28 @@ class FilterGallery(private val parent: Widget, private val session: Session, pr
 
     // ------------------------------------------------------------ Rechnen
 
-    /** Ebenenpixel holen: verkleinert (ganzes Bild) und einen Ausschnitt in 100 % um die Ansichtsmitte. */
-    private fun loadSource() {
+    /**
+     * Ebenenpixel holen: auf die Vorschaufläche [boxW]×[boxH] (Gerätepixel) verkleinert (ganzes Bild)
+     * und ein Ausschnitt in 100 % in Größe der Fläche um die Ansichtsmitte – scharf statt hochskaliert.
+     */
+    private fun loadSource(boxW: Int, boxH: Int) {
         spinner.spinning = true
         Engine.call({
             val l = session.doc.activeLayer as? PixelLayer ?: return@call null
             val g = l.pixels
             val d = session.doc
+            val bw = boxW.coerceAtMost(4096); val bh = boxH.coerceAtMost(4096)
+            val sc = minOf(1f, bw.toFloat() / d.width, bh.toFloat() / d.height)
+            val tw = maxOf(1, kotlin.math.round(d.width * sc).toInt()); val th = maxOf(1, kotlin.math.round(d.height * sc).toInt())
+            // Größte Mip-Stufe, die nicht kleiner als das Ziel ist, dann gefiltert auf die Zielgröße
             var level = 0
-            while (maxOf(d.width, d.height) shr level > 1100) level++
+            while ((d.width shr (level + 1)) >= tw && (d.height shr (level + 1)) >= th) level++
             val m = if (level > 0) g.mip(level) else g
             val fw = (d.width + (1 shl level) - 1) shr level; val fh = (d.height + (1 shl level) - 1) shr level
-            val fpx = IntArray(fw * fh).also { m.readRect(IntRect.ofSize(fw, fh), it) }
-            val fitSrc = Source(fpx, fw, fh, 0, 0, 1f / (1 shl level))
-            val cw = minOf(d.width, 1000); val ch = minOf(d.height, 760)
+            val mpx = IntArray(fw * fh).also { m.readRect(IntRect.ofSize(fw, fh), it) }
+            val fitSrc = if (fw == tw && fh == th) Source(mpx, fw, fh, 0, 0, 1f / (1 shl level))
+                else Source(de.photographics.core.image.Resample.resizeArgb(mpx, fw, fh, tw, th, de.photographics.core.image.ResampleMethod.BICUBIC), tw, th, 0, 0, tw.toFloat() / d.width)
+            val cw = minOf(d.width, bw); val ch = minOf(d.height, bh)
             val cx = ((view.left + view.right) / 2 - cw / 2).coerceIn(0, d.width - cw); val cy = ((view.top + view.bottom) / 2 - ch / 2).coerceIn(0, d.height - ch)
             val cpx = IntArray(cw * ch).also { g.readRect(IntRect(cx, cy, cx + cw, cy + ch), it) }
             fitSrc to Source(cpx, cw, ch, cx, cy, 1f)
@@ -248,7 +276,10 @@ class FilterGallery(private val parent: Widget, private val session: Session, pr
             onMain {
                 running = false
                 spinner.spinning = pending
-                if (bytes != null && !closed) picture.paintable = MemoryTexture(src.w, src.h, MemoryFormat.B8G8R8A8, bytes, src.w * 4L)
+                if (bytes != null && !closed) picture.paintable = MemoryTexture(src.w, src.h, MemoryFormat.B8G8R8A8, bytes, src.w * 4L).also { t ->
+                    // Nur für Tests: das Fensterfoto erfasst den Dialoginhalt nicht
+                    System.getenv("PG_GALLERY_DUMP")?.let { t.saveToPng(it) }
+                }
                 if (pending) render()
             }
         }.apply { isDaemon = true; name = "photographics-galerie" }.start()
@@ -256,15 +287,20 @@ class FilterGallery(private val parent: Widget, private val session: Session, pr
 
     /** Miniaturen aller Effekte aus einem verkleinerten Bildausschnitt (im Hintergrund). */
     private fun renderThumbs(f: Source) {
-        val tw = 208; val th = 140
-        val step = maxOf(1, minOf(f.w / tw, f.h / th))
-        val sw = minOf(f.w / step, tw); val sh = minOf(f.h / step, th)
-        val x0 = (f.w - sw * step) / 2; val y0 = (f.h - sh * step) / 2
-        val small = IntArray(sw * sh) { i -> f.px[(y0 + (i / sw) * step) * f.w + x0 + (i % sw) * step] }
+        // Ausschnitt im Seitenverhältnis der Kachel (Gerätepixel), gefiltert verkleinert
+        val k = maxOf(1, picture.scaleFactor)
+        val tw = 104 * k; val th = 70 * k
+        val q = minOf(f.w.toFloat() / tw, f.h.toFloat() / th).coerceAtLeast(1f)
+        val cw = minOf(f.w, kotlin.math.round(tw * q).toInt()); val ch = minOf(f.h, kotlin.math.round(th * q).toInt())
+        val sw = maxOf(1, kotlin.math.round(cw / q).toInt()); val sh = maxOf(1, kotlin.math.round(ch / q).toInt())
+        val x0 = (f.w - cw) / 2; val y0 = (f.h - ch) / 2
+        val crop = IntArray(cw * ch) { i -> f.px[(y0 + i / cw) * f.w + x0 + i % cw] }
+        val thumbScale = f.scale * sw / cw
         Thread {
+            val small = if (sw == cw && sh == ch) crop else de.photographics.core.image.Resample.resizeArgb(crop, cw, ch, sw, sh, de.photographics.core.image.ResampleMethod.BICUBIC)
             for (s in Gallery.specs) {
                 if (closed) return@Thread
-                val out = runCatching { GalleryChain(listOf(GalleryEffect(s, s.defaults())), GalleryContext(fg, bg, f.scale / step)).process(small.copyOf(), sw, sh, 0, 0, sw, sh) }.getOrNull() ?: continue
+                val out = runCatching { GalleryChain(listOf(GalleryEffect(s, s.defaults())), GalleryContext(fg, bg, thumbScale)).process(small.copyOf(), sw, sh, 0, 0, sw, sh) }.getOrNull() ?: continue
                 val bytes = CanvasView.toBytes(out)
                 onMain { if (!closed) thumbPictures[s.id]?.paintable = MemoryTexture(sw, sh, MemoryFormat.B8G8R8A8, bytes, sw * 4L) }
             }

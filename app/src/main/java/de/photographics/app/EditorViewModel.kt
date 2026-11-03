@@ -257,7 +257,7 @@ data class EditorUiState(
     /** Datei, in die Strg+S direkt speichert (null = „Speichern unter“ nötig). */
     val saveTarget: String? = null,
     /** Automatische Sicherung vom letzten Mal, über die noch entschieden werden muss. */
-    val recovery: Recovery.Info? = null,
+    val recovery: de.photographics.core.editor.Recovery.Info? = null,
     val canRedo: Boolean = false,
     val undoLabel: String? = null,
     val redoLabel: String? = null,
@@ -376,7 +376,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     /** Alle Zugriffe auf Dokument und Editor laufen über diesen einen Thread. */
     private val engine = Executors.newSingleThreadExecutor { r -> Thread(r, "photographics-engine") }.asCoroutineDispatcher()
     /** Automatische Sicherung (siehe [autosaveNow]). */
-    private val recovery = Recovery(java.io.File(app.filesDir, "recovery"))
+    private val recovery = de.photographics.core.editor.Recovery(java.io.File(app.filesDir, "recovery"))
 
     private val _state = MutableStateFlow(EditorUiState())
     val state: StateFlow<EditorUiState> = _state.asStateFlow()

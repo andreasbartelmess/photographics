@@ -1586,3 +1586,5 @@ Ungespeicherte Arbeit wiederherstellen?	Restore unsaved work?
 Wiederherstellen	Restore
 Wiederhergestellt – noch nicht gespeichert.	Restored – not saved yet.
 Die Sicherung konnte nicht gelesen werden: {0}	The backup could not be read: {0}
+„{0}“ ({1} × {2} px), gesichert am {3}	“{0}” ({1} × {2} px), backed up on {3}
+photographics wurde beendet, ohne zu speichern. Automatisch gesichert:	photographics was closed without saving. Backed up automatically:

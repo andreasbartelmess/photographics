@@ -28,16 +28,24 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: Flatpak repository from the latest release
+      - name: Flatpak repository from the newest release that has one
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release download --repo "${{ github.repository }}" --pattern photographics-flatpak-repo.tar --dir "$RUNNER_TEMP/fp"; then
+          # Nicht jedes Release enthält eine Linux-Fassung (z. B. reine Android-Updates): sonst
+          # verschwände das Repository von der Website und installierte Fassungen bekämen keine Updates
+          found=""
+          for tag in $(gh release list --repo "${{ github.repository }}" --exclude-drafts --limit 30 --json tagName --jq '.[].tagName'); do
+            if gh release download "$tag" --repo "${{ github.repository }}" --pattern photographics-flatpak-repo.tar --dir "$RUNNER_TEMP/fp" 2>/dev/null; then
+              found="$tag"; break
+            fi
+          done
+          if [ -n "$found" ]; then
             mkdir -p website/flatpak
             tar -xf "$RUNNER_TEMP/fp/photographics-flatpak-repo.tar" -C website/flatpak
-            du -sh website/flatpak/repo
+            echo "Flatpak-Repository aus $found"; du -sh website/flatpak/repo
           else
-            echo "::warning::Kein Flatpak-Repository im neuesten Release"
+            echo "::warning::Kein Release mit Flatpak-Repository gefunden"
           fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

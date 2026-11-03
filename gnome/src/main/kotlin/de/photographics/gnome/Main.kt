@@ -14,7 +14,7 @@ import java.io.File
 import java.nio.ByteBuffer
 
 const val APP_ID = "de.andreasbartelmess.Photographics"
-const val VERSION = "0.4.0"
+const val VERSION = "0.4.1"
 
 class PhotographicsApp {
     // Testläufe (Bildschirmfoto) als eigene Instanz, sonst übernimmt eine laufende App die Dateien
@@ -23,7 +23,7 @@ class PhotographicsApp {
 
     init {
         adw.onStartup { setupStyle() }
-        adw.onActivate { (windows.lastOrNull() ?: newWindow()).present() }
+        adw.onActivate { (windows.lastOrNull() ?: newWindow()).also { it.present(); offerRecovery(it) } }
         adw.onOpen { files, _ ->
             for (f in files.orEmpty()) {
                 val path = f?.local() ?: continue
@@ -31,6 +31,7 @@ class PhotographicsApp {
                 val w = windows.firstOrNull { it.session == null } ?: newWindow()
                 w.present(); w.openFile(path)
             }
+            windows.lastOrNull()?.let { offerRecovery(it) }
         }
         val quit = SimpleAction("quit", null)
         quit.onActivate { _ -> for (w in windows.toList()) w.window.close() }
@@ -90,6 +91,46 @@ class PhotographicsApp {
             org.gnome.gtk.IconTheme.getForDisplay(display).addSearchPath(dir.path)
         }
         org.gnome.gtk.Window.setDefaultIconName(APP_ID)
+    }
+
+    private var recoveryChecked = false
+
+    /**
+     * Beim ersten Fenster: Sicherungen aus einem früheren Lauf (Absturz, Abmelden ohne Speichern)
+     * anbieten. Die App läuft nur einmal, also gehört hier vorhandenes keinem offenen Fenster.
+     */
+    private fun offerRecovery(w: MainWindow) {
+        // Testläufe (PG_SCREENSHOT) nicht – außer ausdrücklich zum Testen der Wiederherstellung
+        if (recoveryChecked || System.getenv("PG_SCREENSHOT") != null && System.getenv("PG_RECOVERY_TEST") == null) return
+        recoveryChecked = true
+        val found = FileIO.recoveryDir.listFiles()?.filter { it.isDirectory }?.mapNotNull { d ->
+            val r = de.photographics.core.editor.Recovery(d)
+            r.info()?.let { r to it } ?: run { r.delete(); null }
+        }.orEmpty().sortedBy { it.second.time }
+        if (found.isEmpty()) return
+        val fmt = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT)
+        val list = found.joinToString("\n") { (_, i) -> tr("„{0}“ ({1} × {2} px), gesichert am {3}", i.name, i.width, i.height, fmt.format(java.util.Date(i.time))) }
+        val d = org.gnome.adw.AlertDialog(tr("Ungespeicherte Arbeit wiederherstellen?"),
+            tr("photographics wurde beendet, ohne zu speichern. Automatisch gesichert:") + "\n\n" + list)
+        d.addResponse("discard", tr("Verwerfen"))
+        d.addResponse("restore", tr("Wiederherstellen"))
+        d.setResponseAppearance("discard", org.gnome.adw.ResponseAppearance.DESTRUCTIVE)
+        d.setResponseAppearance("restore", org.gnome.adw.ResponseAppearance.SUGGESTED)
+        d.defaultResponse = "restore"; d.closeResponse = "restore"
+        var answered = false
+        fun answer(id: String?) {
+            if (answered) return   // Schließen löst ebenfalls eine Antwort aus
+            answered = true
+            if (id == "discard") { for ((r, _) in found) r.delete(); return }
+            // Erste Sicherung im leeren Fenster, weitere je in einem neuen
+            for ((k, p) in found.withIndex()) {
+                val win = if (k == 0 && w.session == null) w else newWindow().also { it.present() }
+                win.openRecovery(p.first, p.second)
+            }
+        }
+        d.onResponse(null) { id -> answer(id) }
+        d.present(w.window)
+        if (System.getenv("PG_RECOVERY_TEST") == "restore") org.gnome.glib.GLib.timeoutAddOnce(500) { d.forceClose(); answer("restore") }
     }
 
     fun newWindow(): MainWindow {

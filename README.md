@@ -147,7 +147,7 @@ report (`report.html`, `report.csv`) with side-by-side previews of every file th
 
 No fixed dates, and the order may change. Suggestions are welcome.
 
-- **Done in 0.4.1 (Android):** autosave and crash recovery; unsaved-changes prompt and Ctrl+S back into the
+- **Done in 0.4.1:** autosave and crash recovery (Android and Linux); unsaved-changes prompt and Ctrl+S back into the
   opened PSD/TIFF/XCF; drag and drop in the layers panel; sharper filter gallery preview
 - **Done in 0.4:** Linux (GNOME) version as Flatpak; editable layer styles incl. bevel, satin and
   gradient overlay; shape layers, pen tool, paths and alpha channels; filter gallery (47 effects);

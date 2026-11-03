@@ -47,6 +47,12 @@ object FileIO {
 
     class Loaded(val doc: Document, val layered: Boolean)
 
+    /** Automatische Sicherungen, je Fenster ein Unterverzeichnis (übersteht Abstürze, daher nicht im Cache). */
+    val recoveryDir: File by lazy {
+        val base = System.getenv("XDG_DATA_HOME")?.takeIf { it.isNotBlank() } ?: (System.getProperty("user.home") + "/.local/share")
+        File(base, "photographics/recovery").apply { mkdirs() }
+    }
+
     val cacheDir: File by lazy {
         val base = System.getenv("XDG_CACHE_HOME")?.takeIf { it.isNotBlank() } ?: (System.getProperty("user.home") + "/.cache")
         File(base, "photographics").apply { mkdirs() }

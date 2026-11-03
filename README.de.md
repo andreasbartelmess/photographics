@@ -413,7 +413,7 @@ Druckerei. Der Proof betrifft nur die Anzeige – Export und gespeicherte Dateie
 
 Ohne feste Termine, die Reihenfolge kann sich ändern. Vorschläge sind willkommen.
 
-- **Erledigt in 0.4.1 (Android):** automatisches Sichern und Wiederherstellen nach Abstürzen; Nachfrage bei
+- **Erledigt in 0.4.1:** automatisches Sichern und Wiederherstellen nach Abstürzen (Android und Linux); Nachfrage bei
   ungespeicherten Änderungen und Strg+S zurück in die geöffnete PSD/TIFF/XCF; Ebenen per Drag & Drop
   verschieben; schärfere Vorschau der Filtergalerie
 - **Erledigt in 0.4:** Linux-Version (GNOME) als Flatpak; Ebenenstile bearbeiten, auch Abgeflachte

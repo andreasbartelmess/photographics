@@ -12,7 +12,15 @@ import java.io.File
 /** Ein geöffnetes Dokument. Alles außer [name]/[file] nur auf dem Engine-Thread anfassen. */
 class Session(val editor: Editor, @Volatile var file: File?, @Volatile var name: String, val layered: Boolean) {
     val doc get() = editor.doc
+    /**
+     * Ungespeicherte Änderungen – richtet sich nach dem Verlauf (Rückgängig bis zum gespeicherten
+     * Stand heißt wieder „gespeichert“); wird in [state] auf dem Engine-Thread aktualisiert.
+     */
     @Volatile var dirty = false
+        private set
+
+    /** Nach erfolgreichem Speichern (Engine-Thread). */
+    fun markSaved() { editor.history.markSaved(); dirty = false }
     /** Angehobene Auswahl (Verschieben/Transformieren): erscheint nicht als eigene Ebene. */
     var floating: de.photographics.core.editor.Floating? = null
 
@@ -35,9 +43,10 @@ class Session(val editor: Editor, @Volatile var file: File?, @Volatile var name:
         walk(doc.root, 0)
         val h = editor.history
         val sel = doc.selection
+        dirty = !h.atSavedState || floating != null
         return DocState(doc.width, doc.height, rows, h.undoLabel, h.redoLabel, dirty,
             sel?.outlines ?: emptyList(), sel != null, doc.dpi, doc.colorProfile.description, h.entries, doc.guides,
-            doc.workPath, doc.paths, (doc.activeLayer as? de.photographics.core.doc.ShapeLayer)?.docPath(), doc.channels.map { it.name }, doc.bitDepth)
+            doc.workPath, doc.paths, (doc.activeLayer as? de.photographics.core.doc.ShapeLayer)?.docPath(), doc.channels.map { it.name }, doc.bitDepth, h.changeCount)
     }
 
     private fun kindOf(l: Layer) = when (l) {
@@ -67,6 +76,8 @@ data class DocState(
     val shapePath: de.photographics.core.vector.VectorPath? = null,
     val channels: List<String> = emptyList(),
     val bitDepth: Int = 8,
+    /** Änderungszähler des Verlaufs (automatisches Sichern nur nach echten Änderungen neu planen). */
+    val changes: Long = 0,
 ) {
     val canUndo get() = undoLabel != null
     val canRedo get() = redoLabel != null

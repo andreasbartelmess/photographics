@@ -1,4 +1,4 @@
-package de.photographics.app
+package de.photographics.core.editor
 
 import de.photographics.core.doc.Document
 import de.photographics.core.psd.PsdWriter
@@ -6,15 +6,15 @@ import java.io.File
 import java.util.Properties
 
 /**
- * Automatische Sicherung des geöffneten Dokuments (eine einzige Sicherung): Beendet Android die
- * App im Hintergrund oder stürzt sie ab, bietet der Startbildschirm beim nächsten Start an, die
- * ungespeicherte Arbeit wiederherzustellen.
+ * Automatische Sicherung eines geöffneten Dokuments (eine Sicherung je Verzeichnis): Wird die App
+ * beendet, ohne zu speichern (Android im Hintergrund, Absturz, Abmelden), bietet sie beim nächsten
+ * Start an, die ungespeicherte Arbeit wiederherzustellen.
  *
  * Die Sicherung ist eine PSD; geschrieben wird erst in eine temporäre Datei, die nach dem
  * vollständigen Schreiben umbenannt wird – ein Abbruch hinterlässt nie eine halbe Sicherung.
  */
 class Recovery(private val dir: File) {
-    /** [name]: Anzeigename des Dokuments; [target]/[format]: Datei, in die Strg+S speicherte. */
+    /** [name]: Anzeigename des Dokuments; [target]/[format]: Datei (URI bzw. Pfad), in die Strg+S speicherte. */
     data class Info(val name: String, val time: Long, val width: Int, val height: Int, val target: String?, val format: String?)
 
     private val psd = File(dir, "recovery.psd")
@@ -56,4 +56,7 @@ class Recovery(private val dir: File) {
         meta.delete(); psd.delete()
         File(dir, "recovery.psd.tmp").delete(); File(dir, "recovery.properties.tmp").delete()
     }
+
+    /** Verzeichnis samt Inhalt entfernen (eigene Sicherung je Fenster, siehe GNOME). */
+    fun delete() { clear(); dir.delete() }
 }
