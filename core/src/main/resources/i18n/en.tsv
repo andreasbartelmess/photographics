@@ -536,6 +536,7 @@ In Gruppe verschieben	Move into group
 In Smartobjekt konvertieren	Convert to smart object
 Text bearbeiten	Edit text
 Ebene rastern	Rasterize layer
+Ebenenstil rastern	Rasterize layer style
 Einstellungen bearbeiten	Edit adjustment
 Maske hinzufügen (alles zeigen)	Add mask (reveal all)
 Maske aus Auswahl	Mask from selection
@@ -1588,3 +1589,4 @@ Wiederhergestellt – noch nicht gespeichert.	Restored – not saved yet.
 Die Sicherung konnte nicht gelesen werden: {0}	The backup could not be read: {0}
 „{0}“ ({1} × {2} px), gesichert am {3}	“{0}” ({1} × {2} px), backed up on {3}
 photographics wurde beendet, ohne zu speichern. Automatisch gesichert:	photographics was closed without saving. Backed up automatically:
+Die Ebene hat keinen sichtbaren Ebenenstil.	The layer has no visible layer style.

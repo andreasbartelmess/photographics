@@ -71,6 +71,43 @@ class GalleryTest {
         assertTrue(hidden.isEmpty)
     }
 
+    /**
+     * Galerie-Vorschau „ganzes Bild“ (volle Auflösung, danach gemittelt) = Ergebnis von „Anwenden“,
+     * verkleinert – auch bei Effekten mit Pixelstruktur, die verkleinert gerechnet anders aussähen.
+     */
+    @Test
+    fun scaledPreviewMatchesAppliedResult() {
+        val w = 300; val h = 200; val k = 4
+        for (id in listOf("graphic-pen", "glowing-edges", "stained-glass", "stamp")) {
+            val doc = de.photographics.core.doc.Document(w, h)
+            val layer = de.photographics.core.doc.PixelLayer("A", de.photographics.core.image.TileGrid.fromPixels(w, h, sample(w, h).map { it or 0xFF000000.toInt() }.toIntArray()))
+            doc.root.add(layer)
+            val spec = Gallery.byId(id)!!
+            val chain = GalleryChain(listOf(GalleryEffect(spec, spec.defaults())), GalleryContext(0xFF102030.toInt(), 0xFFF0E0D0.toInt()))
+            val preview = de.photographics.core.filters.FilterRunner.previewScaled(doc, layer, chain, w / k, h / k)!!
+            de.photographics.core.filters.FilterRunner.apply(doc, layer, chain)
+            val out = IntArray(w * h).also { layer.pixels.readRect(doc.bounds, it) }
+            for (y in 0 until h / k) for (x in 0 until w / k) {
+                val p = preview[y * (w / k) + x]
+                for (sh in intArrayOf(16, 8, 0)) {
+                    var sum = 0
+                    for (yy in 0 until k) for (xx in 0 until k) sum += (out[(y * k + yy) * w + x * k + xx] shr sh) and 0xFF
+                    assertEquals("$id ($x,$y)", sum / (k * k).toFloat(), ((p shr sh) and 0xFF).toFloat(), 1.01f)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun scaledPreviewCanBeCancelled() {
+        val w = 64; val h = 64
+        val doc = de.photographics.core.doc.Document(w, h)
+        val layer = de.photographics.core.doc.PixelLayer("A", de.photographics.core.image.TileGrid.fromPixels(w, h, sample(w, h)))
+        doc.root.add(layer)
+        val s = Gallery.specs.first()
+        assertEquals(null, de.photographics.core.filters.FilterRunner.previewScaled(doc, layer, GalleryChain(listOf(GalleryEffect(s, s.defaults()))), 16, 16) { true })
+    }
+
     /** Kontaktblatt aller Effekte (für die Entwicklung): PG_GALLERY_SHEET=bild.jpg:ausgabe.png */
     @Test
     fun contactSheet() {

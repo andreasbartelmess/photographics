@@ -295,7 +295,7 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
             item(tr("Ebenenmaske hinzufügen"), "add-mask"); item(tr("Maske aus Auswahl"), "add-mask-selection")
             item(tr("Maske aktivieren/deaktivieren"), "toggle-mask"); item(tr("Maske anwenden"), "apply-mask"); item(tr("Maske löschen"), "delete-mask")
         }
-        section { item(tr("Schnittmaske erstellen/lösen"), "toggle-clip"); item(tr("In Smartobjekt umwandeln"), "smart"); item(tr("Rastern"), "rasterize") }
+        section { item(tr("Schnittmaske erstellen/lösen"), "toggle-clip"); item(tr("In Smartobjekt umwandeln"), "smart"); item(tr("Rastern"), "rasterize"); item(tr("Ebenenstil rastern"), "rasterize-style") }
         section { item(tr("Nach oben"), "layer-up"); item(tr("Nach unten"), "layer-down"); item(tr("Ebeneneigenschaften …"), "layer-props"); item(tr("Ebenenstil") + " …", "layer-style") }
     }
 
@@ -490,6 +490,7 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
         action("toggle-clip", arrayOf("<Control><Alt>g")) { c.edit(null) { e -> e.doc.activeLayer?.let { l -> if (!e.setClipping(l, !l.clipped)) toastLater(tr("Diese Ebene kann keine Schnittmaske bilden.")) }; null } }
         action("smart") { c.edit(null) { e -> (e.doc.activeLayer as? de.photographics.core.doc.PixelLayer)?.let { e.convertToSmartObject(it) ?: toastLater(tr("Die Ebene ist leer.")) }; IntRect.EMPTY } }
         action("rasterize") { c.edit(null) { e -> e.doc.activeLayer?.let { e.rasterize(it) }; null } }
+        action("rasterize-style") { c.edit(null) { e -> if (e.doc.activeLayer?.let { e.rasterizeStyle(it) } != true) toastLater(tr("Die Ebene hat keinen sichtbaren Ebenenstil.")); null } }
         action("layer-style") {
             state?.active?.let { row ->
                 c.startEffects(row.id) { fx ->
@@ -756,6 +757,7 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
         // Effekte rechnet der Compositor für Pixel-, Text-, Form- und Smartobjektebenen
         actions["layer-style"]?.enabled = a != null && a.kind != LayerRow.Kind.GROUP && a.kind != LayerRow.Kind.ADJUSTMENT
         actions["rasterize"]?.enabled = a != null && (a.kind == LayerRow.Kind.TEXT || a.kind == LayerRow.Kind.SMART)
+        actions["rasterize-style"]?.enabled = a != null && a.kind != LayerRow.Kind.GROUP && a.kind != LayerRow.Kind.ADJUSTMENT
         for (n in listOf("deselect", "invert-selection", "feather", "fill-fg", "fill-bg", "clear-selection", "content-fill", "ai-fill")) actions[n]?.enabled = s?.hasSelection == true
         zoomLabel.sensitive = has
         for (w in docWidgets) w.visible = has

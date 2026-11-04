@@ -199,6 +199,7 @@ class LayersPanel(private val act: Actions) {
             append(tr("Schnittmaske erstellen/lösen"), "win.toggle-clip")
             append(tr("In Smartobjekt umwandeln"), "win.smart")
             append(tr("Rastern"), "win.rasterize")
+            append(tr("Ebenenstil rastern"), "win.rasterize-style")
         })
     }
 

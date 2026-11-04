@@ -1699,12 +1699,14 @@ class Controller(private val canvas: CanvasView, private val ui: Ui) : CanvasInp
     }
 
     fun finishAdjustment(id: Int, commit: Boolean) {
+        // Letzte Reglerstellung, deren Vorschau noch nicht gelaufen ist, nicht verlieren
+        val pending = adjustWanted?.takeIf { it.first == id }?.second
         adjustWanted = null
         edit(tr("Einstellungsebene")) { ed ->
             val l = ed.doc.findLayer(id) as? de.photographics.core.doc.AdjustmentLayer ?: return@edit null
             val before = eAdjustBefore ?: return@edit null
             eAdjustBefore = null
-            if (commit) ed.commitAdjustment(l, before) else ed.previewAdjustment(l, before)
+            if (commit) { pending?.let { ed.previewAdjustment(l, it) }; ed.commitAdjustment(l, before) } else ed.previewAdjustment(l, before)
             null
         }
     }

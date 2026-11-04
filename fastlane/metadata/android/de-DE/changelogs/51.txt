@@ -1,0 +1,1 @@
+Neu in 0.4.2: Die Vorschau entspricht jetzt dem Ergebnis – Schwellenwert und Tontrennung auch in verkleinerter Ansicht, die Filtergalerie zeigt nach einer schnellen Vorschau das exakte Ergebnis, auch beim Ziehen der Regler. Stempel für Fotokopie-Optik überarbeitet, Körnung mit neuem Regler „Größe“ für ausgefranste Konturen auf großen Bildern. Neu: Ebene › Ebenenstil rastern.

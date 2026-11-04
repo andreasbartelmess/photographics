@@ -1,6 +1,8 @@
 package de.photographics.app.ui
 
 import android.graphics.Bitmap
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.conflate
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -141,29 +143,43 @@ fun FilterGalleryDialog(vm: EditorViewModel, fg: Int, bg: Int, onDismiss: () -> 
             if (bmp != null) thumbs[s.id] = bmp
         }
     }
-    // Vorschau: bei jeder Änderung neu (kurz entprellt; neue Änderungen brechen die alte Rechnung ab)
-    val key = effects.toList()
-    LaunchedEffect(key, full, sources) {
-        val src = (if (full) sources?.second else sources?.first) ?: return@LaunchedEffect
-        busy = true
-        delay(60)
-        effects.getOrNull(selected)?.let { remembered[it.spec.id] = it.values }
-        // Erst schnell in halber Auflösung (Regler bleiben flüssig), dann in voller
-        if (src.w * src.h > 400_000) {
-            val hw = maxOf(1, src.w / 2); val hh = maxOf(1, src.h / 2)
-            val half = withContext(Dispatchers.Default) {
-                val b = Bitmap.createScaledBitmap(Bitmap.createBitmap(src.px, src.w, src.h, Bitmap.Config.ARGB_8888), hw, hh, true)
-                val px = IntArray(hw * hh).also { b.getPixels(it, 0, hw, 0, 0, hw, hh) }
-                GalleryChain(key, GalleryContext(fg, bg, src.scale * hw / src.w)).process(px, hw, hh, src.ox / 2, src.oy / 2, hw, hh)
+    // Vorschau: gerechnet wird immer die neueste Einstellung, sobald die vorige Rechnung fertig ist –
+    // nicht abbrechen, sonst käme beim Ziehen eines Reglers nie ein genaues Bild. Ganzes Bild:
+    // verkleinert gerechnet sähen Striche, Korn und feine Linien anders aus als nach dem Anwenden;
+    // daher in voller Auflösung rechnen und erst das Ergebnis verkleinern. Nur beim ersten Bild einer
+    // Quelle kommt vorher eine schnelle, ungenaue Vorschau.
+    LaunchedEffect(Unit) {
+        var exactShownFor: Any? = null
+        snapshotFlow { Triple(effects.toList(), full, sources) }.conflate().collect { (key, isFull, srcs) ->
+            val src = (if (isFull) srcs?.second else srcs?.first) ?: return@collect
+            busy = true
+            effects.getOrNull(selected)?.let { remembered[it.spec.id] = it.values }
+            if (isFull || src.scale >= 1f) {
+                // 100 %: der Ausschnitt ist schon in voller Auflösung
+                val out = withContext(Dispatchers.Default) {
+                    GalleryChain(key, GalleryContext(fg, bg, src.scale)).process(src.px.copyOf(), src.w, src.h, src.ox, src.oy, src.w, src.h)
+                }
+                preview = toBitmap(out, src.w, src.h)
+            } else {
+                if (exactShownFor !== src) {
+                    // Erstes Bild: schnell (bei großen Flächen in halber Auflösung)
+                    val k = if (src.w * src.h > 400_000) 2 else 1
+                    val hw = maxOf(1, src.w / k); val hh = maxOf(1, src.h / k)
+                    val quick = withContext(Dispatchers.Default) {
+                        val px = if (k == 1) src.px.copyOf() else {
+                            val b = Bitmap.createScaledBitmap(Bitmap.createBitmap(src.px, src.w, src.h, Bitmap.Config.ARGB_8888), hw, hh, true)
+                            IntArray(hw * hh).also { b.getPixels(it, 0, hw, 0, 0, hw, hh) }
+                        }
+                        GalleryChain(key, GalleryContext(fg, bg, src.scale * hw / src.w)).process(px, hw, hh, 0, 0, hw, hh)
+                    }
+                    preview = toBitmap(quick, hw, hh)
+                }
+                val exact = vm.galleryExact(GalleryChain(key, GalleryContext(fg, bg)), src.w, src.h) ?: return@collect
+                preview = toBitmap(exact, src.w, src.h)
+                exactShownFor = src
             }
-            preview = toBitmap(half, hw, hh)
-            yield()
+            busy = false
         }
-        val out = withContext(Dispatchers.Default) {
-            GalleryChain(key, GalleryContext(fg, bg, src.scale)).process(src.px.copyOf(), src.w, src.h, src.ox, src.oy, src.w, src.h)
-        }
-        preview = toBitmap(out, src.w, src.h)
-        busy = false
     }
 
     fun pick(s: GallerySpec) {

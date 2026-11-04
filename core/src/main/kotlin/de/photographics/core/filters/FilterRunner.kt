@@ -72,6 +72,76 @@ object FilterRunner {
     }
 
     /**
+     * Vorschau wie [apply] – volle Auflösung, Auswahl überblendet –, ohne die Ebene zu ändern: die
+     * Arbeitsfläche wird streifenweise gerechnet und dabei auf [outW]×[outH] gemittelt (Mittel über
+     * alle Pixel, die in ein Ausgabepixel fallen). Für die Filtergalerie: Effekte mit Pixelstruktur
+     * (Striche, Korn, 1-Pixel-Linien, Kantenstärke) sehen auf einem verkleinerten Bild gerechnet
+     * anders aus als nach dem Anwenden. [cancelled] wird je Streifen geprüft (dann null).
+     */
+    fun previewScaled(doc: Document, layer: PixelLayer, filter: GeometryFilter, outW: Int, outH: Int, cancelled: () -> Boolean = { false }): IntArray? {
+        val region = doc.bounds
+        if (region.isEmpty || outW <= 0 || outH <= 0) return IntArray(maxOf(0, outW) * maxOf(0, outH))
+        val margin = minOf(filter.margin, 4096)
+        val sel = doc.selection
+        val grid = layer.pixels
+        // Ausgabespalte bzw. -zeile je Dokumentpixel
+        val colOf = IntArray(region.width) { x -> minOf(outW - 1, (x.toLong() * outW / region.width).toInt()) }
+        val rowOf = IntArray(region.height) { y -> minOf(outH - 1, (y.toLong() * outH / region.height).toInt()) }
+        // Vormultipliziert summieren: Farbe transparenter Pixel zählt nicht mit
+        val acc = DoubleArray(outW * outH * 4)
+        val cnt = IntArray(outW * outH)
+        val readW = region.width + 2 * margin
+        val bandH = maxOf(16, BAND_PIXELS / maxOf(1, readW)).coerceAtMost(region.height)
+        val count = (region.height + bandH - 1) / bandH
+        var aborted = false
+        Parallel.bands(count, (bandH + 2L * margin) * readW * 40L, compute = { i ->
+            if (aborted || cancelled()) return@bands null
+            val full = IntRect(region.left, region.top + i * bandH, region.right, minOf(region.bottom, region.top + (i + 1) * bandH))
+            // Wie [apply]: gelesen wird nur innerhalb der Ebene (der Filter sieht dieselben Bildränder);
+            // außerhalb ist die Ebene transparent
+            val band = full.intersect(grid.extent)
+            if (band.isEmpty) return@bands full to null
+            val read = band.inset(-margin).intersect(grid.extent)
+            val src = IntArray(read.width * read.height)
+            grid.readRect(read, src)
+            full to BandResult(band, read, src, filter.process(src.copyOf(), read.width, read.height, read.left, read.top, doc.width, doc.height))
+        }, consume = { _, res ->
+            if (res == null) { aborted = true; return@bands }
+            val (full, r) = res
+            // Außerhalb der Ebene: transparent (zählt nur mit)
+            for (y in full.top until full.bottom) for (x in full.left until full.right) {
+                if (r == null || !r.band.contains(x, y)) cnt[rowOf[y - region.top] * outW + colOf[x - region.left]]++
+            }
+            if (r == null) return@bands
+            val b = r.band; val rd = r.read
+            for (y in b.top until b.bottom) {
+                val orow = rowOf[y - region.top] * outW
+                for (x in b.left until b.right) {
+                    val i = (y - rd.top) * rd.width + (x - rd.left)
+                    val s = sel?.at(x, y) ?: 255
+                    val c = when (s) { 255 -> r.out[i]; 0 -> r.src[i]; else -> Colors.lerp(r.src[i], r.out[i], s / 255f) }
+                    val o = orow + colOf[x - region.left]
+                    val a = c ushr 24
+                    acc[o * 4] += ((c shr 16) and 0xFF) * a.toDouble()
+                    acc[o * 4 + 1] += ((c shr 8) and 0xFF) * a.toDouble()
+                    acc[o * 4 + 2] += (c and 0xFF) * a.toDouble()
+                    acc[o * 4 + 3] += a.toDouble()
+                    cnt[o]++
+                }
+            }
+        })
+        if (aborted) return null
+        return IntArray(outW * outH) { o ->
+            val n = cnt[o]; val sa = acc[o * 4 + 3]
+            if (n == 0 || sa <= 0.0) 0 else {
+                val a = (sa / n + 0.5).toInt().coerceIn(0, 255)
+                fun ch(k: Int) = (acc[o * 4 + k] / sa + 0.5).toInt().coerceIn(0, 255)
+                (a shl 24) or (ch(0) shl 16) or (ch(1) shl 8) or ch(2)
+            }
+        }
+    }
+
+    /**
      * Korrektur in 16 Bit: jeder Kanalwert (0..65535) geht ohne Rundung auf 8 Bit durch die Abbildung
      * (zwischen den 8-Bit-Stützstellen interpoliert); obere und untere Bits werden geschrieben.
      */

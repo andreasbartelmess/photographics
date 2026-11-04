@@ -1,0 +1,1 @@
+New in 0.4.2: the preview now matches the result – Threshold and Posterize also in zoomed-out views, and the filter gallery shows the exact result after a quick preview, also while dragging sliders. Stamp reworked for a photocopy look, Grain has a new "Size" slider for ragged contours on large images. New: Layer › Rasterize layer style.

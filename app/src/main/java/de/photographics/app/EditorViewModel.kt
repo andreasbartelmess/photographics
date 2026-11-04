@@ -2912,6 +2912,17 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         fit to GallerySource(IntArray(cw * ch).also { l.pixels.readRect(IntRect(cx, cy, cx + cw, cy + ch), it) }, cw, ch, cx, cy, 1f)
     }
 
+    /**
+     * Vorschau „ganzes Bild“ genau wie nach „Anwenden“: in voller Auflösung gerechnet und auf
+     * [w]×[h] gemittelt (null = abgebrochen oder keine Pixelebene). Läuft neben der Engine (nur lesend).
+     */
+    suspend fun galleryExact(chain: de.photographics.core.filters.GalleryChain, w: Int, h: Int): IntArray? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+        val ed = editor ?: return@withContext null
+        val l = ed.doc.activeLayer as? PixelLayer ?: return@withContext null
+        val job = coroutineContext[Job]
+        de.photographics.core.filters.FilterRunner.previewScaled(ed.doc, l, chain, w, h) { job?.isActive == false }
+    }
+
     /** Effektstapel der Filtergalerie auf die aktive Pixelebene anwenden (ein Verlaufsschritt). */
     fun applyGallery(effects: List<de.photographics.core.filters.GalleryEffect>) = withEditor { ed ->
         if (ed.doc.activeLayer !is PixelLayer) { message(tr("Filter benötigen eine Pixelebene (Text/Smartobjekt ggf. rastern oder eine Einstellungsebene verwenden).")); return@withEditor }
@@ -3324,6 +3335,12 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     fun rasterizeLayer(id: Int) = withEditor { ed ->
         ed.doc.findLayer(id)?.let { ed.rasterize(it) }
+        fullRefresh()
+    }
+
+    /** Ebenenstil in die Pixel einrechnen (danach sehen Filter z. B. die Verlaufsüberlagerung). */
+    fun rasterizeStyle(id: Int) = withEditor { ed ->
+        if (ed.doc.findLayer(id)?.let { ed.rasterizeStyle(it) } != true) message(tr("Die Ebene hat keinen sichtbaren Ebenenstil."))
         fullRefresh()
     }
 

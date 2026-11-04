@@ -205,6 +205,16 @@ object MemorySelfTest {
                 val sel = de.photographics.core.selection.QuickSelect.select(l.raster, floatArrayOf(nw * 0.2f, nh * 0.5f, nw * 0.6f, nh * 0.55f), 120f)
                 check(!sel.isEmpty) { "Schnellauswahl leer" }
             }
+            // Nach dem Reduzieren (sonst reicht das Budget nicht): Ebenenstil in die Pixel rechnen
+            step("Ebenenstil rastern (Verlauf, Schatten)") {
+                val l = doc.root.children.filterIsInstance<de.photographics.core.doc.RasterLayer>().last()
+                ed.setEffects(l, de.photographics.core.doc.LayerEffects(
+                    gradientOverlay = de.photographics.core.doc.LayerEffects.GradientOverlay(opacity = 0.6f),
+                    dropShadows = listOf(de.photographics.core.doc.LayerEffects.Shadow(0, 0.5f, de.photographics.core.render.BlendMode.NORMAL, 120.0, true, 20.0, 0.0, 20.0)),
+                ))
+                check(ed.rasterizeStyle(l)) { "Ebenenstil nicht gerastert" }
+                check((doc.root.children.last() as? de.photographics.core.doc.RasterLayer)?.effects == null) { "Effekte noch vorhanden" }
+            }
             step("PSD öffnen (speicherabgebildet)") {
                 val d = RandomAccessFile(psd, "r").use { f -> PsdReader.read(f.channel.map(FileChannel.MapMode.READ_ONLY, 0, f.length())) }
                 check(d.width == nw + 200) { "PSD: falsche Breite ${d.width}" }

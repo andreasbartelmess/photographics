@@ -609,6 +609,32 @@ class Editor(doc: Document) {
         replaceLayer(layer, pl, tr("Ebene rastern"))
     }
 
+    /**
+     * Ebenenstil in die Pixel einrechnen (Photoshop: Ebene → Rastern → Ebenenstil); Text, Form und
+     * Smartobjekt werden dabei gerastert. Danach sehen Filter das Ergebnis mit Effekten, z. B. eine
+     * Verlaufsüberlagerung. Deckkraft, Mischmodus, Maske und Schnittmaske bleiben Eigenschaften der
+     * Ebene, die Fläche wird eingerechnet. false = keine sichtbaren Effekte.
+     */
+    fun rasterizeStyle(layer: Layer): Boolean {
+        val rl = layer as? RasterLayer ?: return false
+        val fx = rl.effects?.takeIf { it.visible && it.hasAny } ?: return false
+        val reach = kotlin.math.ceil(fx.reach()).toInt() + 2
+        val area = doc.bounds.union(rl.raster.extent.inset(-reach))
+        history.makeRoom(area.width.toLong() * area.height * 8)
+        val tmp = Document(doc.width, doc.height)
+        tmp.preservedResources = doc.preservedResources   // globaler Lichtwinkel
+        tmp.root.add(layer.deepCopy().also { c ->
+            c.opacity = 1f; c.blendMode = de.photographics.core.render.BlendMode.NORMAL
+            c.clipped = false; c.visible = true; c.mask = null
+        })
+        val pl = renderedLayer(layer.name, tmp, area)
+        copyLayerProps(layer, pl)
+        pl.preservedBlocks = layer.preservedBlocks.filter { it.key !in EFFECT_BLOCKS }
+        pl.fillOpacity = 1f
+        replaceLayer(layer, pl, tr("Ebenenstil rastern"))
+        return true
+    }
+
     private fun copyLayerProps(from: Layer, to: Layer) {
         to.applyProps(from.props()); to.mask = from.mask; to.psdId = from.psdId
         // Ebenenstil bleibt beim Rastern und Umwandeln erhalten (wie in Photoshop)

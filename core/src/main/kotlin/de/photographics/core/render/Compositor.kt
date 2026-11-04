@@ -97,6 +97,60 @@ object Compositor {
         }
         // Ebeneneffekte für den Bereich (Ausgabekoordinaten) vorab zwischenspeichern
         if (area != null) prepareEffects(doc, step, area)
+        // Verkleinerte Ansicht, die in voller Auflösung gerechnet wird (siehe [renderExact])
+        if (area != null && step > 1 && needsFullResolution(doc.root.children)) {
+            prepareEffects(doc, 1, IntRect(area.left * step, area.top * step, area.right * step, area.bottom * step))
+        }
+    }
+
+    /**
+     * Enthält [layers] (sichtbar, auch in Gruppen) eine Korrektur mit harten Stufen? Dann lässt sich
+     * eine verkleinerte Ansicht nicht aus Mipmaps rechnen: Schwellenwert auf gemittelten Pixeln ergibt
+     * ein anderes Bild als Schwellenwert in voller Auflösung, danach verkleinert.
+     */
+    fun needsFullResolution(layers: List<Layer>): Boolean = layers.any { l ->
+        l.visible && ((l is AdjustmentLayer && l.adjustment.needsFullResolution) || (l is GroupLayer && needsFullResolution(l.children)))
+    }
+
+    /**
+     * Verkleinerte Ansicht ([rect] in Ausgabekoordinaten bei [step]) exakt: [layers] in voller
+     * Auflösung zusammensetzen und je [step]×[step] Dokumentpixel mitteln – streifenweise.
+     */
+    private fun renderExact(doc: Document, layers: List<Layer>, rect: IntRect, step: Int, out: IntArray): IntArray {
+        val angle = lightAngle(doc)
+        val deep = doc.bitDepth == 16
+        val rows = maxOf(1, BAND_PIXELS / maxOf(1, rect.width * step * step))
+        val ow = rect.width
+        var y = rect.top
+        while (y < rect.bottom) {
+            val y1 = minOf(rect.bottom, y + rows)
+            // Am Bildrand nur über die Pixel innerhalb der Arbeitsfläche mitteln
+            val full = IntRect(rect.left * step, y * step, rect.right * step, y1 * step)
+            val dr = full.intersect(doc.bounds)
+            val acc = FloatArray(ow * (y1 - y) * 4)
+            if (!dr.isEmpty) {
+                val buf = FloatArray(dr.width * dr.height * 4)
+                compositeChildren(layers, buf, Area(dr, 1, angle, deep))
+                val cnt = IntArray(ow * (y1 - y))
+                for (yy in 0 until dr.height) {
+                    val row = ((dr.top + yy - full.top) / step) * ow
+                    var s = yy * dr.width * 4
+                    for (xx in 0 until dr.width) {
+                        val p = row + (dr.left + xx - full.left) / step
+                        val o = p * 4
+                        acc[o] += buf[s]; acc[o + 1] += buf[s + 1]; acc[o + 2] += buf[s + 2]; acc[o + 3] += buf[s + 3]
+                        cnt[p]++
+                        s += 4
+                    }
+                }
+                for (p in cnt.indices) if (cnt[p] > 0) { val k = 1f / cnt[p]; val o = p * 4; acc[o] *= k; acc[o + 1] *= k; acc[o + 2] *= k; acc[o + 3] *= k }
+            }
+            val tmp = IntArray(ow * (y1 - y))
+            toArgb(acc, tmp)
+            System.arraycopy(tmp, 0, out, (y - rect.top) * ow, tmp.size)
+            y = y1
+        }
+        return out
     }
 
     fun renderArgb(doc: Document, rect: IntRect, out: IntArray = IntArray(rect.width * rect.height)): IntArray {
@@ -126,6 +180,7 @@ object Compositor {
      */
     fun renderArgbSampled(doc: Document, rect: IntRect, step: Int, out: IntArray = IntArray(rect.width * rect.height)): IntArray {
         if (step <= 1) return renderArgb(doc, rect, out)
+        if (needsFullResolution(doc.root.children)) return renderExact(doc, doc.root.children, rect, step, out)
         val band = maxOf(1, BAND_PIXELS / maxOf(1, rect.width))
         var y = rect.top
         while (y < rect.bottom) {
@@ -147,6 +202,8 @@ object Compositor {
      * Live-Änderung zwischengespeichert werden (siehe [renderRangeSampled]).
      */
     fun liveSplit(doc: Document, layer: Layer): Int {
+        // Harte Stufen lassen sich nicht über ein verkleinertes Zwischenbild legen: alles neu rechnen
+        if (needsFullResolution(doc.root.children)) return 0
         var top = layer
         while (true) { val p = top.parent ?: break; if (p === doc.root) break; top = p }
         var i = doc.root.children.indexOf(top)
@@ -166,6 +223,9 @@ object Compositor {
         out: IntArray = IntArray(rect.width * rect.height),
     ): IntArray {
         val layers = doc.root.children.subList(from, until)
+        // Harte Stufen: ohne darunterliegendes Zwischenbild exakt; mit einem sorgt [liveSplit] dafür,
+        // dass es keine gibt
+        if (step > 1 && below == null && needsFullResolution(layers)) return renderExact(doc, layers, rect, step, out)
         val band = maxOf(1, BAND_PIXELS / maxOf(1, rect.width))
         var y = rect.top
         while (y < rect.bottom) {

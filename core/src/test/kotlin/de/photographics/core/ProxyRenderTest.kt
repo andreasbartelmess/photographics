@@ -1,6 +1,7 @@
 package de.photographics.core
 
 import de.photographics.core.adjust.HueSaturationAdj
+import de.photographics.core.adjust.ThresholdAdj
 import de.photographics.core.doc.AdjustmentLayer
 import de.photographics.core.doc.Document
 import de.photographics.core.doc.GroupLayer
@@ -124,5 +125,39 @@ class ProxyRenderTest {
             for (sh in intArrayOf(24, 16, 8, 0)) maxDiff = maxOf(maxDiff, kotlin.math.abs(((got shr sh) and 0xFF) - ((ref shr sh) and 0xFF)))
         }
         assertTrue("Abweichung $maxDiff", maxDiff <= 3)
+    }
+
+    /**
+     * Schwellenwert in verkleinerter Ansicht (Vorschau wie Anzeige) = Schwellenwert in voller
+     * Auflösung, danach gemittelt – nicht Schwellenwert auf gemittelten Pixeln. Auch über die
+     * Live-Aufteilung (liveSplit) hinweg und bei Rändern, die nicht durch den Schritt teilbar sind.
+     */
+    @Test
+    fun thresholdInReducedViewMatchesFullResolution() {
+        val w = 403; val h = 301
+        val rnd = java.util.Random(7)
+        // Feines Rauschen um die Schwelle: gemittelt läge fast alles knapp darunter oder darüber
+        val px = IntArray(w * h) { i -> val g = (118 + (i % w) / 40 + rnd.nextInt(41) - 20).coerceIn(0, 255); (0xFF shl 24) or (g * 0x010101) }
+        val doc = Document(w, h)
+        val base = PixelLayer("A", TileGrid.fromPixels(w, h, px))
+        doc.root.add(base)
+        doc.root.add(AdjustmentLayer("T", ThresholdAdj(128)))
+        val full = Compositor.renderArgb(doc, doc.bounds)
+        assertEquals(0, Compositor.liveSplit(doc, base))
+        for (step in intArrayOf(2, 4, 8)) {
+            val pw = (w + step - 1) / step; val ph = (h + step - 1) / step
+            Compositor.prepare(doc, step, IntRect(0, 0, pw, ph))
+            val proxy = Compositor.renderArgbSampled(doc, IntRect(0, 0, pw, ph), step)
+            val range = Compositor.renderRangeSampled(doc, IntRect(0, 0, pw, ph), step, 0, doc.root.children.size, null)
+            for (y in 0 until ph) for (x in 0 until pw) {
+                var sum = 0; var n = 0
+                for (yy in y * step until minOf(h, (y + 1) * step)) for (xx in x * step until minOf(w, (x + 1) * step)) { sum += full[yy * w + xx] and 0xFF; n++ }
+                val want = sum.toFloat() / n
+                val got = proxy[y * pw + x]
+                assertEquals("step $step ($x,$y) Deckung", 255, got ushr 24)
+                assertEquals("step $step ($x,$y)", want, (got and 0xFF).toFloat(), 1.01f)
+                assertEquals("step $step ($x,$y) Bereich", got, range[y * pw + x])
+            }
+        }
     }
 }

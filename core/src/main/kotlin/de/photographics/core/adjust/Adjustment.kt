@@ -34,6 +34,12 @@ sealed class Adjustment {
     abstract fun withValues(v: FloatArray): Adjustment
     abstract fun compile(): RgbMap
 
+    /**
+     * Harte Stufen (Schwellenwert, Tontrennung): auf gemittelten Pixeln einer verkleinerten Ansicht
+     * sähe das Ergebnis anders aus – solche Ansichten rechnen dann in voller Auflösung.
+     */
+    open val needsFullResolution: Boolean get() = false
+
     val label get() = type.label
 }
 
@@ -365,6 +371,7 @@ object InvertAdj : Adjustment() {
 
 data class PosterizeAdj(val levels: Int = 4) : Adjustment() {
     override val type get() = AdjustmentType.POSTERIZE
+    override val needsFullResolution get() = true
     override fun params() = listOf(AdjParam(tr("Stufen"), 2f, 255f, levels.toFloat()))
     override fun withValues(v: FloatArray) = copy(levels = v[0].roundToInt().coerceIn(2, 255))
     override fun compile(): RgbMap {
@@ -375,6 +382,7 @@ data class PosterizeAdj(val levels: Int = 4) : Adjustment() {
 
 data class ThresholdAdj(val level: Int = 128) : Adjustment() {
     override val type get() = AdjustmentType.THRESHOLD
+    override val needsFullResolution get() = true
     override fun params() = listOf(AdjParam(tr("Schwellenwert"), 1f, 255f, level.toFloat()))
     override fun withValues(v: FloatArray) = copy(level = v[0].roundToInt().coerceIn(1, 255))
     override fun compile() = RgbMap { c ->

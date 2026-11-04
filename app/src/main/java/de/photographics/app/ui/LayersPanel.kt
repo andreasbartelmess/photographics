@@ -462,6 +462,7 @@ private fun LayerRow(item: LayerItem, selected: Boolean, maskTargeted: Boolean, 
                 fun act(label: String, f: () -> Unit) = DropdownMenuItem(text = { Text(label) }, onClick = { menu = false; vm.selectLayer(item.id); f() })
                 act(tr("Umbenennen …"), onRename)
                 if (item.type.hasStyle) act(tr("Ebenenstil") + " …", onStyle)
+                if (item.type.hasStyle) act(tr("Ebenenstil rastern")) { vm.rasterizeStyle(item.id) }
                 act(if (item.clipped) tr("Schnittmaske zurückwandeln (Strg+Alt+G)") else tr("Schnittmaske erstellen (Strg+Alt+G)")) { vm.toggleClipping(item.id) }
                 if (item.hasMask) act(if (item.maskLinked) tr("Maske von Ebene lösen") else tr("Maske mit Ebene verbinden")) { vm.toggleMaskLink(item.id) }
                 act(if (item.lockTransparency) tr("Transparenz freigeben") else tr("Transparenz fixieren")) { vm.toggleLockTransparency(item.id) }

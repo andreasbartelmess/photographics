@@ -766,19 +766,16 @@ object Gallery {
             }
         },
         GallerySpec("stamp", tr("Stempel"), GalleryCategory.SKETCH, listOf(p(tr("Hell/Dunkel-Balance"), 0f, 50f, 25f), p(tr("Glättung"), 1f, 50f, 5f)), usesColors = true) { v ->
-            // Wie ein Gummi- oder Holzstempel: Schwellwert auf die Helligkeit (höhere Balance = mehr
-            // Vordergrundfarbe), danach werden die Ränder der Formen geglättet – kleine Sprenkel
-            // verschwinden, Ecken runden sich, große Formen bleiben an ihrem Platz. Nur zwei Farben,
+            // Wie Photoshop: Helligkeit weichzeichnen (Glättung), dann scharf an der Schwelle trennen
+            // (höhere Balance = mehr Vordergrundfarbe). An sauberen Bildern runden sich Ecken und kleine
+            // Sprenkel verschwinden; vorher hinzugefügtes Rauschen wird dabei zu Klumpen, die Kanten
+            // ausfransen und Grautöne zu Sprenkeln zerfallen lassen (Fotokopie-Look). Nur zwei Farben,
             // Kanten mit genau einem Pixel Kantenglättung.
-            val pre = v.px(0.6f)
-            val sigma = v.px((v[1] - 1f) * 0.12f)
+            val sigma = v.px(0.3f + (v[1] - 1f) * 0.1f)
             val thr = v[0] / 50f * 257f - 1f
-            Effect(G.gaussMargin(sigma) + G.gaussMargin(pre) + 4) { img ->
+            Effect(G.gaussMargin(sigma) + 4) { img ->
                 val w = img.w; val h = img.h
-                val l = G.blurred(img.lum(), w, h, pre)
-                // Dunkelanteil 0..255 mit 1-Pixel-Kante, dann Ränder glätten und erneut scharf trennen
-                val ink = G.blurred(G.crisp(l, w, h, thr, invert = true), w, h, sigma)
-                val out = G.crisp(ink, w, h, 127.5f, invert = false)
+                val out = G.crisp(G.blurred(img.lum(), w, h, sigma), w, h, thr, invert = true)
                 img.map { i, _, _ -> G.mix(v.ctx.bg, v.ctx.fg, out[i] / 255f) }
             }
         },
@@ -837,17 +834,25 @@ object Gallery {
             }
         },
         GallerySpec("grain", tr("Körnung"), GalleryCategory.TEXTURE, listOf(p(tr("Intensität"), 0f, 100f, 40f), p(tr("Kontrast"), 0f, 100f, 50f),
-            choice(tr("Körnungsart"), listOf(tr("Normal"), tr("Weich"), tr("Gesprenkelt"), tr("Klumpen"), tr("Horizontal"), tr("Vertikal"))))) { v ->
+            choice(tr("Körnungsart"), listOf(tr("Normal"), tr("Weich"), tr("Gesprenkelt"), tr("Klumpen"), tr("Horizontal"), tr("Vertikal"))),
+            // Korngröße in Pixeln: Körnung wirkt pro Pixel – an großen Bildern sind 1-Pixel-Körner
+            // kaum zu sehen (und Stempel macht daraus keine ausgefransten Kanten)
+            p(tr("Größe"), 1f, 20f, 1f, pixels = true))) { v ->
+            val size = v.px(3)          // in Pixeln des gerechneten Bildes
+            val cells = size > 1.01f
             Effect(2) { img ->
                 img.map { i, x, y ->
                     val ax = img.ox + x; val ay = img.oy + y
+                    // Gitterkoordinaten in Dokumentpixeln / Korngröße
+                    val gx = ax / size; val gy = ay / size
                     val n = when (v.int(2)) {
-                        0 -> G.hash(ax, ay, 211) - 0.5f
-                        1 -> G.noise(ax / v.px(2f), ay / v.px(2f), 213) - 0.5f
-                        2 -> if (G.hash(ax, ay, 215) > 0.97f) -0.5f else 0f
-                        3 -> G.fbm(ax / v.px(4f), ay / v.px(4f), 2, 217) - 0.5f
-                        4 -> G.hash(0, ay, 219) - 0.5f
-                        else -> G.hash(ax, 0, 221) - 0.5f
+                        // Wertrauschen hat weniger Streuung als ein Zufallswert je Pixel: angleichen
+                        0 -> if (cells) ((G.noise(gx, gy, 211) - 0.5f) * 1.8f).coerceIn(-0.5f, 0.5f) else G.hash(ax, ay, 211) - 0.5f
+                        1 -> G.noise(ax / (v.px(2f) * v[3]), ay / (v.px(2f) * v[3]), 213) - 0.5f
+                        2 -> if ((if (cells) G.hash(kotlin.math.floor(gx).toInt(), kotlin.math.floor(gy).toInt(), 215) else G.hash(ax, ay, 215)) > 0.97f) -0.5f else 0f
+                        3 -> G.fbm(ax / (v.px(4f) * v[3]), ay / (v.px(4f) * v[3]), 2, 217) - 0.5f
+                        4 -> G.hash(0, if (cells) kotlin.math.floor(gy).toInt() else ay, 219) - 0.5f
+                        else -> G.hash(if (cells) kotlin.math.floor(gx).toInt() else ax, 0, 221) - 0.5f
                     }
                     val c = img.px[i]
                     val k = 1f + (v[1] - 50f) / 100f

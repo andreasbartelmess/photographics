@@ -43,8 +43,10 @@ class FilterGallery(private val parent: Widget, private val session: Session, pr
     private var selected = 0
     private val effects = ArrayList<GalleryEffect>()
     private var running = false
-    private var pending = false
-    private var closed = false
+    @Volatile private var pending = false
+    @Volatile private var closed = false
+    /** Quelle, für die schon eine genaue Vorschau zu sehen ist. */
+    private var exactShownFor: Source? = null
     private var updating = false
 
     init {
@@ -268,18 +270,34 @@ class FilterGallery(private val parent: Widget, private val session: Session, pr
         if (running) { pending = true; return }
         running = true; pending = false
         spinner.spinning = true
-        val c = chain(src.scale, effects.toList())
+        val list = effects.toList()
+        val c = chain(src.scale, list)
         remembered[effects[selected].spec.id] = effects[selected].values
-        Thread {
-            val out = runCatching { c.process(src.px.copyOf(), src.w, src.h, src.ox, src.oy, src.w, src.h) }.getOrNull()
-            val bytes = out?.let { CanvasView.toBytes(it) }
+        // Ganzes Bild: verkleinert gerechnet sehen Striche, Korn und feine Linien anders aus als nach
+        // dem Anwenden – nach der schnellen Vorschau daher in voller Auflösung rechnen und verkleinern
+        val exact = !full && src.scale < 1f
+        val layer = session.doc.activeLayer as? PixelLayer
+        fun show(out: IntArray?) {
+            val bytes = out?.let { CanvasView.toBytes(it) } ?: return
             onMain {
-                running = false
-                spinner.spinning = pending
-                if (bytes != null && !closed) picture.paintable = MemoryTexture(src.w, src.h, MemoryFormat.B8G8R8A8, bytes, src.w * 4L).also { t ->
+                if (!closed) picture.paintable = MemoryTexture(src.w, src.h, MemoryFormat.B8G8R8A8, bytes, src.w * 4L).also { t ->
                     // Nur für Tests: das Fensterfoto erfasst den Dialoginhalt nicht
                     System.getenv("PG_GALLERY_DUMP")?.let { t.saveToPng(it) }
                 }
+            }
+        }
+        // Schnelle, ungenaue Vorschau nur beim ersten Bild einer Quelle; danach läuft jede genaue
+        // Rechnung zu Ende (neue Änderungen warten und nehmen dann den neuesten Stand) – sonst käme
+        // beim Ziehen eines Reglers nie ein genaues Bild
+        val quick = !exact || exactShownFor !== src
+        Thread {
+            if (quick) show(runCatching { c.process(src.px.copyOf(), src.w, src.h, src.ox, src.oy, src.w, src.h) }.getOrNull())
+            if (exact && layer != null) runCatching {
+                de.photographics.core.filters.FilterRunner.previewScaled(session.doc, layer, chain(1f, list), src.w, src.h) { closed }
+            }.getOrNull()?.let { show(it); onMain { exactShownFor = src } }
+            onMain {
+                running = false
+                spinner.spinning = pending
                 if (pending) render()
             }
         }.apply { isDaemon = true; name = "photographics-galerie" }.start()

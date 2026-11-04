@@ -194,4 +194,41 @@ class EffectsTest {
         val img = Compositor.renderArgb(doc, doc.bounds)
         assertTrue("Verlauf statt Grau in der Fläche", at(img, 120, 60, 60) != 0x808080)
     }
+
+    /**
+     * Ebenenstil rastern: das Bild bleibt gleich, die Effekte stecken danach in den Pixeln (Filter
+     * sehen die Verlaufsüberlagerung), der Mischmodus bleibt Eigenschaft der Ebene; rückgängig machbar.
+     */
+    @Test
+    fun rasterizeStyleBakesEffects() {
+        val w = 200; val h = 120
+        val doc = Document(w, h)
+        doc.root.add(PixelLayer("Weiß", TileGrid.fromPixels(w, h, IntArray(w * h) { -1 })))
+        val text = PixelLayer("Text", TileGrid.fromPixels(w, h, IntArray(w * h) { i -> val x = i % w; val y = i / w; if (x in 20..179 && y in 30..89) 0xFF000000.toInt() else 0 }))
+        text.blendMode = de.photographics.core.render.BlendMode.DARKEN
+        doc.root.add(text)
+        val ed = Editor(doc)
+        ed.setEffects(text, LayerEffects(
+            gradientOverlay = LayerEffects.GradientOverlay(color0 = 0x000000, color1 = 0xB0B0B0, opacity = 1f, angle = 0.0, radial = false, reverse = false, scale = 1.0),
+            dropShadows = listOf(LayerEffects.Shadow(0x000000, 0.5f, de.photographics.core.render.BlendMode.NORMAL, 120.0, true, 5.0, 0.0, 4.0)),
+        ))
+        Compositor.prepare(doc, 1, doc.bounds)
+        val before = Compositor.renderArgb(doc, doc.bounds)
+        assertTrue(ed.rasterizeStyle(text))
+        val baked = doc.activeLayer as PixelLayer
+        assertTrue("keine Effekte mehr", baked.effects == null)
+        assertEquals(de.photographics.core.render.BlendMode.DARKEN, baked.blendMode)
+        Compositor.prepare(doc, 1, doc.bounds)
+        val after = Compositor.renderArgb(doc, doc.bounds)
+        var diff = 0
+        for (i in before.indices) for (sh in intArrayOf(24, 16, 8, 0)) diff = maxOf(diff, kotlin.math.abs(((before[i] shr sh) and 0xFF) - ((after[i] shr sh) and 0xFF)))
+        assertTrue("Bild unverändert: $diff", diff <= 3)
+        // Die Pixel selbst tragen jetzt den Verlauf: links dunkel, rechts hell
+        val px = IntArray(w * h).also { baked.pixels.readRect(doc.bounds, it) }
+        assertTrue((px[60 * w + 25] and 0xFF) < 40)
+        assertTrue((px[60 * w + 175] and 0xFF) > 120)
+        assertTrue(!ed.rasterizeStyle(baked))
+        ed.undo()
+        assertTrue("Effekte nach Rückgängig zurück", (doc.root.children[1] as PixelLayer).effects != null)
+    }
 }
