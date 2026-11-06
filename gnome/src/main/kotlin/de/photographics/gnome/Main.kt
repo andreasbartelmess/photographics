@@ -14,7 +14,7 @@ import java.io.File
 import java.nio.ByteBuffer
 
 const val APP_ID = "de.andreasbartelmess.Photographics"
-const val VERSION = "0.4.2"
+const val VERSION = "0.5.0"
 
 class PhotographicsApp {
     // Testläufe (Bildschirmfoto) als eigene Instanz, sonst übernimmt eine laufende App die Dateien
