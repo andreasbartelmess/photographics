@@ -53,3 +53,6 @@ jobs:
           path: website
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          # Das Flatpak-Repository hat viele kleine Dateien; das Verteilen dauert bei GitHub teils über 10 Minuten
+          timeout: 1800000
