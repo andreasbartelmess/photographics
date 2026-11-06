@@ -90,9 +90,10 @@ fun AdjustmentPanel(
     /** Schnittmaske der Einstellungsebene (null = keine Ebene, z. B. direkte Korrektur). */
     clipped: Boolean? = null,
     onToggleClip: () -> Unit = {},
+    onCompare: ((Boolean) -> Unit)? = null,
 ) {
     val current by rememberUpdatedState(adjustment)
-    PanelCard(adjustment.type.icon, adjustment.label, modifier, actions = {
+    PanelCard(adjustment.type.icon, adjustment.label, modifier, onCompare = onCompare, actions = {
         PanelActions(onReset = { onChange(current.type.createDefault()) }, onCancel = null, onApply = onClose, applyLabel = tr("Fertig"))
     }) {
         if (clipped != null) {

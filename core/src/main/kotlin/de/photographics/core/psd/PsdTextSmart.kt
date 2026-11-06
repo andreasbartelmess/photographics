@@ -13,6 +13,8 @@ internal object PsdTextSmart {
     const val TEXT_KEY = "pgTX"
     /** Eigener Block für Smartobjekte: Originalraster + Transformation. */
     const val SMART_KEY = "pgSO"
+    /** Inhalt eines Smartobjekts mit Ebenen: vollständige PSD-Datei. */
+    const val CONTENTS_KEY = "pgSC"
 
     // ------------------------------------------------------------ Photoshop-Text (TySh)
 

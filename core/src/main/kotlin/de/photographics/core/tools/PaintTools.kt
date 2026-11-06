@@ -22,7 +22,7 @@ class BrushTool(private val color: Int, private val background: Int = color, pen
     override val dynamicsColors get() = color to background
 
     override fun apply(ctx: StrokeContext, x: Int, y: Int, orig: Int, amount: Float): Int {
-        if (ctx.target == PaintTarget.MASK) return (orig + (gray - orig) * amount).roundToInt()
+        if (ctx.target.isMask) return (orig + (gray - orig) * amount).roundToInt()
         val c = if (ctx.colorDynamics) ctx.pixelColor else color
         return ctx.settings.mode.paint(orig, c, amount)
     }
@@ -34,7 +34,7 @@ class EraserTool : PaintTool() {
     override val supportsMask = true
 
     override fun apply(ctx: StrokeContext, x: Int, y: Int, orig: Int, amount: Float): Int =
-        if (ctx.target == PaintTarget.MASK) (orig + (255 - orig) * amount).roundToInt()
+        if (ctx.target.isMask) (orig + (255 - orig) * amount).roundToInt()
         else Colors.withAlpha(orig, (Colors.a(orig) * (1f - amount)).roundToInt())
 }
 

@@ -180,15 +180,21 @@ class TextLayer(name: String, style: TextStyle, transform: Affine, width: Int, h
  * Smartobjekt: hält das Originalraster in voller Auflösung und eine Transformation.
  * Skalieren und Drehen rechnen immer vom Original – ohne Qualitätsverlust.
  */
-class SmartLayer(name: String, val source: TileGrid, transform: Affine, width: Int, height: Int) : RasterLayer(name) {
+/**
+ * Smartobjekt: [source] (Bild des Inhalts) wird über [transform]/[warp] ins Dokument abgebildet,
+ * darauf wirken die [smartFilters]. [contents] = eingebettetes Dokument mit Ebenen (Photoshop:
+ * „Inhalt bearbeiten“); null = nur ein Bild. [source] ist dann sein zusammengefügtes Bild.
+ * Beides wird nie verändert – neuer Inhalt ergibt ein neues Smartobjekt (siehe Editor).
+ */
+class SmartLayer(name: String, val source: TileGrid, transform: Affine, width: Int, height: Int, val contents: Document? = null) : RasterLayer(name) {
     var transform: Affine = transform
-        set(v) { field = v; cache = null; fastPreview = false }
+        set(v) { field = v; dropAll(); fastPreview = false }
     /**
      * Verzerrt/perspektivisch: Zielpunkte der vier Ecken der Quelle im Dokument (oben links, oben
      * rechts, unten rechts, unten links); null = nur [transform].
      */
     var warp: DoubleArray? = null
-        set(v) { field = v?.copyOf(); cache = null; fastPreview = false }
+        set(v) { field = v?.copyOf(); dropAll(); fastPreview = false }
 
     /** Abbildung Quelle → Dokument. */
     fun homography(): de.photographics.core.image.Homography = warp?.let {
@@ -210,9 +216,33 @@ class SmartLayer(name: String, val source: TileGrid, transform: Affine, width: I
     var docHeight = height
     /** Während des Ziehens schneller bilinear rendern, danach bikubisch. */
     var fastPreview = false
-        set(v) { if (field != v) { field = v; cache = null } }
+        set(v) { if (field != v) { field = v; dropAll() } }
 
+    /** Fertiges Raster (mit Filtern und Filtermaske). */
     private var cache: TileGrid? = null
+    /**
+     * Zwischenstufen, solange Smartfilter wirken: transformierter Inhalt ohne Filter ([base]) und mit
+     * Filtern, aber ohne Filtermaske ([unmasked]). So rechnet Nachregeln eines Filters die
+     * Transformation nicht neu und Malen auf der Filtermaske nur die Überblendung. Bei Speicherknappheit
+     * verworfen (werden bei Bedarf neu gerechnet).
+     */
+    @Volatile private var base: TileGrid? = null
+    @Volatile private var unmasked: TileGrid? = null
+
+    private fun dropAll() { cache = null; base = null; unmasked = null }
+    internal fun dropIntermediate() { base = null; unmasked = null }
+
+    /** Smartfilter (bleiben nachregelbar); jede Änderung rechnet das Raster neu. */
+    var smartFilters: SmartFilters = SmartFilters()
+        set(v) {
+            val old = field
+            field = v
+            cache = null
+            // Nur Maske/Maske an-aus geändert: Filterergebnis bleibt gültig
+            if (old.filters != v.filters || old.visible != v.visible) unmasked = null
+        }
+
+    init { live.add(this) }
 
     fun setPreviewTransform(t: Affine) { transform = t; fastPreview = true }
 
@@ -263,14 +293,67 @@ class SmartLayer(name: String, val source: TileGrid, transform: Affine, width: I
 
     fun invalidate() { cache = null }
 
+    /** Filtermaske mit dem Dokument mitführen (Freistellen, Drehen, Bildgröße …); neue Maske, nicht verändert. */
+    fun mapFilterMask(f: (TileGrid) -> TileGrid) {
+        val m = smartFilters.mask ?: return
+        smartFilters = smartFilters.copy(mask = LayerMask(f(m.grid), m.enabled))
+    }
+
+    /**
+     * Filtermaske wurde in [r] bemalt: dort nur neu überblenden (sonst alles neu). Läuft auf dem
+     * Thread des Editors; gerendert wird danach wie üblich aus [raster].
+     */
+    fun filterMaskChanged(r: IntRect) {
+        val c = cache; val b = base; val u = unmasked
+        val m = smartFilters.mask?.takeIf { it.enabled && smartFilters.active }
+        if (c == null || b == null || u == null || m == null || c === u || c === b) { cache = null; return }
+        de.photographics.core.filters.SmartFilterRunner.maskBlendInto(c, b, u, m.grid, r)
+    }
+
+    /** Inhalt als eigenständiges Dokument: Kopie von [contents] bzw. ein Dokument mit dem Bild (Auflösung [dpi], Profil [profile]). */
+    fun contentsDocument(dpi: Float, profile: de.photographics.core.color.IccProfile): Document = contents?.duplicate() ?: Document(source.width, source.height).also { d ->
+        d.dpi = dpi; d.colorProfile = profile
+        d.root.add(PixelLayer(name, source.copy()))
+        d.activeLayer = d.root.children.last()
+    }
+
+    /** Bild mit nur den Smartfiltern unter [index] (ohne Filtermaske) – Vorschauquelle beim Nachregeln eines Filters. */
+    fun rasterBelow(index: Int): TileGrid =
+        de.photographics.core.filters.SmartFilterRunner.applyFilters(baseRaster(),
+            smartFilters.copy(filters = smartFilters.filters.take(index), mask = null), docWidth, docHeight)
+
+    /** Transformierter Inhalt ohne Smartfilter. */
+    fun baseRaster(): TileGrid = base ?: (warp?.let { Resample.renderProjective(source, homography(), docWidth, docHeight, fast = fastPreview) }
+        ?: Resample.renderAffine(source, transform, docWidth, docHeight, fast = fastPreview)).also { if (smartFilters.active) base = it }
+
     override val raster: TileGrid
-        get() = cache ?: (warp?.let { Resample.renderProjective(source, homography(), docWidth, docHeight, fast = fastPreview) }
-            ?: Resample.renderAffine(source, transform, docWidth, docHeight, fast = fastPreview)).also { cache = it }
+        get() = cache ?: build().also { cache = it }
+
+    private fun build(): TileGrid {
+        val sf = smartFilters
+        if (!sf.active) return baseRaster().also { base = null; unmasked = null }
+        val b = baseRaster()
+        val u = unmasked ?: de.photographics.core.filters.SmartFilterRunner.applyFilters(b, sf, docWidth, docHeight)
+        val m = sf.mask?.takeIf { it.enabled }
+        if (m == null) { unmasked = null; return u }
+        unmasked = u
+        return de.photographics.core.filters.SmartFilterRunner.maskBlend(b, u, m.grid).also { it.compact() }
+    }
 
     override fun deepCopy(): SmartLayer =
-        SmartLayer(tr("{0} Kopie", name), source, transform, docWidth, docHeight).also { copyPropsTo(it); it.warp = warp }
+        SmartLayer(tr("{0} Kopie", name), source, transform, docWidth, docHeight, contents).also {
+            copyPropsTo(it); it.warp = warp
+            it.smartFilters = smartFilters.copy(mask = smartFilters.mask?.let { m -> LayerMask(m.grid.copy(), m.enabled) })
+        }
 
     companion object {
+        /** Alle Smartobjekte (schwach gehalten): bei Speicherknappheit Zwischenstufen verwerfen. */
+        private val live: MutableSet<SmartLayer> = java.util.Collections.synchronizedSet(java.util.Collections.newSetFromMap(java.util.WeakHashMap()))
+
+        init {
+            de.photographics.core.image.TileMemory.onPressure += { synchronized(live) { live.toList() }.forEach { it.dropIntermediate() } }
+        }
+
         fun mapQuad(q: DoubleArray, m: Affine) = DoubleArray(8) { i -> if (i % 2 == 0) m.mapX(q[i], q[i + 1]) else m.mapY(q[i - 1], q[i]) }
     }
 }

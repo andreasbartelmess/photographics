@@ -214,6 +214,7 @@ class CanvasView : Widget {
 
     fun setSession(s: Session?, state: DocState?) {
         session = s
+        shown = null
         docW = state?.width ?: 0; docH = state?.height ?: 0
         clearTiles()
         fitted = false
@@ -230,6 +231,7 @@ class CanvasView : Widget {
     fun invalidate(rect: IntRect?, state: DocState, live: Boolean = false) {
         if (state.width != docW || state.height != docH) {
             docW = state.width; docH = state.height
+            shown = null
             clearTiles(); fit()
             queueDraw()
             return
@@ -237,9 +239,10 @@ class CanvasView : Widget {
         generation++
         val view = IntRect(docX(0.0).toInt() - 1, docY(0.0).toInt() - 1, docX(width.toDouble()).toInt() + 2, docY(height.toDouble()).toInt() + 2).intersect(IntRect.ofSize(docW, docH))
         val hit = if (rect == null) view else rect.intersect(view)
-        val big = live && view.width > 0 && hit.width.toLong() * hit.height > view.width.toLong() * view.height / 4
         val fine = levelFor(zoom * deviceScale)
-        if (big && fine < MAX_LEVEL) {
+        // Mit der Grafikkarte reicht die Zeit für volle Auflösung; nur auf dem Prozessor gröber
+        val big = live && !GpuRender.fast && fine < MAX_LEVEL && view.width > 0 && hit.width.toLong() * hit.height > view.width.toLong() * view.height / 4
+        if (big) {
             liveBoost = 1
             if (liveTimer != 0) org.gnome.glib.Source.remove(liveTimer)
             liveTimer = org.gnome.glib.GLib.timeoutAddOnce(350) { liveTimer = 0; liveBoost = 0; queueDraw() }
@@ -430,15 +433,64 @@ class CanvasView : Widget {
         }
         visibleNow = (ty0..ty1).flatMap { ty -> (tx0..tx1).map { tx -> key(level, tx, ty) } }.toHashSet()
         if (W > 0 && H > 0) {
-            val ck = CompositeKey(level, tx0, ty0, tx1, ty1, tilesVersion)
-            var tex = composite?.takeIf { compositeKey == ck }
-            if (tex == null) {
-                tex = buildComposite(level, tx0, ty0, tx1, ty1, X0, Y0, W, H)
-                composite = tex; compositeKey = ck
-            }
             val s = step * zoom
             val l = snapX(ox + X0 * s); val t = snapY(oy + Y0 * s)
-            if (tex != null) snapshot.appendScaledTexture(tex, filter, Rect().init(l, t, (W * s).toFloat(), (H * s).toFloat()))
+            val dest = Rect().init(l, t, (W * s).toFloat(), (H * s).toFloat())
+            if (missing.isEmpty()) {
+                // Alle sichtbaren Kacheln aktuell: dieses Bild zeigen und als letzten vollständigen Stand merken
+                val ck = CompositeKey(level, tx0, ty0, tx1, ty1, tilesVersion, false)
+                var tex = composite?.takeIf { compositeKey == ck }
+                if (tex == null) {
+                    tex = buildComposite(level, tx0, ty0, tx1, ty1, X0, Y0, W, H, freshFirst = false)
+                    composite = tex; compositeKey = ck
+                }
+                if (tex != null) {
+                    snapshot.appendScaledTexture(tex, filter, dest)
+                    shown = Shown(tex, step, X0, Y0, W, H)
+                }
+            } else {
+                // Unvollständig (Zoomen, Verschieben, Änderung in Arbeit): den letzten vollständigen Stand
+                // skaliert stehen lassen und erst tauschen, wenn alles fertig ist – kein Mischbild aus alten,
+                // neuen und unscharfen Kacheln. Nur neu aufgedeckte Ränder kommen aus den vorhandenen Kacheln.
+                val sh = shown
+                val covered = sh != null && run {
+                    val ss = sh.step * zoom
+                    ox + sh.x0 * ss <= max(0.0, ox) + 0.5 && oy + sh.y0 * ss <= max(0.0, oy) + 0.5 &&
+                        ox + (sh.x0 + sh.w) * ss >= min(width.toDouble(), ox + docW * zoom) - 0.5 &&
+                        oy + (sh.y0 + sh.h) * ss >= min(height.toDouble(), oy + docH * zoom) - 0.5
+                }
+                val ck = CompositeKey(level, tx0, ty0, tx1, ty1, tilesVersion, true)
+                var tex = if (covered) null else composite?.takeIf { compositeKey == ck }
+                if (tex == null && !covered) {
+                    tex = buildComposite(level, tx0, ty0, tx1, ty1, X0, Y0, W, H, freshFirst = true)
+                    composite = tex; compositeKey = ck
+                }
+                if (sh == null) {
+                    if (tex != null) snapshot.appendScaledTexture(tex, filter, dest)
+                } else {
+                    val ss = sh.step * zoom
+                    val sl = snapX(ox + sh.x0 * ss); val st = snapY(oy + sh.y0 * ss)
+                    val sr = snapX(ox + (sh.x0 + sh.w) * ss); val sb = snapY(oy + (sh.y0 + sh.h) * ss)
+                    if (tex != null) {
+                        val vw = width.toFloat(); val vh = height.toFloat()
+                        for (c in listOf(
+                            Rect().init(0f, 0f, vw, st), Rect().init(0f, sb, vw, vh - sb),
+                            Rect().init(0f, st, sl, sb - st), Rect().init(sr, st, vw - sr, sb - st),
+                        )) {
+                            if (c.width <= 0f || c.height <= 0f) continue
+                            snapshot.pushClip(c); snapshot.appendScaledTexture(tex, filter, dest); snapshot.pop()
+                        }
+                    }
+                    val sf2 = when {
+                        sh.step == step -> filter
+                        ss < 1.0 -> ScalingFilter.TRILINEAR
+                        else -> ScalingFilter.LINEAR
+                    }
+                    snapshot.pushClip(docRect)
+                    snapshot.appendScaledTexture(sh.texture, sf2, Rect().init(sl, st, sr - sl, sb - st))
+                    snapshot.pop()
+                }
+            }
         }
         gpuLive?.let { g ->
             // Übernommen und die Kacheln zeigen den neuen Stand: Vorschau ausblenden
@@ -504,7 +556,11 @@ class CanvasView : Widget {
         sn.pop()
     }
 
-    private data class CompositeKey(val level: Int, val tx0: Int, val ty0: Int, val tx1: Int, val ty1: Int, val version: Int)
+    private data class CompositeKey(val level: Int, val tx0: Int, val ty0: Int, val tx1: Int, val ty1: Int, val version: Int, val partial: Boolean)
+
+    /** Zuletzt vollständig gezeigtes Bild: Textur in Pixeln der Stufe [step], Ursprung ([x0], [y0]). */
+    private class Shown(val texture: Texture, val step: Int, val x0: Int, val y0: Int, val w: Int, val h: Int)
+    private var shown: Shown? = null
     private var composite: Texture? = null
     private var compositeKey: CompositeKey? = null
     /** Zählt jede Änderung am Kachelbestand (dann wird das zusammengesetzte Bild neu gebaut). */
@@ -515,48 +571,50 @@ class CanvasView : Widget {
      * Textur zusammen (Ursprung = Kachel tx0/ty0). Fehlende Kacheln kommen vorläufig aus einer
      * gröberen Stufe.
      */
-    private fun buildComposite(level: Int, tx0: Int, ty0: Int, tx1: Int, ty1: Int, X0: Int, Y0: Int, W: Int, H: Int): Texture? {
+    private fun buildComposite(level: Int, tx0: Int, ty0: Int, tx1: Int, ty1: Int, X0: Int, Y0: Int, W: Int, H: Int, freshFirst: Boolean): Texture? {
         val renderer = native?.renderer ?: return null
         val sn = Snapshot()
-        val step = 1 shl level
         for (ty in ty0..ty1) for (tx in tx0..tx1) {
             val cl = tx * TILE - X0; val ct = ty * TILE - Y0
             val cw = min(TILE, W - cl); val ch = min(TILE, H - ct)
             if (cw <= 0 || ch <= 0) continue
-            val t = tiles[key(level, tx, ty)]
             sn.pushClip(Rect().init(cl.toFloat(), ct.toFloat(), cw.toFloat(), ch.toFloat()))
-            if (t != null) {
-                val r = t.rect
-                sn.appendTexture(t.texture, Rect().init((r.left - X0).toFloat(), (r.top - Y0).toFloat(), r.width.toFloat(), r.height.toFloat()))
-            } else {
-                var l = level + 1
-                var found = false
-                while (l <= MAX_LEVEL) {
-                    val s = TILE shl l
-                    val c = tiles[key(l, tx * TILE * step / s, ty * TILE * step / s)]
-                    if (c != null) {
-                        val f = (1 shl (l - level)).toFloat()
-                        val r = c.rect
-                        sn.appendScaledTexture(c.texture, ScalingFilter.LINEAR, Rect().init(r.left * f - X0, r.top * f - Y0, r.width * f, r.height * f))
-                        found = true
-                        break
-                    }
-                    l++
-                }
-                // Beim Herauszoomen: feinere Kacheln verkleinert zeigen, bis die passenden fertig sind
-                if (!found && level > 0) {
-                    val fl = level - 1
-                    for (sy in 0..1) for (sx in 0..1) {
-                        val c = tiles[key(fl, tx * 2 + sx, ty * 2 + sy)] ?: continue
-                        val r = c.rect
-                        sn.appendScaledTexture(c.texture, ScalingFilter.LINEAR, Rect().init(r.left * 0.5f - X0, r.top * 0.5f - Y0, r.width * 0.5f, r.height * 0.5f))
-                    }
-                }
-            }
+            // freshFirst: aktuelle Kacheln (auch gröbere oder feinere) vor veralteten derselben Stufe
+            val passes = if (freshFirst) listOf(true, false) else listOf(false)
+            for (freshOnly in passes) if (drawTileOrFallback(sn, level, tx, ty, X0, Y0, freshOnly)) break
             sn.pop()
         }
         val node = sn.toNode() ?: return null
         return renderer.renderTexture(node, Rect().init(0f, 0f, W.toFloat(), H.toFloat()))
+    }
+
+    /** Kachel ([tx], [ty]) der Stufe [level] oder Ersatz aus einer gröberen bzw. feineren Stufe; [freshOnly] = keine veralteten. */
+    private fun drawTileOrFallback(sn: Snapshot, level: Int, tx: Int, ty: Int, X0: Int, Y0: Int, freshOnly: Boolean): Boolean {
+        val step = 1 shl level
+        fun get(k: Long) = tiles[k]?.takeIf { !freshOnly || k !in stale }
+        get(key(level, tx, ty))?.let { t ->
+            val r = t.rect
+            sn.appendTexture(t.texture, Rect().init((r.left - X0).toFloat(), (r.top - Y0).toFloat(), r.width.toFloat(), r.height.toFloat()))
+            return true
+        }
+        for (l in level + 1..MAX_LEVEL) {
+            val s = TILE shl l
+            val c = get(key(l, tx * TILE * step / s, ty * TILE * step / s)) ?: continue
+            val f = (1 shl (l - level)).toFloat()
+            val r = c.rect
+            sn.appendScaledTexture(c.texture, ScalingFilter.LINEAR, Rect().init(r.left * f - X0, r.top * f - Y0, r.width * f, r.height * f))
+            return true
+        }
+        // Beim Herauszoomen: feinere Kacheln verkleinert zeigen, bis die passenden fertig sind
+        if (level == 0) return false
+        val fl = level - 1
+        val finer = (0..3).mapNotNull { i -> get(key(fl, tx * 2 + i % 2, ty * 2 + i / 2)) }
+        if (finer.isEmpty()) return false
+        for (c in finer) {
+            val r = c.rect
+            sn.appendScaledTexture(c.texture, ScalingFilter.LINEAR, Rect().init(r.left * 0.5f - X0, r.top * 0.5f - Y0, r.width * 0.5f, r.height * 0.5f))
+        }
+        return true
     }
 
     /** Textur einer Kachel; [rect] = gerenderter Bereich in Pixeln der Stufe, mit [PAD] Rand zu den Nachbarn. */
@@ -610,6 +668,7 @@ class CanvasView : Widget {
         val gen = generation
         val w = docW; val h = docH
         Engine.call({
+            val t0 = System.nanoTime()
             val byLevel = batch.groupBy { unkey(it).first }
             val out = ArrayList<Triple<Long, IntRect, ByteArray>>()
             for ((level, keys) in byLevel) {
@@ -621,15 +680,26 @@ class CanvasView : Widget {
                 }
                 var area = rects[0]
                 for (r in rects) area = area.union(r)
-                Compositor.prepare(s.doc, step, area)
                 val pf = proof; val gw = gamutWarning
                 val view = channelView
                 // Alphakanal: Graustufen aus der passenden Verkleinerungsstufe (im Engine-Thread vorbereitet)
                 val alpha = if (view >= ALPHA_VIEW) s.doc.channels.getOrNull(view - ALPHA_VIEW)?.grid?.let { if (level > 0) it.mip(level, scalar = true) else it } else null
+                // Grafikkarte: zusammenhängende Kacheln in einem Durchgang (dann zerschneiden), verstreute
+                // (z. B. der Ring um die Ansicht) einzeln – sonst würde viel Unsichtbares mitgerechnet
+                val sum = rects.sumOf { it.width.toLong() * it.height }
+                val together = area.width.toLong() * area.height <= sum * 2
+                val whole = if (alpha == null && together) GpuRender.render(s.doc, area, step) else null
+                val single = if (alpha == null && !together) rects.map { GpuRender.render(s.doc, it, step) ?: return@map null } else null
+                val gpuDone = whole != null || (single != null && single.all { it != null })
+                if (!gpuDone && alpha == null) Compositor.prepare(s.doc, step, area)
                 Parallel.bands(keys.size, TILE.toLong() * TILE * 40, compute = { i ->
                     val px = if (alpha != null) IntArray(rects[i].width * rects[i].height).also { a ->
                         alpha.readRect(rects[i], a)
                         for (k in a.indices) { val g = a[k] and 0xFF; a[k] = (0xFF shl 24) or (g shl 16) or (g shl 8) or g }
+                    } else if (single != null && single[i] != null) single[i]!!
+                    else if (whole != null) IntArray(rects[i].width * rects[i].height).also { t ->
+                        val r = rects[i]
+                        for (y in 0 until r.height) System.arraycopy(whole, (r.top - area.top + y) * area.width + (r.left - area.left), t, y * r.width, r.width)
                     } else Compositor.renderArgbSampled(s.doc, rects[i], step)
                     if (alpha == null) pf?.apply(px, gw && pf.supportsGamutWarning)
                     if (view in 1..3) {
@@ -639,6 +709,7 @@ class CanvasView : Widget {
                     toBytes(px)
                 }, consume = { i, bytes -> out += Triple(keys[i], rects[i], bytes) })
             }
+            if (RENDER_STATS) println("Anzeige: ${batch.size} Kacheln in ${(System.nanoTime() - t0) / 1_000_000} ms (${if (GpuRender.fast) "Grafikkarte" else "Prozessor"})")
             out
         }) { res ->
             rendering = false
@@ -656,6 +727,8 @@ class CanvasView : Widget {
 
     companion object {
         const val TILE = 256
+        /** `PG_RENDER_STATS=1`: Dauer jedes Anzeige-Durchgangs ausgeben. */
+        private val RENDER_STATS = System.getenv("PG_RENDER_STATS") != null
         const val ALPHA_VIEW = 100
         const val CHECK = 8
         const val PAD = 4

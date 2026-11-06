@@ -23,6 +23,8 @@ class LayerStyleDialog(
     initial: LayerEffects,
     private val onPreview: (LayerEffects) -> Unit,
     private val onFinish: (Boolean) -> Unit,
+    /** Gedrückt halten zum Vergleichen (true = vorher zeigen). */
+    private val onCompare: ((Boolean) -> Unit)? = null,
 ) {
     private val dialog = org.gnome.adw.Dialog()
     private val params = Box(Orientation.VERTICAL, 10).apply { marginStart = 18; marginEnd = 18; marginTop = 12; marginBottom = 18 }
@@ -41,6 +43,15 @@ class LayerStyleDialog(
         val header = org.gnome.adw.HeaderBar().apply { showEndTitleButtons = false; showStartTitleButtons = false }
         header.packStart(Button.withLabel(tr("Abbrechen")).apply { onClicked { finish(false) } })
         header.packEnd(Button.withLabel(tr("OK")).apply { addCssClass("suggested-action"); onClicked { finish(true) } })
+        if (onCompare != null) header.packEnd(Button.withLabel(tr("Vorher")).apply {
+            addCssClass("flat")
+            tooltipText = tr("Gedrückt halten, um den Stand vorher zu sehen")
+            val hold = org.gnome.gtk.GestureClick().apply { propagationPhase = org.gnome.gtk.PropagationPhase.CAPTURE }
+            hold.onPressed { _, _, _ -> onCompare(true) }
+            hold.onReleased { _, _, _ -> onCompare(false) }
+            hold.onStopped { onCompare(false) }
+            addController(hold)
+        })
 
         for ((i, e) in LayerStyles.effects.withIndex()) {
             val check = CheckButton().apply {

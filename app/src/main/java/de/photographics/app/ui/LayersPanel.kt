@@ -57,6 +57,8 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Gradient
 import androidx.compose.material.icons.filled.Contrast
 import androidx.compose.material.icons.filled.FilterFrames
+import androidx.compose.material.icons.filled.CropSquare
+import de.photographics.app.SmartFilterItem
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Tune
@@ -89,6 +91,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -124,6 +127,20 @@ fun LayersPanel(
     onAddAdjustment: () -> Unit = {},
 ) {
     var renameTarget by remember { mutableStateOf<LayerItem?>(null) }
+    // Smartobjekt: Datei für „Inhalt ersetzen“ wählen bzw. Ziel für „Inhalt exportieren“
+    var smartTarget by remember { mutableStateOf<Int?>(null) }
+    val replaceLauncher = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        val id = smartTarget; smartTarget = null
+        if (uri != null && id != null) vm.replaceSmartContents(id, uri)
+    }
+    val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("image/vnd.adobe.photoshop")) { uri ->
+        val id = smartTarget; smartTarget = null
+        if (uri != null && id != null) vm.exportSmartContents(id, uri)
+    }
+    val smartActions = SmartActions(
+        replace = { id -> smartTarget = id; replaceLauncher.launch(OPEN_TYPES) },
+        export = { item -> smartTarget = item.id; exportLauncher.launch(item.name + ".psd") },
+    )
     var styleTarget by remember { mutableStateOf<Pair<Int, de.photographics.core.doc.LayerEffects>?>(null) }
     val openStyle = { id: Int -> vm.openLayerStyle(id) { styleTarget = id to it } }
     val active = state.layers.firstOrNull { it.id == state.activeLayerId }
@@ -247,6 +264,7 @@ fun LayersPanel(
                             vm = vm,
                             onRename = { renameTarget = item },
                             onStyle = { openStyle(item.id) },
+                            smart = smartActions,
                         )
                     }
                 }
@@ -274,7 +292,7 @@ fun LayersPanel(
         RenameDialog(t.name, onRename = { vm.renameLayer(t.id, it); renameTarget = null }, onDismiss = { renameTarget = null })
     }
     styleTarget?.let { (id, fx) ->
-        LayerStyleDialog(fx, onPreview = { vm.previewLayerStyle(id, it) }, onFinish = { vm.finishLayerStyle(id, it); styleTarget = null })
+        LayerStyleDialog(fx, onPreview = { vm.previewLayerStyle(id, it) }, onFinish = { vm.finishLayerStyle(id, it); styleTarget = null }, onCompare = { vm.compare(it) })
     }
 }
 
@@ -380,7 +398,129 @@ private fun PropertySlider(label: String, value: Float, onDone: () -> Unit, onCh
 }
 
 @Composable
-private fun LayerRow(item: LayerItem, selected: Boolean, maskTargeted: Boolean, vm: EditorViewModel, onRename: () -> Unit, onStyle: () -> Unit) {
+private fun LayerRow(item: LayerItem, selected: Boolean, maskTargeted: Boolean, vm: EditorViewModel, onRename: () -> Unit, onStyle: () -> Unit, smart: SmartActions) {
+    Column(Modifier.fillMaxWidth()) {
+        LayerRowMain(item, selected, maskTargeted, vm, onRename, onStyle, smart)
+        if (item.smartFilters.isNotEmpty()) SmartFilterRows(item, vm)
+    }
+}
+
+/**
+ * Smartfilter unter dem Smartobjekt (wie Photoshop): Kopfzeile „Smartfilter“ mit Augensymbol und
+ * Filtermaske, darunter die Filter – der zuletzt angewendete oben. Antippen: nachregeln.
+ */
+@Composable
+private fun SmartFilterRows(item: LayerItem, vm: EditorViewModel) {
+    val cs = MaterialTheme.colorScheme
+    val state by vm.state.collectAsState()
+    var blending by remember { mutableStateOf<Int?>(null) }
+    Column(Modifier.fillMaxWidth().padding(start = (56 + item.depth * 20).dp, end = 4.dp, bottom = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { vm.changeSmartFilters(item.id) { ed, l -> ed.setSmartFiltersVisible(l, !item.smartFiltersVisible) } }, modifier = Modifier.size(36.dp)) {
+                Icon(if (item.smartFiltersVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff, tr("Alle Smartfilter ein-/ausblenden"), tint = cs.onSurfaceVariant)
+            }
+            if (item.filterMask) {
+                // Filtermaske wie die Ebenenmaske: Antippen = darauf malen
+                val targeted = item.id == state.activeLayerId && state.paintTarget == PaintTarget.FILTER_MASK
+                Box(Modifier.size(28.dp).clip(RoundedCornerShape(6.dp))
+                    .background(if (targeted) cs.primary else cs.surfaceVariant)
+                    .clickable { vm.selectLayer(item.id); vm.setPaintTarget(PaintTarget.FILTER_MASK) }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.CropSquare, tr("Filtermaske – antippen, um darauf zu malen"), Modifier.size(18.dp), tint = if (targeted) cs.onPrimary else cs.onSurfaceVariant)
+                }
+            } else Icon(Icons.Filled.FilterFrames, null, Modifier.size(18.dp), tint = cs.onSurfaceVariant)
+            Text(tr("Smartfilter"), Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+            var menu by remember { mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { menu = true }, modifier = Modifier.size(36.dp)) { Icon(Icons.Filled.MoreVert, tr("Smartfilter-Optionen")) }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text(if (item.filterMask) tr("Filtermaske löschen") else tr("Filtermaske hinzufügen")) }, onClick = {
+                        menu = false; vm.changeSmartFilters(item.id) { ed, l -> ed.setFilterMask(l, !item.filterMask) }
+                        vm.setPaintTarget(if (item.filterMask) PaintTarget.PIXELS else PaintTarget.FILTER_MASK)
+                    })
+                    if (item.filterMask) DropdownMenuItem(text = { Text(tr("Filtermaske umkehren")) }, onClick = {
+                        menu = false; vm.changeSmartFilters(item.id) { ed, l -> ed.invertFilterMask(l) }
+                    })
+                    DropdownMenuItem(text = { Text(tr("Filtermaske aus Auswahl")) }, onClick = {
+                        menu = false; vm.changeSmartFilters(item.id) { ed, l -> ed.filterMaskFromSelection(l) }
+                        vm.setPaintTarget(PaintTarget.FILTER_MASK)
+                    })
+                }
+            }
+        }
+        val n = item.smartFilters.size
+        for (i in n - 1 downTo 0) {
+            val f = item.smartFilters[i]
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                    .clickable(enabled = f.editable) { vm.editSmartFilter(item.id, i) { _, _ -> } }
+                    .padding(start = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = {
+                    vm.changeSmartFilters(item.id) { ed, l -> l.smartFilters.filters.getOrNull(i)?.let { sf -> ed.updateSmartFilter(l, i, sf.copy(enabled = !sf.enabled), if (sf.enabled) tr("Smartfilter ausblenden") else tr("Smartfilter einblenden")) } }
+                }, modifier = Modifier.size(36.dp)) {
+                    Icon(if (f.enabled) Icons.Filled.Visibility else Icons.Filled.VisibilityOff, tr("Filter ein-/ausblenden"), tint = cs.onSurfaceVariant)
+                }
+                Column(Modifier.weight(1f).padding(start = 4.dp)) {
+                    Text(f.label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium,
+                        color = if (f.enabled && item.smartFiltersVisible) cs.onSurface else cs.outline)
+                    if (f.blend != BlendMode.NORMAL || f.opacity < 1f)
+                        Text("${f.blend.label} · ${(f.opacity * 100).roundToInt()} %", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                }
+                var menu by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(onClick = { menu = true }, modifier = Modifier.size(36.dp)) { Icon(Icons.Filled.MoreVert, tr("Smartfilter-Optionen")) }
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        @Composable
+                        fun act(label: String, f2: () -> Unit) = DropdownMenuItem(text = { Text(label) }, onClick = { menu = false; f2() })
+                        if (f.editable) act(tr("Filter nachregeln …")) { vm.editSmartFilter(item.id, i) { _, _ -> } }
+                        act(tr("Fülloptionen …")) { blending = i }
+                        if (i < n - 1) act(tr("Nach oben")) { vm.changeSmartFilters(item.id) { ed, l -> ed.moveSmartFilter(l, i, i + 1) } }
+                        if (i > 0) act(tr("Nach unten")) { vm.changeSmartFilters(item.id) { ed, l -> ed.moveSmartFilter(l, i, i - 1) } }
+                        act(tr("Smartfilter löschen")) { vm.changeSmartFilters(item.id) { ed, l -> ed.removeSmartFilter(l, i) } }
+                    }
+                }
+            }
+        }
+    }
+    blending?.let { i ->
+        val f = item.smartFilters.getOrNull(i) ?: run { blending = null; return@let }
+        SmartFilterBlendingDialog(f, onDismiss = { blending = null }) { mode, opacity ->
+            blending = null
+            vm.changeSmartFilters(item.id) { ed, l -> l.smartFilters.filters.getOrNull(i)?.let { sf -> ed.updateSmartFilter(l, i, sf.copy(blendMode = mode, opacity = opacity), tr("Fülloptionen")) } }
+        }
+    }
+}
+
+/** Fülloptionen eines Smartfilters: Mischmodus und Deckkraft. */
+@Composable
+private fun SmartFilterBlendingDialog(f: SmartFilterItem, onDismiss: () -> Unit, onOk: (BlendMode, Float) -> Unit) {
+    var mode by remember { mutableStateOf(f.blend) }
+    var opacity by remember { mutableStateOf(f.opacity) }
+    var open by remember { mutableStateOf(false) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(tr("Fülloptionen: {0}", f.label)) },
+        text = {
+            Column {
+                Text(tr("Modus"), style = MaterialTheme.typography.labelLarge)
+                Box {
+                    androidx.compose.material3.OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) { Text(mode.label) }
+                    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                        for (m in BlendMode.layerModes) DropdownMenuItem(text = { Text(m.label) }, onClick = { mode = m; open = false })
+                    }
+                }
+                Text(tr("Deckkraft: {0} %", (opacity * 100).roundToInt()), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
+                androidx.compose.material3.Slider(opacity, { opacity = it }, valueRange = 0f..1f)
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { onOk(mode, opacity) }) { Text(tr("OK")) } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text(tr("Abbrechen")) } },
+    )
+}
+
+@Composable
+private fun LayerRowMain(item: LayerItem, selected: Boolean, maskTargeted: Boolean, vm: EditorViewModel, onRename: () -> Unit, onStyle: () -> Unit, smart: SmartActions) {
     var menu by remember { mutableStateOf(false) }
     val cs = MaterialTheme.colorScheme
     Row(
@@ -468,9 +608,20 @@ private fun LayerRow(item: LayerItem, selected: Boolean, maskTargeted: Boolean, 
                 act(if (item.lockTransparency) tr("Transparenz freigeben") else tr("Transparenz fixieren")) { vm.toggleLockTransparency(item.id) }
                 act(tr("In Gruppe verschieben")) { vm.groupActive() }
                 when (item.type) {
-                    LayerType.PIXEL -> act(tr("In Smartobjekt konvertieren")) { vm.convertToSmart(item.id) }
-                    LayerType.TEXT -> { act(tr("Text bearbeiten")) { vm.editTextLayer(item.id) }; act(tr("Ebene rastern")) { vm.rasterizeLayer(item.id) } }
-                    LayerType.SMART -> act(tr("Ebene rastern")) { vm.rasterizeLayer(item.id) }
+                    LayerType.PIXEL, LayerType.SHAPE, LayerType.GROUP -> act(tr("In Smartobjekt konvertieren")) { vm.convertToSmart(item.id) }
+                    LayerType.TEXT -> {
+                        act(tr("Text bearbeiten")) { vm.editTextLayer(item.id) }; act(tr("Ebene rastern")) { vm.rasterizeLayer(item.id) }
+                        act(tr("In Smartobjekt konvertieren")) { vm.convertToSmart(item.id) }
+                    }
+                    LayerType.SMART -> {
+                        act(tr("Inhalt bearbeiten")) { vm.editSmartContents(item.id) }
+                        act(tr("Neues Smartobjekt durch Kopie")) { vm.duplicateSmartObject(item.id) }
+                        act(tr("In Ebenen umwandeln")) { vm.convertSmartToLayers(item.id) }
+                        act(tr("Inhalt ersetzen …")) { smart.replace(item.id) }
+                        act(tr("Inhalt exportieren …")) { smart.export(item) }
+                        act(tr("Transformation zurücksetzen")) { vm.resetSmartTransform(item.id) }
+                        act(tr("Ebene rastern")) { vm.rasterizeLayer(item.id) }
+                    }
                     LayerType.ADJUSTMENT -> act(tr("Einstellungen bearbeiten")) { vm.openAdjustment(item.id) }
                     else -> {}
                 }
@@ -506,3 +657,6 @@ private fun Thumb(bmp: ImageBitmap?, highlighted: Boolean, dimmed: Boolean = fal
         }
     }
 }
+
+/** Aktionen der Smartobjekt-Einträge, die eine Dateiauswahl brauchen (Launcher liegen im Bedienfeld). */
+private class SmartActions(val replace: (Int) -> Unit, val export: (LayerItem) -> Unit)

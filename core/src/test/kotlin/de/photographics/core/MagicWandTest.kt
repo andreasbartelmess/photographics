@@ -42,6 +42,33 @@ class MagicWandTest {
         assertEquals(0, sel.at(79, 5)); assertEquals(0, sel.at(121, 5))
     }
 
+    /** Bitweise Füllung = einfache 4er-Nachbarschaftsfüllung, auf krummen Breiten über Wortgrenzen. */
+    @Test
+    fun bitFillMatchesNaiveFloodFill() {
+        val rnd = java.util.Random(7)
+        for ((w, h) in listOf(1 to 1, 63 to 5, 64 to 64, 65 to 70, 130 to 97, 301 to 260)) {
+            val px = IntArray(w * h) { if (rnd.nextInt(100) < 38) red else blue }
+            val g = TileGrid.fromPixels(w, h, px)
+            val sx = rnd.nextInt(w); val sy = rnd.nextInt(h)
+            val want = BooleanArray(w * h)
+            val st = ArrayDeque<Int>(); st.add(sy * w + sx); want[sy * w + sx] = true
+            while (st.isNotEmpty()) {
+                val i = st.removeLast(); val x = i % w; val y = i / w
+                for ((nx, ny) in listOf(x - 1 to y, x + 1 to y, x to y - 1, x to y + 1)) {
+                    if (nx !in 0 until w || ny !in 0 until h) continue
+                    val j = ny * w + nx
+                    if (!want[j] && px[j] == px[i]) { want[j] = true; st.add(j) }
+                }
+            }
+            val sel = MagicWand.select(g, sx, sy, 0, contiguous = true)
+            val all = MagicWand.select(g, sx, sy, 0, contiguous = false)
+            for (i in 0 until w * h) {
+                assertEquals("$w×$h bei ${i % w},${i / w}", if (want[i]) 255 else 0, sel.at(i % w, i / w))
+                assertEquals(if (px[i] == px[sy * w + sx]) 255 else 0, all.at(i % w, i / w))
+            }
+        }
+    }
+
     @Test
     fun outlinesOfRectangleAndRing() {
         val w = 50; val h = 40

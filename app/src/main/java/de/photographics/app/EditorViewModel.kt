@@ -19,6 +19,7 @@ import de.photographics.core.doc.AdjustmentLayer
 import de.photographics.core.doc.Document
 import de.photographics.core.doc.RasterLayer
 import de.photographics.core.doc.SmartLayer
+import de.photographics.core.doc.with
 import de.photographics.core.doc.TextLayer
 import de.photographics.core.doc.TextRasterizer
 import de.photographics.core.doc.TextStyle
@@ -156,7 +157,14 @@ data class LayerItem(
     val maskLinked: Boolean = true,
     /** Basis einer Schnittmaske (die Ebene darüber ist beschnitten) – Name wird unterstrichen. */
     val clipBase: Boolean = false,
+    /** Smartfilter (Smartobjekte), unten zuerst angewendet; [smartFiltersVisible] = Augensymbol „Smartfilter“. */
+    val smartFilters: List<SmartFilterItem> = emptyList(),
+    val smartFiltersVisible: Boolean = true,
+    val filterMask: Boolean = false,
 )
+
+/** Ein Smartfilter in der Ebenenliste. */
+data class SmartFilterItem(val label: String, val enabled: Boolean, val blend: BlendMode, val opacity: Float, val editable: Boolean, val gallery: Boolean)
 
 /** Seitenverhältnis beim Freistellen; [w]/[h] = Breite zu Höhe (Querformat), null = frei. */
 data class CropAspect(val label: String, val w: Double, val h: Double)
@@ -254,6 +262,10 @@ data class EditorUiState(
     val canUndo: Boolean = false,
     /** Änderungen seit dem letzten Speichern/Öffnen. */
     val unsaved: Boolean = false,
+    /** „Inhalt bearbeiten“ läuft: Name des Dokuments, zu dem das Smartobjekt gehört (sonst null). */
+    val editingContentsOf: String? = null,
+    /** Beim Bearbeiten eines Inhalts: noch nicht in das Smartobjekt übernommene Änderungen. */
+    val contentsUnsaved: Boolean = false,
     /** Datei, in die Strg+S direkt speichert (null = „Speichern unter“ nötig). */
     val saveTarget: String? = null,
     /** Automatische Sicherung vom letzten Mal, über die noch entschieden werden muss. */
@@ -295,6 +307,10 @@ data class EditorUiState(
     /** Pixel des Dokuments pro Pixel der Anzeige-Bitmap (>1 bei sehr großen Bildern). */
     val displayScale: Int = 1,
     val filterActive: String? = null,
+    /** Smartfilter zum Nachregeln öffnen (Filter, gespeicherte Werte); die Oberfläche übernimmt es ins Filter-Panel. */
+    val smartFilterOpen: Pair<de.photographics.core.filters.FilterSpec, FloatArray>? = null,
+    /** Galerie-Smartfilter zum Nachregeln öffnen: Effektstapel für die Filtergalerie. */
+    val galleryEditOpen: List<de.photographics.core.filters.GalleryEffect>? = null,
     /** Nur der Stift malt; Finger zoomen/verschieben (Handballen-Schutz). */
     val stylusOnly: Boolean = false,
     val stylusSeen: Boolean = false,
@@ -375,6 +391,8 @@ data class IccEntry(val fileName: String, val description: String, val colorSpac
 class EditorViewModel(app: Application) : AndroidViewModel(app) {
     /** Alle Zugriffe auf Dokument und Editor laufen über diesen einen Thread. */
     private val engine = Executors.newSingleThreadExecutor { r -> Thread(r, "photographics-engine") }.asCoroutineDispatcher()
+    /** Grafikkarte für die Anzeige; ihr GL-Kontext gehört dem Engine-Thread. */
+    private val gpu = de.photographics.app.gpu.GpuState.create()
     /** Automatische Sicherung (siehe [autosaveNow]). */
     private val recovery = de.photographics.core.editor.Recovery(java.io.File(app.filesDir, "recovery"))
 
@@ -482,9 +500,13 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
      * Dokument mit den echten Render-Wegen – Gesamtansicht, Verschieben, Deckkraft-Regler,
      * Einstellungsebene, Transformieren, Pinselstrich – je Einzelbild gemessen.
      */
-    fun runBenchmark(megapixel: Int) = onEngine {
+    fun runBenchmark(megapixel: Int, gpu: Boolean = true) = onEngine {
         val tag = "PG-Bench"
         fun log(s: String) = android.util.Log.i(tag, s)
+        // Vergleichslauf ohne Grafikkarte: PG_GPU=0 tools/device_bench.sh
+        this.gpu.enabled = gpu && settings.value.gpuCompose
+        if (!this.gpu.enabled) this.gpu.close() else this.gpu.warmUp()
+        log("Grafikkarte: ${if (this.gpu.enabled) this.gpu.renderer ?: this.gpu.broken else "aus"}")
         val w = kotlin.math.sqrt(megapixel * 1_000_000 * 1.5).toInt(); val h = w * 2 / 3
         log("Start: ${w}×$h (${w.toLong() * h / 1_000_000} MP), ${Runtime.getRuntime().availableProcessors()} Kerne")
         val doc = de.photographics.core.doc.Document(w, h)
@@ -515,6 +537,18 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             log("%-34s Ø %4d ms  max %4d ms  (erstes %d ms)".format(label, t.drop(1).average().toInt(), t.maxOrNull() ?: 0, t[0]))
         }
         frames(tr("Gesamtansicht neu zeichnen"), 3) { renderNow(null) }
+        run {
+            val sc = displayScale
+            for (l in this.gpu.profile(doc, IntRect(0, 0, (w + sc - 1) / sc, (h + sc - 1) / sc), sc, check = true)) log("GPU Gesamtansicht 1/$sc, $l")
+            for (l in this.gpu.profile(doc, IntRect(w / 2 - 1280, h / 2 - 800, w / 2 + 1280, h / 2 + 800), 1)) log("GPU Ausschnitt 2560×1600 bei 100 %, $l")
+            // Wie wächst die Zeit mit den Ebenen? (nur die erste Variante)
+            val all = doc.root.children.toList()
+            for (k in 1..all.size) {
+                all.forEachIndexed { i, l -> l.visible = i < k }
+                log("GPU 100 % mit $k Ebene(n): " + this.gpu.profile(doc, IntRect(w / 2 - 1280, h / 2 - 800, w / 2 + 1280, h / 2 + 800), 1).first())
+            }
+            all.forEach { it.visible = true }
+        }
         run {
             val sc = displayScale; val bw = (w + sc - 1) / sc; val bh = (h + sc - 1) / sc
             val px = IntArray(bw * 64)
@@ -617,6 +651,8 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         newDocument(2000, 1500, transparent = false, showEditor = false)
         loadLutLibrary()
         loadIccLibrary()
+        gpu.enabled = settings.value.gpuCompose
+        onEngine { gpu.warmUp(); if (BuildConfig.DEBUG) android.util.Log.d("PG-Render", "Grafikkarte: ${gpu.renderer ?: gpu.broken}") }
     }
 
     private fun onEngine(block: suspend () -> Unit) = viewModelScope.launch(engine) {
@@ -745,27 +781,81 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun loadRecentThumb(e: RecentFiles.Entry): Bitmap? = recentFiles.loadThumb(e)
     fun showStartScreen(show: Boolean) = _state.update { it.copy(showStart = show, recent = recentFiles.list()) }
 
+    /** Datei platzieren wie Photoshop: als eingebettetes Smartobjekt, zu große Bilder eingepasst. */
     fun placeAsLayer(uri: Uri) = withEditor { ed ->
         busy(true)
         try {
-            val cr = getApplication<Application>().contentResolver
-            val name = ImageIO.displayName(cr, uri).substringBeforeLast('.')
-            val (grid, profile) = ImageIO.readAsGrid(cr, uri, getApplication<Application>().cacheDir, settings.value.workingRgb.profile)
-            // Wie Photoshop: platzierte Bilder in das Dokumentprofil umrechnen
-            de.photographics.core.color.ColorTransform.rgb(profile, ed.doc.colorProfile, settings.value.conversionIntent, settings.value.conversionBpc)?.let { conv ->
-                val e = grid.extent; val row = IntArray(e.width)
-                for (y in e.top until e.bottom) {
-                    val r = IntRect(e.left, y, e.right, y + 1)
-                    grid.readRect(r, row)
-                    for (i in row.indices) { val c = row[i]; if ((c ushr 24) != 0) row[i] = (c and 0xFF000000.toInt()) or conv.map(c and 0xFFFFFF) }
-                    grid.writeRect(r, row)
-                }
-            }
-            ed.placeImage(name, grid)
+            val (name, grid) = importImage(ed, uri)
+            ed.placeSmartObject(name, grid)
             fullRefresh()
         } finally {
             busy(false)
         }
+    }
+
+    /** Smartobjekt [id]: Inhalt durch die Datei [uri] ersetzen (Lage, Smartfilter und Ebenenstil bleiben). */
+    fun replaceSmartContents(id: Int, uri: Uri) = withEditor { ed ->
+        val l = ed.doc.findLayer(id) as? SmartLayer ?: return@withEditor
+        busy(true)
+        try {
+            val (_, grid) = importImage(ed, uri)
+            ed.replaceSmartContents(l, grid)
+            fullRefresh()
+        } catch (e: Exception) {
+            message(tr("Datei lässt sich nicht öffnen: {0}", e.message ?: e.javaClass.simpleName))
+        } finally {
+            busy(false)
+        }
+    }
+
+    /** Smartobjekt [id]: Inhalt (ohne Transformation und Smartfilter) als PSD nach [uri] speichern. */
+    fun exportSmartContents(id: Int, uri: Uri) = withEditor { ed ->
+        val l = ed.doc.findLayer(id) as? SmartLayer ?: return@withEditor
+        busy(true)
+        try {
+            val out = ed.editableContents(l)
+            val app = getApplication<Application>()
+            ImageIO.savePsd(app.contentResolver, uri, out, java.io.File(app.cacheDir, "psd"))
+            message(tr("Inhalt exportiert: {0}", ImageIO.displayName(app.contentResolver, uri)))
+        } catch (e: Exception) {
+            message(tr("Export fehlgeschlagen") + ": " + (e.message ?: e.javaClass.simpleName))
+        } finally {
+            busy(false)
+        }
+    }
+
+    fun duplicateSmartObject(id: Int) = withEditor { ed ->
+        (ed.doc.findLayer(id) as? SmartLayer)?.let { ed.duplicateSmartObject(it) }
+        fullRefresh()
+    }
+
+    fun convertSmartToLayers(id: Int) = withEditor { ed ->
+        val l = ed.doc.findLayer(id) as? SmartLayer ?: return@withEditor
+        if (!ed.convertSmartToLayers(l)) message(tr("Nur möglich, solange das Smartobjekt unverzerrt in Originalgröße liegt und keine Smartfilter hat – sonst Rastern."))
+        fullRefresh()
+    }
+
+    fun resetSmartTransform(id: Int) = withEditor { ed ->
+        (ed.doc.findLayer(id) as? SmartLayer)?.let { ed.resetSmartTransform(it) }
+        fullRefresh()
+    }
+
+    /** Bild aus [uri] (Name, Pixel) in das Dokumentprofil umgerechnet. */
+    private fun importImage(ed: Editor, uri: Uri): Pair<String, TileGrid> {
+        val cr = getApplication<Application>().contentResolver
+        val name = ImageIO.displayName(cr, uri).substringBeforeLast('.')
+        val (grid, profile) = ImageIO.readAsGrid(cr, uri, getApplication<Application>().cacheDir, settings.value.workingRgb.profile)
+        // Wie Photoshop: platzierte Bilder in das Dokumentprofil umrechnen
+        de.photographics.core.color.ColorTransform.rgb(profile, ed.doc.colorProfile, settings.value.conversionIntent, settings.value.conversionBpc)?.let { conv ->
+            val e = grid.extent; val row = IntArray(e.width)
+            for (y in e.top until e.bottom) {
+                val r = IntRect(e.left, y, e.right, y + 1)
+                grid.readRect(r, row)
+                for (i in row.indices) { val c = row[i]; if ((c ushr 24) != 0) row[i] = (c and 0xFF000000.toInt()) or conv.map(c and 0xFFFFFF) }
+                grid.writeRect(r, row)
+            }
+        }
+        return name to grid
     }
 
     /** Formate, in die Strg+S direkt zurückspeichern kann (mit Ebenen, verlustfrei). */
@@ -786,6 +876,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
      * [then] läuft nach erfolgreichem Speichern auf dem Hauptthread.
      */
     fun save(then: (() -> Unit)? = null): Boolean {
+        if (parents.isNotEmpty()) { applySmartContents(then); return true }
         val (uri, fmt) = docTarget ?: return false
         writeDocument(uri, fmt, inPlace = true, then = then)
         return true
@@ -885,15 +976,17 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun onBackground() { autosaveJob?.cancel(); onEngine { autosaveNow() } }
 
     private fun autosaveNow() {
-        val ed = editor ?: return
+        // Beim Bearbeiten eines Smartobjekt-Inhalts das eigentliche Dokument sichern
+        val ed = parents.firstOrNull()?.editor ?: editor ?: return
         if (_state.value.recovery != null) return   // alte Sicherung noch nicht entschieden: nicht überschreiben
         if (ed.history.atSavedState && floating == null) { dropAutosave(); return }
         if (ed.history.changeCount == autosavedAt) return
         if (stroke != null) { scheduleAutosave(); return }   // mitten im Pinselstrich: später
         val app = getApplication<Application>()
         try {
-            val t = docTarget
-            recovery.write(ed.doc, _state.value.fileName, t?.first?.toString(), t?.second?.name, java.io.File(app.cacheDir, "psd-write"))
+            val root = parents.firstOrNull()
+            val t = if (root != null) root.docTarget else docTarget
+            recovery.write(ed.doc, root?.name ?: _state.value.fileName, t?.first?.toString(), t?.second?.name, java.io.File(app.cacheDir, "psd-write"))
             autosavedAt = ed.history.changeCount
         } catch (e: Exception) {
             if (e is CancellationException) throw e
@@ -940,14 +1033,14 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun discardRecovery() = onEngine { _state.update { it.copy(recovery = null) }; recovery.clear() }
 
     private fun setDocument(doc: Document, name: String, warnings: List<String>) {
+        // Neues Dokument während „Inhalt bearbeiten“: zurück zum eigentlichen Editor
+        if (parents.isNotEmpty()) { editor = parents.first().editor; parents.clear(); _state.update { it.copy(editingContentsOf = null) } }
         val ed = editor
         if (ed == null) editor = Editor(doc).also { e ->
             // Arbeitsvolume für ausgelagerte Verlaufsschritte (wie bei Photoshop)
             e.history.scratch = de.photographics.core.history.ScratchDisk(java.io.File(getApplication<Application>().cacheDir, "scratch"))
         } else ed.replaceDocument(doc)
-        thumbs.clear(); maskThumbs.clear()
-        stroke = null; cloneOffset = null; filterTx = null; floating = null; moveLayer = null
-        clearPreview()
+        resetTransient()
         // Anzeige-Bitmap auf max. ~4096 px Kantenlänge begrenzen
         displayScale = 1
         while (max(doc.width, doc.height) / displayScale > 4096) displayScale *= 2
@@ -965,6 +1058,76 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
         fullRefresh()
+    }
+
+    private fun resetTransient() {
+        thumbs.clear(); maskThumbs.clear()
+        stroke = null; cloneOffset = null; filterTx = null; floating = null; moveLayer = null
+        smartEdit = null; galleryTarget = null
+        clearPreview()
+    }
+
+    // ---------------------------------------------------------------- Inhalt bearbeiten (Smartobjekt)
+
+    /** Dokument, aus dem „Inhalt bearbeiten“ geöffnet wurde (Stapel: Smartobjekte in Smartobjekten). */
+    private class ParentDoc(val editor: Editor, val name: String, val docTarget: Pair<Uri, SaveFormat>?, val saveTarget: String?, @Volatile var layerId: Int)
+    private val parents = java.util.concurrent.CopyOnWriteArrayList<ParentDoc>()
+
+    /** Smartobjekt [id]: seinen Inhalt an Stelle des Dokuments bearbeiten (Photoshop: „Inhalt bearbeiten“). */
+    fun editSmartContents(id: Int) = withEditor { ed ->
+        val l = ed.doc.findLayer(id) as? SmartLayer ?: return@withEditor
+        endTransientEdits(ed)
+        val contents = ed.editableContents(l)
+        val s = _state.value
+        parents += ParentDoc(ed, s.fileName, docTarget, s.saveTarget, l.id)
+        docTarget = null
+        editor = Editor(contents).also { e ->
+            e.history.scratch = de.photographics.core.history.ScratchDisk(java.io.File(getApplication<Application>().cacheDir, "scratch-inhalt-${parents.size}"))
+        }
+        resetTransient()
+        _state.update { it.copy(fileName = l.name + ".psb", saveTarget = null, editingContentsOf = s.fileName, paintTarget = PaintTarget.PIXELS,
+            textEdit = null, transform = null, adjustEdit = null, filterActive = null, cropRect = null) }
+        setDocumentKeepHistory(contents)
+        refreshLayers()
+    }
+
+    /** Engine: laufende Vorschauen/Transformationen beenden, bevor das Dokument gewechselt wird. */
+    private suspend fun endTransientEdits(ed: Editor) {
+        stroke?.let { ed.endStroke(it) }; stroke = null
+        settleFloating(ed, commit = true)
+    }
+
+    /** „Inhalt bearbeiten“: den bearbeiteten Inhalt in das Smartobjekt übernehmen (Strg+S), Fenster bleibt offen. */
+    fun applySmartContents(then: (() -> Unit)? = null) = withEditor { ed -> applyContentsNow(ed); then?.let { withContext(kotlinx.coroutines.Dispatchers.Main) { it() } } }
+
+    private suspend fun applyContentsNow(ed: Editor) {
+        settleFloating(ed, commit = true)
+        val p = parents.lastOrNull() ?: return
+        val l = p.editor.doc.findLayer(p.layerId) as? SmartLayer ?: run { message(tr("Das Smartobjekt gibt es nicht mehr.")); return }
+        busy(true)
+        try {
+            p.layerId = p.editor.updateSmartContents(l, ed.doc).id
+            ed.history.markSaved()
+            message(tr("Inhalt in das Smartobjekt übernommen."))
+        } finally { busy(false) }
+        refreshLayers()
+    }
+
+    /** „Inhalt bearbeiten“ beenden: mit [apply] vorher übernehmen, sonst Änderungen verwerfen. */
+    fun closeSmartContents(apply: Boolean) = withEditor { ed ->
+        val p = parents.lastOrNull() ?: return@withEditor
+        endTransientEdits(ed)
+        if (apply && !ed.history.atSavedState) applyContentsNow(ed)
+        ed.history.clear()
+        parents.removeAt(parents.size - 1)
+        editor = p.editor
+        docTarget = p.docTarget
+        resetTransient()
+        _state.update { it.copy(fileName = p.name, saveTarget = p.saveTarget, editingContentsOf = parents.lastOrNull()?.name,
+            paintTarget = PaintTarget.PIXELS, textEdit = null, transform = null, adjustEdit = null, filterActive = null, cropRect = null) }
+        p.editor.doc.findLayer(p.layerId)?.let { p.editor.setActive(it) }
+        setDocumentKeepHistory(p.editor.doc)
+        refreshLayers()
     }
 
     // ---------------------------------------------------------------- Rendern
@@ -993,6 +1156,20 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         if (cw > 0 && ch > 0) bmp.setPixels(out, 0, ow, ox0, oy0, cw, ch)
     }
 
+    /**
+     * Engine: Bereich [r] (Dokument) der Anzeige-Bitmap [bmp] (Maßstab [s], Ursprung [ox]/[oy] in
+     * Pixeln der Bitmap) von der Grafikkarte. false: die Grafikkarte kann es nicht – dann der Prozessor.
+     */
+    private fun gpuToBitmap(doc: de.photographics.core.doc.Document, bmp: TiledBitmap, r: IntRect, s: Int, ox: Int = 0, oy: Int = 0): Boolean {
+        val out = (if (s == 1) r else IntRect(r.left / s, r.top / s, (r.right + s - 1) / s, (r.bottom + s - 1) / s))
+            .intersect(IntRect(ox, oy, ox + bmp.width, oy + bmp.height))
+        if (out.isEmpty) return true
+        val px = gpu.render(doc, out, s) ?: return false
+        applyProof(px)
+        bmp.setPixels(px, 0, out.width, out.left - ox, out.top - oy, out.width, out.height)
+        return true
+    }
+
     /** Rendert sofort (nur auf dem Engine-Thread aufrufen). */
     private fun renderNow(rect: IntRect?, notify: Boolean = true, withDetail: Boolean = true) {
         dropLiveBelow()
@@ -1009,7 +1186,9 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val t0 = System.nanoTime()
         // Streifenweise rendern (Höhe ein Vielfaches des Anzeigemaßstabs): nie ein Puffer in Dokumentgröße
         val cache = strokeCache
-        if (cache != null || r.width.toLong() * r.height < 500_000) {
+        if (cache == null && gpuToBitmap(doc, bmp, r, s)) {
+            // Grafikkarte: der ganze Bereich in einem Durchgang
+        } else if (cache != null || r.width.toLong() * r.height < 500_000) {
             // Kleine Bereiche und Pinselstriche (Render-Cache ist nicht threadsicher) direkt
             val bandH = maxOf(s, (RENDER_BAND_PIXELS / maxOf(1, r.width)) / s * s)
             var y0 = r.top
@@ -1074,6 +1253,10 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val old = settings.value
         settingsStore.update(f)
         val s = settings.value
+        if (s.gpuCompose != old.gpuCompose) {
+            gpu.enabled = s.gpuCompose
+            onEngine { if (!s.gpuCompose) gpu.close(); renderNow(null) }
+        }
         if (s.proofCondition != old.proofCondition || s.proofSimulatePaper != old.proofSimulatePaper || s.gamutWarningColor != old.gamutWarningColor ||
             s.proofIcc != old.proofIcc || s.proofIntent != old.proofIntent || s.proofBpc != old.proofBpc
         ) {
@@ -1243,6 +1426,18 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val area = (if (running) IntRect(r.left / step, r.top / step, (r.right + step - 1) / step, (r.bottom + step - 1) / step)
             else IntRect(ox, oy, ox + pw, oy + ph)).intersect(IntRect(ox, oy, ox + pw, oy + ph))
         if (area.isEmpty) { settleDirty = settleDirty.union(r); scheduleSettle(); return }
+        val onGpu = gpu.render(doc, area, step)
+        if (onGpu != null) {
+            // Grafikkarte: kein Zwischenbild der Ebenen darunter nötig
+            applyProof(onGpu)
+            pb.setPixels(onGpu, 0, area.width, area.left - ox, area.top - oy, area.width, area.height)
+            if (BuildConfig.DEBUG) android.util.Log.d("PG-Render", "Vorschau GPU ${area.width}x${area.height} (1/$step) ${(System.nanoTime() - t0) / 1_000_000} ms")
+            settleDirty = settleDirty.union(r)
+            DisplayWrites.flush()
+            _state.update { it.copy(previewBitmap = pb, previewRect = IntRect(ox * step, oy * step, (ox + pw) * step, (oy + ph) * step)) }; bumpRender()
+            scheduleSettle()
+            return
+        }
         Compositor.prepare(doc, step, area)
         val full = IntRect(ox, oy, ox + pw, oy + ph)
         val from = layer?.let { Compositor.liveSplit(doc, it) } ?: 0
@@ -1533,6 +1728,11 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         Compositor.prepare(doc, l, out)
         suspend fun renderPart(part: IntRect) {
             if (part.isEmpty) return
+            gpu.render(doc, part, l)?.let { px ->
+                applyProof(px)
+                bmp.setPixels(px, 0, part.width, part.left - out.left, part.top - out.top, part.width, part.height)
+                return
+            }
             val bandH = maxOf(1, 65_536 / maxOf(1, part.width))
             var y = part.top
             while (y < part.bottom) {
@@ -1577,6 +1777,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         if (a.isEmpty) return
         val ox = d.rect.left / l; val oy = d.rect.top / l
         val cache = strokeCache
+        if (cache == null && gpuToBitmap(doc, d.bitmap, a, l, ox, oy)) return
         if (cache != null) {
             // Render-Cache liefert volle Auflösung (nicht threadsicher): seriell, auf Detailstufe verkleinern
             val full = IntRect(a.left / l * l, a.top / l * l, minOf(doc.width, (a.right + l - 1) / l * l), minOf(doc.height, (a.bottom + l - 1) / l * l))
@@ -1651,6 +1852,12 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                     c.opacity, c.fillOpacity, c.blendMode, c.clipped, c.lockTransparency, c.mask != null,
                     c.mask?.enabled ?: false, c.kind, thumb, mThumb, type, detail,
                     maskLinked = c.mask?.linked ?: true, clipBase = clipBase,
+                    smartFilters = (c as? SmartLayer)?.smartFilters?.filters?.map { f ->
+                        SmartFilterItem(f.label, f.enabled, f.blendMode, f.opacity,
+                            f.gallery != null || de.photographics.core.filters.FilterCatalog.byId(f.filterId) != null, f.gallery != null)
+                    } ?: emptyList(),
+                    smartFiltersVisible = (c as? SmartLayer)?.smartFilters?.visible ?: true,
+                    filterMask = (c as? SmartLayer)?.smartFilters?.mask != null,
                 )
                 if (c is GroupLayer && c.expanded) walk(c, depth + 1)
             }
@@ -1666,9 +1873,14 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 layers = items, activeLayerId = floating?.takeIf { it.layer === doc.activeLayer }?.source?.id ?: doc.activeLayer?.id,
                 docWidth = doc.width, docHeight = doc.height,
                 canUndo = h.canUndo, canRedo = h.canRedo, undoLabel = h.undoLabel, redoLabel = h.redoLabel,
-                unsaved = !h.atSavedState || floating != null,
+                unsaved = !h.atSavedState || floating != null || parents.any { p -> !p.editor.history.atSavedState },
+                contentsUnsaved = parents.isNotEmpty() && (!h.atSavedState || floating != null),
                 hasSelection = sel != null, selectionOutlines = sel?.outlines ?: emptyList(),
-                paintTarget = if (doc.activeLayer?.mask == null) PaintTarget.PIXELS else it.paintTarget,
+                paintTarget = when (it.paintTarget) {
+                    PaintTarget.MASK -> if (doc.activeLayer?.mask == null) PaintTarget.PIXELS else PaintTarget.MASK
+                    PaintTarget.FILTER_MASK -> if ((doc.activeLayer as? SmartLayer)?.smartFilters?.mask == null) PaintTarget.PIXELS else PaintTarget.FILTER_MASK
+                    PaintTarget.PIXELS -> PaintTarget.PIXELS
+                },
                 workPath = doc.workPath, paths = doc.paths, channelNames = doc.channels.map { c -> c.name }, bitDepth = doc.bitDepth,
                 shapePath = (doc.activeLayer as? de.photographics.core.doc.ShapeLayer)?.docPath(),
                 selectedPath = it.selectedPath.takeIf { i -> i < doc.paths.size } ?: -1,
@@ -2041,15 +2253,15 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val s = _state.value.let { if (toolOverride != null) it.copy(tool = toolOverride) else it }
         withEditor { ed ->
             val tool = createTool(s, x, y) ?: return@withEditor
-            val target = if (s.paintTarget == PaintTarget.MASK && tool.supportsMask) PaintTarget.MASK else PaintTarget.PIXELS
             val layer = ed.doc.activeLayer
+            val target = paintTargetFor(s.paintTarget, layer, tool.supportsMask)
             val st = ed.beginStroke(tool, s.brush, target)
             if (st == null) {
                 message(
                     when {
                         layer == null -> tr("Keine Ebene ausgewählt.")
                         !layer.visible -> tr("Die Ebene ist ausgeblendet.")
-                        s.paintTarget == PaintTarget.MASK && !tool.supportsMask -> tr("{0} funktioniert nicht auf Masken.", tool.label)
+                        s.paintTarget.isMask && !tool.supportsMask -> tr("{0} funktioniert nicht auf Masken.", tool.label)
                         else -> tr("Auf dieser Ebene kann nicht gemalt werden (Gruppe?).")
                     },
                 )
@@ -2324,11 +2536,18 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun setGradientToTransparent(b: Boolean) = _state.update { it.copy(gradientToTransparent = b) }
     fun setGradientOpacity(v: Float) = _state.update { it.copy(gradientOpacity = v) }
 
+    /** Gewünschtes Malziel, sofern die Ebene es hat (sonst die Pixel). */
+    private fun paintTargetFor(want: PaintTarget, layer: de.photographics.core.doc.Layer?, maskOk: Boolean): PaintTarget = when {
+        want == PaintTarget.MASK && maskOk && layer?.mask != null -> PaintTarget.MASK
+        want == PaintTarget.FILTER_MASK && maskOk && (layer as? SmartLayer)?.smartFilters?.mask != null -> PaintTarget.FILTER_MASK
+        else -> PaintTarget.PIXELS
+    }
+
     /** Verlauf von ([x0], [y0]) nach ([x1], [y1]) auf Pixel oder Maske der aktiven Ebene. */
     fun applyGradient(x0: Float, y0: Float, x1: Float, y1: Float) = withEditor { ed ->
         val s = _state.value
         val l = ed.doc.activeLayer
-        val target = if (s.paintTarget == PaintTarget.MASK && l?.mask != null) PaintTarget.MASK else PaintTarget.PIXELS
+        val target = paintTargetFor(s.paintTarget, l, true)
         val c1 = if (s.gradientToTransparent) s.color and 0x00FFFFFF else s.bgColor
         busy(true)
         try {
@@ -2351,6 +2570,45 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun deselect() = withEditor { it.deselect(); refreshLayers() }
     fun invertSelection() = withEditor { it.invertSelection(); refreshLayers() }
     fun featherSelection(r: Float) = withEditor { it.featherSelection(r); refreshLayers() }
+    fun modifySelection(kind: de.photographics.core.selection.SelectionModifyKind, amount: Int, atCanvasBounds: Boolean) = withEditor { ed ->
+        if (ed.doc.selection == null) { message(tr("Zuerst einen Bereich auswählen.")); return@withEditor }
+        busy(true)
+        try { ed.modifySelection(kind, amount, atCanvasBounds) } finally { busy(false) }
+        refreshLayers()
+    }
+
+    /** Farbbereich: verkleinerte Quelle für die Vorschau. */
+    class ColorRangeSource(val px: IntArray, val w: Int, val h: Int)
+    /** Engine: volle Quelle des offenen Farbbereich-Dialogs (aktive Ebene oder sichtbares Bild). */
+    private var colorRangeGrid: Pair<Boolean, de.photographics.core.image.TileGrid>? = null
+
+    private fun colorRangeGridOf(d: de.photographics.core.doc.Document, all: Boolean): de.photographics.core.image.TileGrid {
+        colorRangeGrid?.let { (a, g) -> if (a == all) return g }
+        val g = (if (all) null else (d.activeLayer as? RasterLayer)?.raster)
+            ?: d.newGrid().also { g -> Compositor.renderBands(d, d.bounds) { r, buf -> g.writeRect(r, buf) } }
+        colorRangeGrid = all to g
+        return g
+    }
+
+    suspend fun colorRangeSource(all: Boolean, maxW: Int, maxH: Int): ColorRangeSource? = kotlinx.coroutines.withContext(engine) {
+        val d = editor?.doc ?: return@withContext null
+        val g = colorRangeGridOf(d, all)
+        var level = 0
+        while ((d.width shr level) > maxW || (d.height shr level) > maxH) level++
+        val m = if (level > 0) g.mip(level) else g
+        val w = maxOf(1, (d.width + (1 shl level) - 1) shr level); val h = maxOf(1, (d.height + (1 shl level) - 1) shr level)
+        ColorRangeSource(IntArray(w * h).also { m.readRect(IntRect.ofSize(w, h), it) }, w, h)
+    }
+
+    fun colorRangeApply(spec: de.photographics.core.selection.ColorRange.Spec, all: Boolean) = withEditor { ed ->
+        busy(true)
+        try {
+            ed.colorRangeSelection(colorRangeGridOf(ed.doc, all), spec, _state.value.selectionOp)
+        } finally { colorRangeGrid = null; busy(false) }
+        refreshLayers()
+    }
+
+    fun colorRangeClosed() = onEngine { colorRangeGrid = null }
     fun clearSelected() = withEditor { ed -> ed.clearSelection()?.let { renderNow(it) }; refreshLayers(ed.doc.activeLayer) }
     fun fillSelected(background: Boolean = false) = withEditor { ed ->
         val s = _state.value
@@ -2662,6 +2920,53 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         refreshLayers()
     }
 
+    // ---------------------------------------------------------------- Vorher/Nachher
+
+    private var adjustNew = false
+    private var styleLayerId = -1
+    /** Engine: nimmt den laufenden Vergleich zurück (null = keiner aktiv). */
+    private var compareUndo: (() -> Unit)? = null
+
+    /** Engine: Vergleich beenden, bevor eine Vorschau weiterläuft oder übernommen wird. */
+    private fun endCompare() { compareUndo?.invoke(); compareUndo = null }
+
+    /**
+     * Gedrückt halten zum Vergleichen: [on] zeigt den Stand vor der laufenden Vorschau (Filter,
+     * Einstellungsebene – eine neue ganz ohne sie –, Ebenenstil), false wieder die Vorschau.
+     */
+    fun compare(on: Boolean) = withEditor { ed ->
+        filterJob?.join(); adjustJob?.join(); styleJob?.join(); smartJob?.join()
+        if (!on) {
+            val u = compareUndo ?: return@withEditor
+            u(); compareUndo = null
+            if (filterTx != null) renderNow(filterRegion) else renderLive(null)
+            return@withEditor
+        }
+        if (compareUndo != null) return@withEditor
+        val tx = filterTx
+        val adj = _state.value.adjustEdit?.let { ed.doc.findLayer(it.layerId) as? AdjustmentLayer }
+        val before = adjustBefore
+        val styleL = styleBefore?.let { layerById(ed, styleLayerId) }
+        val sm = smartEdit?.let { e -> (ed.doc.findLayer(e.layerId) as? SmartLayer)?.let { it to e.before } }
+        when {
+            sm != null -> {
+                val (l, before) = sm
+                val cur = l.smartFilters; l.smartFilters = before; compareUndo = { l.smartFilters = cur }
+                renderLive(null)
+            }
+            tx != null -> { tx.swapOriginals(); compareUndo = { tx.swapOriginals() }; renderNow(filterRegion) }
+            adj != null && before != null -> {
+                if (adjustNew) { val v = adj.visible; adj.visible = false; compareUndo = { adj.visible = v } }
+                else { val cur = adj.adjustment; adj.adjustment = before; compareUndo = { adj.adjustment = cur } }
+                renderLive(null)
+            }
+            styleL != null -> {
+                val cur = styleL.preservedBlocks; styleL.preservedBlocks = styleBefore!!; compareUndo = { styleL.preservedBlocks = cur }
+                renderLive(null)
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- Ebenenstil
 
     /** Engine: Blöcke der Ebene vor dem Öffnen des Ebenenstils (für Abbrechen und den Verlauf). */
@@ -2671,7 +2976,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     /** Ebenenstil von [id] öffnen: [onReady] (Hauptthread) erhält die aktuellen Effekte. */
     fun openLayerStyle(id: Int, onReady: (de.photographics.core.doc.LayerEffects) -> Unit) = withEditor { ed ->
         val l = layerById(ed, id) ?: return@withEditor
-        styleBefore = l.preservedBlocks
+        styleBefore = l.preservedBlocks; styleLayerId = id
         val fx = l.effects ?: de.photographics.core.doc.LayerEffects()
         withContext(kotlinx.coroutines.Dispatchers.Main) { onReady(fx) }
     }
@@ -2679,6 +2984,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun previewLayerStyle(id: Int, fx: de.photographics.core.doc.LayerEffects) {
         styleJob?.cancel()
         styleJob = withEditor { ed ->
+            endCompare()
             val l = layerById(ed, id) ?: return@withEditor
             ed.previewEffects(l, fx)
             renderLive(null)
@@ -2687,6 +2993,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     fun finishLayerStyle(id: Int, commit: Boolean) = withEditor { ed ->
         styleJob?.join()
+        endCompare()
         val l = layerById(ed, id) ?: return@withEditor
         val before = styleBefore ?: return@withEditor
         styleBefore = null
@@ -2879,14 +3186,22 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     /** Ausgangsbild der Galerie-Vorschau: ARGB, Größe, Lage im Dokument, Maßstab (verkleinert < 1). */
     class GallerySource(val px: IntArray, val w: Int, val h: Int, val ox: Int, val oy: Int, val scale: Float)
 
+    /** Engine: Galerie-Smartfilter, der gerade nachgeregelt wird, mit dem Bild der Filter darunter als Quelle. */
+    private class GalleryTarget(val layerId: Int, val index: Int, val below: de.photographics.core.image.TileGrid)
+    @Volatile private var galleryTarget: GalleryTarget? = null
+
+    /** Filtergalerie geschlossen: Nachregeln beenden. */
+    fun galleryClosed() = onEngine { galleryTarget = null }
+
     /**
      * Aktive Pixelebene verkleinert auf die Vorschaufläche [boxW]×[boxH] (ganzes Bild) und als
      * 100-%-Ausschnitt in Größe der Fläche um die Ansichtsmitte; null = keine Pixelebene.
      */
     suspend fun gallerySources(boxW: Int, boxH: Int): Pair<GallerySource, GallerySource>? = kotlinx.coroutines.withContext(engine) {
         val ed = editor ?: return@withContext null
-        val l = ed.doc.activeLayer as? PixelLayer ?: run {
-            message(tr("Filter benötigen eine Pixelebene (Text/Smartobjekt ggf. rastern oder eine Einstellungsebene verwenden)."))
+        // Smartobjekt: sein Bild (mit den vorhandenen Smartfiltern) – die Galerie kommt oben dazu
+        val src = galleryTarget?.below ?: (ed.doc.activeLayer as? PixelLayer)?.pixels ?: (ed.doc.activeLayer as? SmartLayer)?.raster ?: run {
+            message(tr("Filter benötigen eine Pixelebene oder ein Smartobjekt (Text ggf. rastern oder eine Einstellungsebene verwenden)."))
             return@withContext null
         }
         val d = ed.doc
@@ -2896,7 +3211,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val tw = maxOf(1, (d.width * s).roundToInt()); val th = maxOf(1, (d.height * s).roundToInt())
         var level = 0
         while ((d.width shr (level + 1)) >= tw && (d.height shr (level + 1)) >= th) level++
-        val m = if (level > 0) l.pixels.mip(level) else l.pixels
+        val m = if (level > 0) src.mip(level) else src
         val fw = (d.width + (1 shl level) - 1) shr level; val fh = (d.height + (1 shl level) - 1) shr level
         val mipPx = IntArray(fw * fh).also { m.readRect(IntRect.ofSize(fw, fh), it) }
         val fit = if (fw == tw && fh == th) GallerySource(mipPx, fw, fh, 0, 0, 1f / (1 shl level)) else {
@@ -2909,7 +3224,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val cw = minOf(d.width, bw); val ch = minOf(d.height, bh)
         val v = viewVisible.takeIf { !it.isEmpty } ?: d.bounds
         val cx = ((v.left + v.right) / 2 - cw / 2).coerceIn(0, d.width - cw); val cy = ((v.top + v.bottom) / 2 - ch / 2).coerceIn(0, d.height - ch)
-        fit to GallerySource(IntArray(cw * ch).also { l.pixels.readRect(IntRect(cx, cy, cx + cw, cy + ch), it) }, cw, ch, cx, cy, 1f)
+        fit to GallerySource(IntArray(cw * ch).also { src.readRect(IntRect(cx, cy, cx + cw, cy + ch), it) }, cw, ch, cx, cy, 1f)
     }
 
     /**
@@ -2918,13 +3233,34 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
      */
     suspend fun galleryExact(chain: de.photographics.core.filters.GalleryChain, w: Int, h: Int): IntArray? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
         val ed = editor ?: return@withContext null
-        val l = ed.doc.activeLayer as? PixelLayer ?: return@withContext null
         val job = coroutineContext[Job]
+        val smart = galleryTarget?.below ?: (ed.doc.activeLayer as? SmartLayer)?.raster
+        if (smart != null) {
+            // Smartfilter wirken ohne Auswahl auf das ganze Smartobjekt
+            val d = de.photographics.core.doc.Document(ed.doc.width, ed.doc.height)
+            return@withContext de.photographics.core.filters.FilterRunner.previewScaled(d, PixelLayer("", smart), chain, w, h) { job?.isActive == false }
+        }
+        val l = ed.doc.activeLayer as? PixelLayer ?: return@withContext null
         de.photographics.core.filters.FilterRunner.previewScaled(ed.doc, l, chain, w, h) { job?.isActive == false }
     }
 
     /** Effektstapel der Filtergalerie auf die aktive Pixelebene anwenden (ein Verlaufsschritt). */
     fun applyGallery(effects: List<de.photographics.core.filters.GalleryEffect>) = withEditor { ed ->
+        galleryTarget?.let { t ->
+            galleryTarget = null
+            val l = ed.doc.findLayer(t.layerId) as? SmartLayer ?: return@withEditor
+            val f = l.smartFilters.filters.getOrNull(t.index)?.takeIf { it.gallery != null } ?: return@withEditor
+            busy(true)
+            try { ed.updateSmartFilter(l, t.index, f.copy(gallery = effects)); renderNow(null); refreshLayers(thumbFor = l) } finally { busy(false) }
+            return@withEditor
+        }
+        (ed.doc.activeLayer as? SmartLayer)?.let { l ->
+            if (effects.none { it.visible }) return@withEditor
+            val s = _state.value
+            busy(true)
+            try { ed.addSmartFilter(l, de.photographics.core.doc.SmartFilter.gallery(effects, s.color, s.bgColor)); renderNow(null); refreshLayers(thumbFor = l) } finally { busy(false) }
+            return@withEditor
+        }
         if (ed.doc.activeLayer !is PixelLayer) { message(tr("Filter benötigen eine Pixelebene (Text/Smartobjekt ggf. rastern oder eine Einstellungsebene verwenden).")); return@withEditor }
         val s = _state.value
         val chain = de.photographics.core.filters.GalleryChain(effects, de.photographics.core.filters.GalleryContext(s.color, s.bgColor))
@@ -2939,20 +3275,102 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------------------------------------------------------- Filter mit Vorschau
 
+    /** Engine: laufende Bearbeitung eines Smartfilters (Ebene, Stelle -1 = neu oben, Stand vorher, Ausgangsfilter). */
+    private class SmartEdit(val layerId: Int, val index: Int, val before: de.photographics.core.doc.SmartFilters, val base: de.photographics.core.doc.SmartFilter?)
+    private var smartEdit: SmartEdit? = null
+    private var smartJob: Job? = null
+
     fun startFilter(label: String) = withEditor { ed ->
-        if (ed.doc.activeLayer !is PixelLayer) {
-            message(tr("Filter benötigen eine Pixelebene (Text/Smartobjekt ggf. rastern oder eine Einstellungsebene verwenden)."))
+        val l = ed.doc.activeLayer
+        smartEdit = null
+        if (l is SmartLayer) {
+            // Auf einem Smartobjekt wird der Filter ein Smartfilter (bleibt nachregelbar)
+            smartEdit = SmartEdit(l.id, -1, l.smartFilters, null)
+            _state.update { it.copy(filterActive = label) }
+            return@withEditor
+        }
+        if (l !is PixelLayer) {
+            message(tr("Filter benötigen eine Pixelebene oder ein Smartobjekt (Text ggf. rastern oder eine Einstellungsebene verwenden)."))
             return@withEditor
         }
         filterTx = null
         _state.update { it.copy(filterActive = label) }
     }
 
+    /**
+     * Smartfilter [index] von [layerId] nachregeln: [onReady] (Hauptthread) erhält Filterbeschreibung
+     * und gespeicherte Werte, danach laufen Vorschau und Übernehmen wie bei [startFilter].
+     */
+    fun editSmartFilter(layerId: Int, index: Int, onReady: (de.photographics.core.filters.FilterSpec, FloatArray) -> Unit) = withEditor { ed ->
+        val l = ed.doc.findLayer(layerId) as? SmartLayer ?: return@withEditor
+        val f = l.smartFilters.filters.getOrNull(index) ?: return@withEditor
+        if (f.gallery != null) {
+            ed.setActive(l)
+            galleryTarget = GalleryTarget(l.id, index, l.rasterBelow(index))
+            _state.update { it.copy(galleryEditOpen = f.gallery) }
+            return@withEditor
+        }
+        val spec = de.photographics.core.filters.FilterCatalog.byId(f.filterId) ?: run { message(tr("Dieser Filter ist in dieser Version nicht verfügbar.")); return@withEditor }
+        ed.setActive(l)
+        smartEdit = SmartEdit(l.id, index, l.smartFilters, f)
+        val values = FloatArray(spec.params.size) { i -> f.values.getOrNull(i) ?: spec.params[i].default }
+        _state.update { it.copy(filterActive = spec.label, smartFilterOpen = spec to values) }
+        withContext(kotlinx.coroutines.Dispatchers.Main) { onReady(spec, values) }
+    }
+
+    fun smartFilterOpened() = _state.update { it.copy(smartFilterOpen = null) }
+    fun galleryEditOpened() = _state.update { it.copy(galleryEditOpen = null) }
+
+    /** Vorschau eines Filters mit Reglerwerten – auf einem Smartobjekt als Smartfilter. */
+    fun previewFilterSpec(spec: de.photographics.core.filters.FilterSpec, values: FloatArray) {
+        smartJob?.cancel()
+        smartJob = withEditor { ed ->
+            val e = smartEdit
+            if (e == null) { pixelPreview(ed, spec.build(values)); return@withEditor }
+            endCompare()
+            val l = ed.doc.findLayer(e.layerId) as? SmartLayer ?: return@withEditor
+            ed.previewSmartFilters(l, smartWith(e, (e.base ?: de.photographics.core.doc.SmartFilter(spec.id)).copy(values = values.toList())))
+            renderLive(null, l)
+        }
+    }
+
+    private fun smartWith(e: SmartEdit, f: de.photographics.core.doc.SmartFilter): de.photographics.core.doc.SmartFilters =
+        e.before.with(e.index, f, editor?.doc?.selection)
+
+    /** Engine: laufende Smartfilter-Bearbeitung übernehmen oder verwerfen; true = es lief eine. */
+    private suspend fun finishSmartEdit(ed: Editor, apply: Boolean): Boolean {
+        val e = smartEdit ?: return false
+        smartJob?.join()
+        endCompare()
+        smartEdit = null
+        val l = ed.doc.findLayer(e.layerId) as? SmartLayer
+        if (l != null) {
+            if (apply) ed.commitSmartFilters(l, e.before, if (e.index < 0) tr("Smartfilter: {0}", l.smartFilters.filters.lastOrNull()?.label ?: "") else tr("Smartfilter ändern"))
+            else ed.previewSmartFilters(l, e.before)
+        }
+        _state.update { it.copy(filterActive = null) }
+        renderNow(null); refreshLayers(thumbFor = l)
+        return true
+    }
+
+    /** Einfache Änderung an den Smartfiltern von [layerId] (ein Schritt im Verlauf). */
+    fun changeSmartFilters(layerId: Int, op: (Editor, SmartLayer) -> Unit) = withEditor { ed ->
+        val l = ed.doc.findLayer(layerId) as? SmartLayer ?: return@withEditor
+        busy(true)
+        try { op(ed, l); renderNow(null); refreshLayers(thumbFor = l) } finally { busy(false) }
+    }
+
     fun previewFilter(filter: ImageFilter) {
         filterJob?.cancel()
-        filterJob = withEditor { ed ->
+        filterJob = withEditor { ed -> pixelPreview(ed, filter) }
+    }
+
+    /** Engine: Filtervorschau auf der Pixelebene (zurückrollbar). */
+    private fun pixelPreview(ed: Editor, filter: ImageFilter) {
+        run {
+            endCompare()
             filterTx?.let { tx -> tx.rollback() }
-            val res = ed.previewFilter(filter) ?: return@withEditor
+            val res = ed.previewFilter(filter) ?: return
             val dirty = filterRegion.union(res.second)
             filterTx = res.first
             filterRegion = res.second
@@ -2961,15 +3379,21 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun applyFilter(label: String) = withEditor { ed ->
+        smartJob?.join()
+        if (finishSmartEdit(ed, apply = true)) return@withEditor
         filterJob?.join()
+        endCompare()
         filterTx?.let { ed.commitFilter(it, label) }
         filterTx = null; filterRegion = IntRect.EMPTY
         _state.update { it.copy(filterActive = null) }
         refreshLayers(thumbFor = ed.doc.activeLayer)
     }
 
-    fun cancelFilter() = withEditor {
+    fun cancelFilter() = withEditor { ed ->
+        smartJob?.join()
+        if (finishSmartEdit(ed, apply = false)) return@withEditor
         filterJob?.join()
+        endCompare()
         filterTx?.rollback()
         filterTx = null
         renderNow(filterRegion)
@@ -2980,6 +3404,8 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         super.onCleared()
         getApplication<Application>().unregisterComponentCallbacks(memoryCallbacks)
+        // GL-Kontext auf seinem Thread freigeben, bevor der Thread endet
+        engine.executor.execute { gpu.close() }
         engine.close()
     }
 
@@ -3043,7 +3469,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     fun addAdjustmentLayer(type: AdjustmentType) = withEditor { ed ->
         val l = ed.addAdjustmentLayer(type.createDefault())
-        adjustBefore = l.adjustment
+        adjustBefore = l.adjustment; adjustNew = true
         _state.update { it.copy(adjustEdit = AdjustEdit(l.id, l.adjustment, histogramFor(ed, l))) }
         renderNow(null); refreshLayers()
     }
@@ -3063,7 +3489,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun openAdjustment(id: Int) = withEditor { ed ->
         val l = ed.doc.findLayer(id) as? AdjustmentLayer ?: return@withEditor
         ed.setActive(l)
-        adjustBefore = l.adjustment
+        adjustBefore = l.adjustment; adjustNew = false
         _state.update { it.copy(adjustEdit = AdjustEdit(l.id, l.adjustment, histogramFor(ed, l))) }
         refreshLayers()
     }
@@ -3078,6 +3504,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(adjustEdit = e.copy(adjustment = a)) }
         adjustJob?.cancel()
         adjustJob = withEditor { ed ->
+            endCompare()
             val l = ed.doc.findLayer(e.layerId) as? AdjustmentLayer ?: return@withEditor
             ed.previewAdjustment(l, a)
             renderLive(null, l)
@@ -3086,6 +3513,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     fun closeAdjustment() = withEditor { ed ->
         adjustJob?.join()
+        endCompare()
         if (endAdjustEdit(ed)) refreshLayers()
     }
 
@@ -3328,9 +3756,10 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun convertToSmart(id: Int) = withEditor { ed ->
-        val l = ed.doc.findLayer(id) as? PixelLayer ?: return@withEditor
-        ed.convertToSmartObject(l) ?: message(tr("Die Ebene ist leer."))
-        refreshLayers()
+        val l = ed.doc.findLayer(id) ?: return@withEditor
+        busy(true)
+        try { ed.convertToSmartObject(listOf(l)) ?: message(tr("Nichts Sichtbares zum Umwandeln.")) } finally { busy(false) }
+        fullRefresh()
     }
 
     fun rasterizeLayer(id: Int) = withEditor { ed ->

@@ -10,7 +10,7 @@ plugins {
 // Dann eigener versionCode je Architektur (10 × Basis + 1/2/3) und unsigniert (F-Droid signiert selbst).
 val singleAbi: String? = providers.gradleProperty("photographics.abi").orNull
 val abis = listOf("armeabi-v7a", "arm64-v8a", "x86_64")
-val baseVersionCode = 5
+val baseVersionCode = 6
 require(singleAbi == null || singleAbi in abis) { "photographics.abi muss eine von $abis sein" }
 
 android {
@@ -22,7 +22,7 @@ android {
         minSdk = 27 // SharedMemory für den nativen Kachelspeicher
         targetSdk = 36
         versionCode = if (singleAbi == null) baseVersionCode else baseVersionCode * 10 + abis.indexOf(singleAbi) + 1
-        versionName = "0.4.2"
+        versionName = "0.5.0"
         // Adresse des Quellcodes (in gradle.properties: photographics.sourceUrl=https://github.com/…)
         buildConfigField("String", "SOURCE_URL", "\"${providers.gradleProperty("photographics.sourceUrl").getOrElse("")}\"")
 

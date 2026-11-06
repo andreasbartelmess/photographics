@@ -338,9 +338,20 @@ object PsdReader {
             r.seek(lmEnd.coerceAtMost(r.limit))
         }
         doc.preservedGlobalBlocks = if (h.big) emptyList() else globalBlocks
+        // Eingebettete Dateien der Photoshop-Smartobjekte (Kennung → Datei)
+        val linked = globalBlocks.filter { it.key in PsdLinked.GLOBAL_KEYS }
+            .flatMap { runCatching { PsdLinked.readEntries(it.data) }.getOrDefault(emptyList()) }.associateBy { it.uuid }
 
         if (records.isNotEmpty() && layers) {
-            buildLayers(doc, records, h, colorData, targetLayerIndex)
+            buildLayers(doc, records, h, colorData, targetLayerIndex, linked)
+            // Eingebettete Dateien nur für Ebenen behalten, die weiter als Photoshop-Smartobjekt gespeichert werden
+            if (linked.isNotEmpty()) {
+                val used = doc.allLayers().filter { it !is SmartLayer }.flatMap { l -> l.preservedBlocks.filter { it.key == "SoLd" || it.key == "SoLE" } }
+                    .mapNotNull { PsdLinked.readPlaced(it.data)?.uuid }.toSet()
+                val kept = linked.values.filter { it.uuid in used }
+                doc.preservedGlobalBlocks = doc.preservedGlobalBlocks.filter { it.key !in PsdLinked.GLOBAL_KEYS } +
+                    (if (kept.isEmpty()) emptyList() else listOf(PsdTaggedBlock("8BIM", "lnk2", kept.fold(java.io.ByteArrayOutputStream()) { o, e -> o.write(PsdLinked.rawToBlockEntry(e.raw)); o }.toByteArray())))
+            }
         }
         // Alphakanäle stehen im zusammengeführten Bild hinter den Farbkanälen (und der Transparenz)
         val firstAlpha = baseChannels(h.mode) + (if (mergedHasAlpha) 1 else 0)
@@ -565,7 +576,37 @@ object PsdReader {
         w.toByteArray()
     }.getOrNull()
 
-    private fun buildLayers(doc: Document, records: List<LayerRecord>, h: Header, colorData: ByteArray, targetIndex: Int) {
+    /** Hilfsfunktion der Plattform: eingebettete PNG/JPEG/… als Raster (null = nicht lesbar). */
+    @Volatile var imageDecoder: ((ByteArray) -> TileGrid?)? = null
+
+    /**
+     * Smartobjekt aus Photoshops „SoLd“ und der eingebetteten Datei: PSD/PSB mit Ebenen als Inhalt,
+     * Bilder über [imageDecoder]. Null = nicht nachbildbar – dann bleibt die Ebene gerastert und
+     * Photoshops Daten werden unverändert zurückgeschrieben.
+     */
+    /** Eingebettete PSD/PSB zu einem „SoLd“-Block (null = keine oder kein Ebenendokument). */
+    private fun linkedContents(sold: ByteArray, linked: Map<String, PsdLinked.Entry>): Document? = runCatching {
+        val data = PsdLinked.readPlaced(sold)?.let { linked[it.uuid]?.data } ?: return@runCatching null
+        if (data.size >= 4 && String(data, 0, 4, Charsets.ISO_8859_1) == "8BPS") read(data) else null
+    }.getOrNull()
+
+    private fun photoshopSmart(name: String, sold: ByteArray, linked: Map<String, PsdLinked.Entry>, h: Header, shown: TileGrid): SmartLayer? = runCatching {
+        val placed = PsdLinked.readPlaced(sold) ?: return@runCatching null
+        if (placed.warped || placed.filtered) return@runCatching null
+        val data = linked[placed.uuid]?.data ?: return@runCatching null
+        val psd = data.size >= 4 && data[0] == '8'.code.toByte() && data[1] == 'B'.code.toByte() && data[2] == 'P'.code.toByte() && data[3] == 'S'.code.toByte()
+        val contents = if (psd) read(data) else null
+        val source = contents?.let { de.photographics.core.render.Compositor.renderGrid(it, it.bounds) } ?: imageDecoder?.invoke(data) ?: return@runCatching null
+        // Ecken beziehen sich auf die Größe „Sz“; der Inhalt kann eine andere Pixelgröße haben
+        val toSz = de.photographics.core.image.Affine.scale(placed.width / source.width, placed.height / source.height)
+        val l = SmartLayer(name, source, de.photographics.core.image.Affine(), h.width, h.height, contents)
+        val affine = PsdLinked.affineFor(placed.corners, placed.width, placed.height)
+        if (affine != null) l.transform = toSz.then(affine) else l.warp = placed.corners
+        l.setCachedRaster(shown)
+        l
+    }.getOrNull()
+
+    private fun buildLayers(doc: Document, records: List<LayerRecord>, h: Header, colorData: ByteArray, targetIndex: Int, linked: Map<String, PsdLinked.Entry> = emptyMap()) {
         // Datensätze liegen von unten nach oben vor; Gruppen werden durch Trenner (lsct=3) unten
         // und den Gruppen-Datensatz (lsct=1/2) oben geklammert.
         val stack = ArrayDeque<GroupLayer>()
@@ -576,7 +617,9 @@ object PsdReader {
         val kinds = mutableSetOf<LayerKind>()
 
         for ((idx, rec) in records.withIndex()) {
-            val blockMap = rec.blocks.associateBy { it.key }
+            // Eigene Daten aus dem Ebenen-XMP; ältere Dateien haben sie als eigene Zusatzblöcke
+            val blockMap = HashMap(rec.blocks.associateBy { it.key })
+            blockMap[PsdLayerXmp.SHMD]?.let { PsdLayerXmp.read(it.data) }?.forEach { (k, v) -> blockMap.putIfAbsent(k, PsdTaggedBlock("8BIM", k, v)) }
             val unicodeName = blockMap["luni"]?.let { runCatching { BinaryReader(it.data).unicode() }.getOrNull() }
             if (!unicodeName.isNullOrEmpty()) rec.name = unicodeName else rec.name = utf8OrLatin1(rec.name)
             val section = (blockMap["lsct"] ?: blockMap["lsdk"])?.let { BinaryReader(it.data) }
@@ -629,6 +672,9 @@ object PsdReader {
                 val ourText = blockMap[PsdTextSmart.TEXT_KEY]?.let { PsdTextSmart.readText(it.data) }
                 val psText = if (ourText == null) blockMap["TySh"]?.let { PsdTextSmart.parseTySh(it.data) } else null
                 val smart = blockMap[PsdTextSmart.SMART_KEY]?.let { PsdTextSmart.readSmart(it.data) }
+                // Photoshop-Smartobjekt mit eingebettetem Inhalt (ohne Verkrümmung und Photoshop-Smartfilter)
+                val psSmart = if (smart == null && ourText == null && psText == null && linked.isNotEmpty())
+                    blockMap["SoLd"]?.let { photoshopSmart(rec.name, it.data, linked, h, grid) } else null
                 val adjustment = if (rec.blocks.any { it.key in PsdAdjustments.KEYS }) PsdAdjustments.read(blockMap) else null
                 // Formebene: Volltonfüllung mit Vektormaske (und Kontur)
                 val shapePath = if (blockMap["SoCo"] != null) (blockMap["vmsk"] ?: blockMap["vsms"])?.let { PsdPaths.readVectorMask(it.data, h.width, h.height) }?.takeIf { !it.isEmpty } else null
@@ -645,10 +691,15 @@ object PsdReader {
                     psText != null -> TextLayer(rec.name, psText.first, psText.second, h.width, h.height).also {
                         it.originalRaster = grid; it.unchangedFromPsd = true
                     }
-                    smart != null -> SmartLayer(rec.name, smart.first, smart.second, h.width, h.height).also { sl ->
+                    smart != null -> SmartLayer(rec.name, smart.first, smart.second, h.width, h.height,
+                        blockMap[PsdTextSmart.CONTENTS_KEY]?.let { b -> runCatching { read(b.data) }.getOrNull() }
+                            ?: blockMap["SoLd"]?.let { b -> linkedContents(b.data, linked) }).also { sl ->
                         blockMap[PsdTextSmart.SMART_KEY]?.let { PsdTextSmart.readSmartWarp(it.data) }?.let { sl.warp = it }
+                        // Vor dem gespeicherten Raster setzen: es zeigt die Filter schon angewendet
+                        blockMap[PsdSmartFilters.KEY]?.let { PsdSmartFilters.read(it.data) }?.let { sl.smartFilters = it }
                         sl.setCachedRaster(grid)
                     }
+                    psSmart != null -> psSmart
                     else -> PixelLayer(rec.name, grid).also { pl -> pl.low = lowGrid?.also { it.compact() } }
                 }
                 layer.blendMode = BlendMode.fromPsdKey(rec.blendKey)
@@ -668,7 +719,7 @@ object PsdReader {
                 rec.blocks.any { it.key in FILL_KEYS } -> LayerKind.FILL
                 else -> LayerKind.PIXEL
             }
-            if (layer is AdjustmentLayer || layer is TextLayer || layer is de.photographics.core.doc.ShapeLayer) layer.kind = LayerKind.PIXEL
+            if (layer is AdjustmentLayer || layer is TextLayer || layer is de.photographics.core.doc.ShapeLayer || layer is SmartLayer) layer.kind = LayerKind.PIXEL
             if (layer.kind != LayerKind.PIXEL) kinds += layer.kind
             if (rec.blocks.any { it.key == "lfx2" || it.key == "lrFX" || it.key == "lmfx" }) {
                 // Dargestellt: Schatten, Schein, Kontur, Farbüberlagerung; die übrigen nennt die Warnung
@@ -677,7 +728,7 @@ object PsdReader {
             }
             if (layer !is de.photographics.core.doc.ShapeLayer && rec.blocks.any { it.key == "vmsk" || it.key == "vsms" }) sawVector = true
             if (!h.big) layer.preservedBlocks = rec.blocks.filter { b ->
-                b.key !in CONSUMED_KEYS && b.key != PsdTextSmart.TEXT_KEY && b.key != PsdTextSmart.SMART_KEY &&
+                b.key !in CONSUMED_KEYS && b.key !in PsdLayerXmp.OWN_KEYS &&
                     !(layer is AdjustmentLayer && b.key in PsdAdjustments.KEYS) &&
                     !(layer is de.photographics.core.doc.ShapeLayer && b.key in SHAPE_KEYS)
             }

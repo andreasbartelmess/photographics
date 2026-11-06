@@ -81,6 +81,20 @@ object FileIO {
     private fun decodeRaster(f: File): Pair<TileGrid, IccProfile> {
         val pb = try { Pixbuf.fromFile(f.path) } catch (e: Exception) { throw IOException(tr("Unbekanntes Bildformat"), e) }
             ?.applyEmbeddedOrientation() ?: throw IOException(tr("Bild konnte nicht dekodiert werden"))
+        return fromPixbuf(pb)
+    }
+
+    /** In Photoshop-Smartobjekte eingebettete Bilder (PNG, JPEG …). */
+    private fun decodeBytes(b: ByteArray): TileGrid? {
+        val loader = org.gnome.gdkpixbuf.PixbufLoader()
+        loader.write(b)
+        loader.close()
+        return loader.pixbuf?.let { fromPixbuf(it).first }
+    }
+
+    init { de.photographics.core.psd.PsdReader.imageDecoder = { runCatching { decodeBytes(it) }.getOrNull() } }
+
+    private fun fromPixbuf(pb: Pixbuf): Pair<TileGrid, IccProfile> {
         val profile = pb.getOption("icc-profile")?.let { runCatching { IccProfile(Base64.getDecoder().decode(it)) }.getOrNull() } ?: IccProfiles.sRGB
         val w = pb.width; val h = pb.height
         val n = pb.nChannels; val stride = pb.rowstride

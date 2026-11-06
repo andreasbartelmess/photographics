@@ -16,6 +16,8 @@ import java.nio.ByteBuffer
  */
 class PhotographicsApp : Application() {
     override fun onCreate() {
+        // In Photoshop-Smartobjekte eingebettete Bilder (PNG, JPEG …) dekodiert die Plattform
+        de.photographics.core.psd.PsdReader.imageDecoder = { b -> runCatching { ImageIO.decodeRaster(java.nio.ByteBuffer.wrap(b)).first }.getOrNull() }
         super.onCreate()
         // Sprache vor allem anderen setzen: Texte in Aufzählungen und Objekten werden beim ersten Zugriff übersetzt
         val lang = getSharedPreferences("settings", MODE_PRIVATE).getString("language", null)

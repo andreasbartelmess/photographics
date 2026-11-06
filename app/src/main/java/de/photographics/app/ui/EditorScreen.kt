@@ -5,6 +5,8 @@ import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
+import androidx.compose.material.icons.filled.Colorize
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.FormatColorFill
@@ -69,6 +71,7 @@ import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Gradient
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.CheckBox
@@ -153,24 +156,17 @@ import de.photographics.app.Tool
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-private val OPEN_TYPES = arrayOf(
+internal val OPEN_TYPES = arrayOf(
     "image/*", "image/vnd.adobe.photoshop", "application/x-photoshop", "application/photoshop", "application/psd", "image/x-xcf", "application/octet-stream",
 )
 
-private enum class DialogKind { UNSAVED, FILL, EXPORT, NEW, IMAGE_SIZE, CANVAS_SIZE, COLOR, TEXT_COLOR, FEATHER, SHORTCUTS, AI_MODELS, SETTINGS, ASSIGN_PROFILE, CONVERT_PROFILE, TIFF_OPTIONS, BG_COLOR, BRUSH, SWATCHES, CROP_SIZE, ROTATE, NEW_GUIDE, GUIDE_LAYOUT }
+private enum class DialogKind { UNSAVED, FILL, EXPORT, NEW, IMAGE_SIZE, CANVAS_SIZE, COLOR, TEXT_COLOR, FEATHER, MODIFY_SELECTION, COLOR_RANGE, SHORTCUTS, AI_MODELS, SETTINGS, ASSIGN_PROFILE, CONVERT_PROFILE, TIFF_OPTIONS, BG_COLOR, BRUSH, SWATCHES, CROP_SIZE, ROTATE, NEW_GUIDE, GUIDE_LAYOUT }
 
 /** Ab dieser Breite wird das Ebenen-Panel fest angedockt (Tablet quer, große Tablets hoch). */
 private val DOCK_WIDTH = 840.dp
 
 /** Filter-Spezifikation für eine direkt angewendete Korrektur. */
-private fun directAdjustmentSpec(t: AdjustmentType): FilterSpec {
-    val def = t.createDefault()
-    val params = def.params().map { p ->
-        FilterParam(p.label, p.min, p.max, p.value, p.decimals,
-            when (p.kind) { AdjParam.Kind.SWITCH -> ParamKind.SWITCH; AdjParam.Kind.HUE -> ParamKind.HUE; else -> ParamKind.SLIDER })
-    }
-    return FilterSpec(t.label, tr("Korrekturen"), t.icon, params) { v -> AdjustmentFilter(def.withValues(v)) }
-}
+private fun directAdjustmentSpec(t: AdjustmentType): FilterSpec = de.photographics.core.filters.FilterCatalog.adjustment(t)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -187,8 +183,17 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
     var keyMods by remember { mutableStateOf(KeyModifiers()) }
     var dialog by remember { mutableStateOf<DialogKind?>(null) }
     var activeSpec by remember { mutableStateOf<FilterSpec?>(null) }
+    /** Werte beim Öffnen (Smartfilter nachregeln), sonst null = Grundeinstellung. */
+    var activeValues by remember { mutableStateOf<FloatArray?>(null) }
+    LaunchedEffect(state.smartFilterOpen) {
+        state.smartFilterOpen?.let { (spec, values) -> activeValues = values; activeSpec = spec; vm.smartFilterOpened() }
+    }
     var adjustSheet by remember { mutableStateOf(false) }
     var galleryOpen by remember { mutableStateOf(false) }
+    var galleryInitial by remember { mutableStateOf<List<de.photographics.core.filters.GalleryEffect>?>(null) }
+    LaunchedEffect(state.galleryEditOpen) {
+        state.galleryEditOpen?.let { galleryInitial = it; galleryOpen = true; vm.galleryEditOpened() }
+    }
     var adjustAsLayer by remember { mutableStateOf(true) }
     var overflow by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
@@ -256,8 +261,9 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
 
     fun runFilter(spec: FilterSpec) {
         vm.startFilter(spec.label)
+        activeValues = null
         if (spec.params.isEmpty()) {
-            vm.previewFilter(spec.build(FloatArray(0)))
+            vm.previewFilterSpec(spec, FloatArray(0))
             vm.applyFilter(spec.label)
         } else {
             activeSpec = spec
@@ -405,8 +411,23 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
     BackHandler(enabled = activeSpec == null && state.transform != null) { vm.cancelTransform() }
     BackHandler(enabled = activeSpec == null && layersOverlay) { layersOverlay = false }
     BackHandler(enabled = activeSpec == null && !layersOverlay && fullscreen) { fullscreen = false }
+    // „Inhalt bearbeiten“: Zurück schließt den Inhalt (bei Änderungen mit Rückfrage)
+    var askCloseContents by remember { mutableStateOf(false) }
+    fun closeContents() { if (state.contentsUnsaved) askCloseContents = true else vm.closeSmartContents(apply = false) }
     BackHandler(enabled = !state.showStart && activeSpec == null && state.textEdit == null && state.adjustEdit == null &&
-        state.transform == null && !layersOverlay && !fullscreen) { vm.showStartScreen(true) }
+        state.transform == null && !layersOverlay && !fullscreen) { if (state.editingContentsOf != null) closeContents() else vm.showStartScreen(true) }
+    if (askCloseContents) AlertDialog(
+        onDismissRequest = { askCloseContents = false },
+        title = { Text(tr("Inhalt übernehmen?")) },
+        text = { Text(tr("Die Änderungen an „{0}“ in das Smartobjekt übernehmen?", state.fileName)) },
+        confirmButton = { TextButton(onClick = { askCloseContents = false; vm.closeSmartContents(apply = true) }) { Text(tr("Übernehmen")) } },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { askCloseContents = false }) { Text(tr("Abbrechen")) }
+                TextButton(onClick = { askCloseContents = false; vm.closeSmartContents(apply = false) }) { Text(tr("Verwerfen")) }
+            }
+        },
+    )
 
     fun closeDrawerThen(action: () -> Unit) {
         scope.launch { drawer.close() }
@@ -474,7 +495,7 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                         DrawerItem(Icons.Filled.Home, tr("Startbildschirm")) { closeDrawerThen { vm.showStartScreen(true) } }
                         DrawerItem(Icons.Filled.Add, tr("Neues Dokument"), tr("Strg+N")) { closeDrawerThen { guarded { dialog = DialogKind.NEW } } }
                         DrawerItem(Icons.Filled.FolderOpen, tr("Öffnen"), tr("Strg+O")) { closeDrawerThen { guarded { openLauncher.launch(OPEN_TYPES) } } }
-                        DrawerItem(Icons.Filled.AddPhotoAlternate, tr("Als Ebene platzieren")) { closeDrawerThen { placeLauncher.launch(OPEN_TYPES) } }
+                        DrawerItem(Icons.Filled.AddPhotoAlternate, tr("Platzieren …")) { closeDrawerThen { placeLauncher.launch(OPEN_TYPES) } }
                         HorizontalDivider(Modifier.padding(vertical = 12.dp))
                         Text(tr("Speichern & Ausgeben"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(16.dp, 0.dp, 16.dp, 8.dp))
                         if (state.saveTarget != null) DrawerItem(Icons.Filled.Save, tr("Speichern"), tr("Strg+S")) { closeDrawerThen { vm.save() } }
@@ -497,13 +518,17 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                 topBar = {
                     if (!fullscreen) TopAppBar(
                         navigationIcon = {
-                            IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Filled.Menu, tr("Menü")) }
+                            if (state.editingContentsOf != null) IconButton(onClick = { closeContents() }) { Icon(Icons.Filled.Close, tr("Inhalt schließen")) }
+                            else IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Filled.Menu, tr("Menü")) }
                         },
                         title = {
                             Column {
                                 // Punkt = ungespeicherte Änderungen
                                 Text((if (state.unsaved) "• " else "") + state.fileName, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                if (!compact) Text(
+                                state.editingContentsOf?.let { parent ->
+                                    Text(tr("Inhalt eines Smartobjekts in „{0}“", parent), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, maxLines = 1)
+                                }
+                                if (!compact && state.editingContentsOf == null) Text(
                                     tr("{0} × {1} px", state.docWidth, state.docHeight) +
                                         " · ${state.docProfileName}" + (if (state.bitDepth == 16) tr(" · 16 Bit") else "") +
                                         (if (state.proofOn) tr(" · Proof: {0}", state.proofLabel) else "") +
@@ -514,6 +539,7 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                             }
                         },
                         actions = {
+                            if (state.editingContentsOf != null) TextButton(onClick = { vm.applySmartContents() }, enabled = state.contentsUnsaved) { Text(tr("Übernehmen")) }
                             IconButton(onClick = vm::undo, enabled = state.canUndo) { Icon(Icons.AutoMirrored.Filled.Undo, tr("Rückgängig")) }
                             IconButton(onClick = vm::redo, enabled = state.canRedo) { Icon(Icons.AutoMirrored.Filled.Redo, tr("Wiederholen")) }
                             if (!compact) IconToggleButton(checked = state.stylusOnly, onCheckedChange = { vm.setStylusOnly(it) }) {
@@ -553,6 +579,8 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                                     Item(tr("Alles auswählen"), tr("Strg+A"), Icons.Filled.SelectAll) { go { vm.selectAll() } }
                                     Item(tr("Auswahl aufheben"), tr("Strg+D"), Icons.Filled.Deselect) { go { vm.deselect() } }
                                     Item(tr("Auswahl umkehren"), tr("Strg+⇧+I"), Icons.Filled.FlipToBack) { go { vm.invertSelection() } }
+                                    Item(tr("Farbbereich …"), icon = Icons.Filled.Colorize) { go { dialog = DialogKind.COLOR_RANGE } }
+                                    Item(tr("Auswahl verändern …"), icon = Icons.Filled.Tune) { go { if (state.hasSelection) dialog = DialogKind.MODIFY_SELECTION else vm.modifySelection(de.photographics.core.selection.SelectionModifyKind.EXPAND, 0, false) } }
                                     Item(tr("Weiche Auswahlkante …"), icon = Icons.Filled.BlurOn) { go { dialog = DialogKind.FEATHER } }
                                     HorizontalDivider()
                                     MenuHeader(tr("Ansicht"))
@@ -675,10 +703,12 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                         when {
                             spec != null && state.filterActive != null -> FilterPanel(
                                 spec,
-                                onPreview = { values -> vm.previewFilter(spec.build(values)) },
+                                onPreview = { values -> vm.previewFilterSpec(spec, values) },
+                                initial = activeValues,
                                 onApply = { vm.applyFilter(spec.label); activeSpec = null },
                                 onCancel = { vm.cancelFilter(); activeSpec = null },
                                 modifier = panelModifier,
+                                onCompare = { vm.compare(it) },
                             )
                             adj != null -> AdjustmentPanel(
                                 adj.adjustment, onChange = vm::previewAdjustment, onClose = vm::closeAdjustment, modifier = panelModifier,
@@ -687,6 +717,7 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
                                 onLoadLut = { lutLauncher.launch(arrayOf("*/*")) },
                                 clipped = state.layers.firstOrNull { it.id == adj.layerId }?.clipped,
                                 onToggleClip = { vm.toggleClipping(adj.layerId) },
+                                onCompare = { vm.compare(it) },
                             )
                             text != null -> TextPanel(
                                 text.style, onChange = vm::updateTextLive, onDone = vm::commitTextEdit, onCancel = vm::cancelTextEdit,
@@ -730,11 +761,11 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
             onModeChange = { adjustAsLayer = it },
             onAdjustment = { t -> adjustSheet = false; runAdjustment(t) },
             onFilter = { spec -> adjustSheet = false; runFilter(spec) },
-            onGallery = { adjustSheet = false; galleryOpen = true },
+            onGallery = { adjustSheet = false; galleryInitial = null; galleryOpen = true },
             onDismiss = { adjustSheet = false },
         )
     }
-    if (galleryOpen) FilterGalleryDialog(vm, state.color, state.bgColor, onDismiss = { galleryOpen = false })
+    if (galleryOpen) FilterGalleryDialog(vm, state.color, state.bgColor, galleryInitial, onDismiss = { galleryOpen = false; galleryInitial = null })
 
     when (dialog) {
         DialogKind.UNSAVED -> AlertDialog(
@@ -781,6 +812,8 @@ fun EditorScreen(vm: EditorViewModel, adjustSettings: (de.photographics.app.AppS
         DialogKind.TEXT_COLOR -> ColorPickerDialog(state.textEdit?.style?.color ?: state.color, onPick = { c ->
             state.textEdit?.let { vm.updateTextLive(it.style.copy(color = c or 0xFF000000.toInt())) }; dialog = null
         }, onDismiss = { dialog = null })
+        DialogKind.MODIFY_SELECTION -> ModifySelectionDialog(onApply = { k, a, e -> vm.modifySelection(k, a, e); dialog = null }, onDismiss = { dialog = null })
+        DialogKind.COLOR_RANGE -> ColorRangeDialog(vm, state.sampleAllLayers, onDismiss = { dialog = null })
         DialogKind.FEATHER -> FeatherDialog(onApply = { vm.featherSelection(it); dialog = null }, onDismiss = { dialog = null })
         DialogKind.FILL -> FillDialog(state.color, onApply = { c, col, m, o, k -> vm.fillArea(c, col, m, o, k); dialog = null }, onDismiss = { dialog = null })
         DialogKind.SHORTCUTS -> ShortcutsDialog(onDismiss = { dialog = null })

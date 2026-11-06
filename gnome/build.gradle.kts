@@ -19,6 +19,8 @@ for (c in listOf("compileClasspath", "runtimeClasspath", "testCompileClasspath",
 
 dependencies {
     implementation(project(":core"))
+    // Zusammensetzen auf der Grafikkarte (LWJGL, OpenGL ES über EGL)
+    implementation(project(":gpu-desktop"))
     implementation(libs.javagi.adw)
     // KI-Modelle (Inpainting, Hochskalieren) – dieselbe Java-Schnittstelle wie onnxruntime-android
     implementation(libs.onnxruntime.jvm)

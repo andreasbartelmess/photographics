@@ -99,7 +99,7 @@ class Document(width: Int, height: Int) {
             when (l) {
                 is PixelLayer -> { l.pixels = l.pixels.resized(newW, newH, dx, dy, keepOutside); l.low = l.low?.resized(newW, newH, dx, dy, keepOutside) }
                 is TextLayer -> { l.docWidth = newW; l.docHeight = newH; l.transform = l.transform.then(shift) }
-                is SmartLayer -> { l.docWidth = newW; l.docHeight = newH; l.applyDocTransform(shift) }
+                is SmartLayer -> { l.docWidth = newW; l.docHeight = newH; l.applyDocTransform(shift); l.mapFilterMask { it.resized(newW, newH, dx, dy, keepOutside) } }
                 is ShapeLayer -> { l.docWidth = newW; l.docHeight = newH; l.transform = l.transform.then(shift) }
                 else -> {}
             }
@@ -126,6 +126,22 @@ class Document(width: Int, height: Int) {
         selection = null
     }
 
+    /**
+     * Eigenständige Kopie mit denselben Ebenen (Namen bleiben), Pfaden, Kanälen und Hilfslinien –
+     * z. B. Inhalt eines Smartobjekts zum Bearbeiten. Raster werden kopiert.
+     */
+    fun duplicate(): Document {
+        val d = Document(width, height)
+        d.bitDepth = bitDepth; d.dpi = dpi; d.colorProfile = colorProfile
+        d.preservedResources = preservedResources; d.preservedGlobalBlocks = preservedGlobalBlocks
+        d.guides = guides; d.paths = paths; d.workPath = workPath
+        d.channels = channels.map { it.copy(grid = it.grid.copy()) }
+        for (l in root.children) d.root.add(l.deepCopy().also { it.name = l.name })
+        val active = activeLayer?.let { allLayers().indexOf(it) } ?: -1
+        d.activeLayer = d.allLayers().getOrNull(active) ?: d.root.children.lastOrNull()
+        return d
+    }
+
     /** Vollständige Kopie (für Undo von Strukturänderungen wie Freistellen). */
     fun snapshot(): Snapshot = Snapshot(width, height, allLayers().associate { l ->
         l.id to LayerData(
@@ -134,6 +150,7 @@ class Document(width: Int, height: Int) {
             (l as? TextLayer)?.style,
             (l as? SmartLayer)?.warp,
             (l as? PixelLayer)?.low,
+            (l as? SmartLayer)?.smartFilters,
         )
     }, selection, guides, paths, workPath, channels)
 
@@ -145,7 +162,7 @@ class Document(width: Int, height: Int) {
             if (l is PixelLayer && d.pixels != null) l.pixels = d.pixels
             if (l is PixelLayer) l.low = d.low
             if (l is TextLayer) { l.docWidth = width; l.docHeight = height; d.style?.let { l.style = it }; d.transform?.let { l.transform = it } }
-            if (l is SmartLayer) { l.docWidth = width; l.docHeight = height; d.transform?.let { l.transform = it }; l.warp = d.warp }
+            if (l is SmartLayer) { l.docWidth = width; l.docHeight = height; d.transform?.let { l.transform = it }; l.warp = d.warp; d.smartFilters?.let { l.smartFilters = it } }
             if (l is ShapeLayer) { l.docWidth = width; l.docHeight = height; d.transform?.let { l.transform = it } }
             if (d.mask != null) l.mask?.grid = d.mask
         }
@@ -159,7 +176,8 @@ class Document(width: Int, height: Int) {
         val paths: List<de.photographics.core.vector.NamedPath> = emptyList(), val workPath: de.photographics.core.vector.VectorPath? = null,
         val channels: List<AlphaChannel> = emptyList(),
     )
-    class LayerData(val pixels: TileGrid?, val mask: TileGrid?, val transform: Affine? = null, val style: TextStyle? = null, val warp: DoubleArray? = null, val low: TileGrid? = null)
+    class LayerData(val pixels: TileGrid?, val mask: TileGrid?, val transform: Affine? = null, val style: TextStyle? = null, val warp: DoubleArray? = null, val low: TileGrid? = null,
+        val smartFilters: SmartFilters? = null)
 
     companion object {
         fun blank(w: Int, h: Int, background: Int? = 0xFFFFFFFF.toInt()): Document {

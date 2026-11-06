@@ -102,8 +102,10 @@ private fun toBitmap(px: IntArray, w: Int, h: Int): ImageBitmap = Bitmap.createB
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FilterGalleryDialog(vm: EditorViewModel, fg: Int, bg: Int, onDismiss: () -> Unit) {
-    val effects = remember { mutableStateListOf<GalleryEffect>().apply { addAll(lastStack ?: listOf(GalleryEffect(Gallery.specs.first(), Gallery.specs.first().defaults()))) } }
+fun FilterGalleryDialog(vm: EditorViewModel, fg: Int, bg: Int, initial: List<GalleryEffect>? = null, onDismiss: () -> Unit) {
+    // [initial] = vorhandenen Galerie-Smartfilter nachregeln
+    val close = { vm.galleryClosed(); onDismiss() }
+    val effects = remember { mutableStateListOf<GalleryEffect>().apply { addAll(initial?.takeIf { it.isNotEmpty() } ?: lastStack ?: listOf(GalleryEffect(Gallery.specs.first(), Gallery.specs.first().defaults()))) } }
     var selected by remember { mutableIntStateOf(0) }
     var full by remember { mutableStateOf(false) }
     var sources by remember { mutableStateOf<Pair<EditorViewModel.GallerySource, EditorViewModel.GallerySource>?>(null) }
@@ -117,7 +119,7 @@ fun FilterGalleryDialog(vm: EditorViewModel, fg: Int, bg: Int, onDismiss: () -> 
     LaunchedEffect(boxPx) {
         if (boxPx.width <= 0 || boxPx.height <= 0) return@LaunchedEffect
         delay(if (sources == null) 0 else 150)   // Drehen/Größenänderung: kurz abwarten
-        sources = vm.gallerySources(boxPx.width, boxPx.height) ?: run { onDismiss(); return@LaunchedEffect }
+        sources = vm.gallerySources(boxPx.width, boxPx.height) ?: run { close(); return@LaunchedEffect }
     }
     // Miniaturen aller Effekte aus einem verkleinerten Ausschnitt des eigenen Bildes
     LaunchedEffect(sources) {
@@ -187,12 +189,12 @@ fun FilterGalleryDialog(vm: EditorViewModel, fg: Int, bg: Int, onDismiss: () -> 
         if (cur.spec !== s) effects[selected] = GalleryEffect(s, remembered[s.id] ?: s.defaults(), cur.visible)
     }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    Dialog(onDismissRequest = close, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.safeDrawingPadding()) {
                 TopAppBar(
                     title = { Text(tr("Filtergalerie")) },
-                    navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, tr("Abbrechen")) } },
+                    navigationIcon = { IconButton(onClick = close) { Icon(Icons.Filled.Close, tr("Abbrechen")) } },
                     actions = {
                         if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.width(12.dp))
@@ -201,7 +203,7 @@ fun FilterGalleryDialog(vm: EditorViewModel, fg: Int, bg: Int, onDismiss: () -> 
                             SegmentedButton(full, { full = true }, SegmentedButtonDefaults.itemShape(1, 2)) { Text(tr("100 %"), maxLines = 1, softWrap = false) }
                         }
                         Spacer(Modifier.width(12.dp))
-                        Button(onClick = { lastStack = effects.toList(); vm.applyGallery(effects.toList()); onDismiss() }, modifier = Modifier.padding(end = 12.dp)) { Text(tr("Anwenden")) }
+                        Button(onClick = { if (initial == null) lastStack = effects.toList(); vm.applyGallery(effects.toList()); close() }, modifier = Modifier.padding(end = 12.dp)) { Text(tr("Anwenden")) }
                     },
                 )
                 BoxWithConstraints(Modifier.fillMaxSize()) {

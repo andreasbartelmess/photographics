@@ -37,7 +37,8 @@ object I18n {
     private fun unescape(s: String) = if ('\\' !in s) s else s.replace("\\n", "\n").replace("\\t", "\t").replace("\\\\", "\\")
 
     fun tr(de: String, args: Array<out Any?>): String {
-        val t = if (lang == Lang.DE) de else table()[de] ?: de
+        // „Kontext|Text“: gleicher deutscher Text mit anderer Übersetzung (z. B. „Auswahl|Verkleinern“ ≠ Zoom)
+        val t = (if (lang == Lang.DE) null else table()[de]) ?: de.substringAfter('|')
         if (args.isEmpty()) return t
         var out = t
         for (i in args.indices) out = out.replace("{$i}", args[i].toString())

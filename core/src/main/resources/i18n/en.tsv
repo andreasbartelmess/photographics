@@ -1590,3 +1590,82 @@ Die Sicherung konnte nicht gelesen werden: {0}	The backup could not be read: {0}
 „{0}“ ({1} × {2} px), gesichert am {3}	“{0}” ({1} × {2} px), backed up on {3}
 photographics wurde beendet, ohne zu speichern. Automatisch gesichert:	photographics was closed without saving. Backed up automatically:
 Die Ebene hat keinen sichtbaren Ebenenstil.	The layer has no visible layer style.
+Vorher	Before
+Gedrückt halten, um den Stand vorher zu sehen	Press and hold to see the state before
+Leistung	Performance
+Grafikkarte verwenden	Use graphics card
+Nicht verfügbar: {0}	Not available: {0}
+kein OpenGL-ES-3-Treiber	no OpenGL ES 3 driver
+Setzt das Bild auf der Grafikkarte zusammen; sonst rechnet der Prozessor	Composites the image on the graphics card; otherwise the processor does it
+Smartfilter: {0}	Smart filter: {0}
+Smartfilter ändern	Change smart filter
+Smartfilter „{0}“ löschen	Delete smart filter “{0}”
+Smartfilter verschieben	Move smart filter
+Smartfilter einblenden	Show smart filter
+Smartfilter ausblenden	Hide smart filter
+Filtermaske hinzufügen	Add filter mask
+Filtermaske löschen	Delete filter mask
+Alle Smartfilter ein-/ausblenden	Show/hide all smart filters
+Smartfilter	Smart Filters
+Smartfilter-Optionen	Smart filter options
+Filter ein-/ausblenden	Show/hide filter
+Filter nachregeln …	Edit filter …
+Fülloptionen …	Blending options …
+Smartfilter löschen	Delete smart filter
+Fülloptionen	Blending options
+Fülloptionen: {0}	Blending options: {0}
+Deckkraft: {0} %	Opacity: {0} %
+Filter benötigen eine Pixelebene oder ein Smartobjekt (Text ggf. rastern oder eine Einstellungsebene verwenden).	Filters need a pixel layer or a smart object (rasterize text first or use an adjustment layer).
+Dieser Filter ist in dieser Version nicht verfügbar.	This filter is not available in this version.
+Filtermaske	Filter mask
+Doppelklick: Filter nachregeln	Double-click: edit filter
+{0} (Smartfilter)	{0} (smart filter)
+Inhalt ersetzen	Replace Contents
+Inhalt ersetzen …	Replace Contents …
+Inhalt exportieren	Export Contents
+Inhalt exportieren …	Export Contents …
+Inhalt exportiert: {0}	Contents exported: {0}
+Transformation zurücksetzen	Reset Transform
+Smartobjekte	Smart Objects
+Platzieren …	Place …
+Nichts Sichtbares zum Umwandeln.	Nothing visible to convert.
+Datei lässt sich nicht öffnen: {0}	Can’t open file: {0}
+Filtermaske umkehren	Invert Filter Mask
+Filtermaske aus Auswahl	Filter Mask from Selection
+Filtermaske – Klick: auf der Filtermaske malen	Filter mask – click: paint on the filter mask
+Filtermaske – antippen, um darauf zu malen	Filter mask – tap to paint on it
+Inhalt bearbeiten	Edit Contents
+In Ebenen umwandeln	Convert to Layers
+Neues Smartobjekt durch Kopie	New Smart Object via Copy
+Inhalt übernehmen?	Apply contents?
+Die Änderungen an „{0}“ in das Smartobjekt übernehmen?	Apply the changes to “{0}” to the smart object?
+Inhalt schließen	Close contents
+Inhalt eines Smartobjekts in „{0}“	Contents of a smart object in “{0}”
+Nur möglich, solange das Smartobjekt unverzerrt in Originalgröße liegt und keine Smartfilter hat – sonst Rastern.	Only possible while the smart object is undistorted at original size and has no smart filters – rasterize it otherwise.
+Das Smartobjekt gibt es nicht mehr.	The smart object no longer exists.
+Inhalt in das Smartobjekt übernommen.	Contents applied to the smart object.
+Speichern (Strg+S) übernimmt den Inhalt in das Smartobjekt.	Saving (Ctrl+S) applies the contents to the smart object.
+Das Ursprungsdokument ist geschlossen – bitte unter einem Namen speichern.	The original document is closed – please save under a name.
+Auswahl erweitern	Expand selection
+Auswahl verkleinern	Contract selection
+Auswahl abrunden	Smooth selection
+Auswahlrand	Selection border
+Farbbereich	Color range
+Aufgenommene Farben	Sampled colors
+Farbbereich …	Color Range …
+Auswahl verändern	Modify Selection
+Rand …	Border …
+Abrunden …	Smooth …
+Erweitern …	Expand …
+Verkleinern …	Contract …
+Breite (px)	Width (px)
+Effekt am Arbeitsflächenrand anwenden	Apply effect at canvas bounds
+Ins Bild klicken: Farbe aufnehmen. Umschalt fügt hinzu, Alt zieht ab.	Click into the image to sample a color. Shift adds, Alt subtracts.
+Farben im sichtbaren Bild statt nur in der aktiven Ebene suchen	Look for colors in the visible image instead of only the active layer
+Auswahl verändern …	Modify selection …
+Ins Bild tippen: Farbe aufnehmen.	Tap into the image to sample a color.
+Bild zeigen	Show image
+Auswahl|Erweitern	Expand
+Auswahl|Verkleinern	Contract
+Auswahl|Abrunden	Smooth
+Auswahl|Rand	Border

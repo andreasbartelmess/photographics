@@ -21,6 +21,12 @@ class Session(val editor: Editor, @Volatile var file: File?, @Volatile var name:
 
     /** Nach erfolgreichem Speichern (Engine-Thread). */
     fun markSaved() { editor.history.markSaved(); dirty = false }
+    /**
+     * Inhalt eines Smartobjekts („Inhalt bearbeiten“): Speichern übernimmt das Dokument in das
+     * Smartobjekt [SmartParent.layerId] des Ursprungsdokuments statt in eine Datei.
+     */
+    @Volatile var smartParent: SmartParent? = null
+
     /** Angehobene Auswahl (Verschieben/Transformieren): erscheint nicht als eigene Ebene. */
     var floating: de.photographics.core.editor.Floating? = null
 
@@ -35,7 +41,12 @@ class Session(val editor: Editor, @Volatile var file: File?, @Volatile var name:
                 rows += LayerRow(c.id, c.name, depth, c.visible, kindOf(c), c.opacity, c.blendMode, active, c.clipped, c.mask != null,
                     c.mask?.enabled ?: false, c.lockTransparency, c.fillOpacity, c.mask?.linked ?: true,
                     expanded = (c as? GroupLayer)?.expanded ?: false, parentId = if (g === doc.root) 0 else g.id, index = i,
-                    childCount = (c as? GroupLayer)?.children?.size ?: 0)
+                    childCount = (c as? GroupLayer)?.children?.size ?: 0,
+                    smartFilters = (c as? SmartLayer)?.smartFilters?.filters?.map { f ->
+                        SmartFilterRow(f.label, f.enabled, f.blendMode, f.opacity, f.gallery != null || de.photographics.core.filters.FilterCatalog.byId(f.filterId) != null)
+                    } ?: emptyList(),
+                    smartFiltersVisible = (c as? SmartLayer)?.smartFilters?.visible ?: true,
+                    filterMask = (c as? SmartLayer)?.smartFilters?.mask != null)
                 // Eingeklappte Gruppen zeigen ihre Ebenen nicht (wie Photoshop)
                 if (c is GroupLayer && c.expanded) walk(c, depth + 1)
             }
@@ -91,6 +102,14 @@ data class LayerRow(
     val maskEnabled: Boolean = false, val lockTransparency: Boolean = false, val fillOpacity: Float = 1f, val maskLinked: Boolean = true,
     /** Gruppe aufgeklappt; [parentId] 0 = oberste Ebene; [index] in den Kindern des Elternteils (unten = 0). */
     val expanded: Boolean = false, val parentId: Int = 0, val index: Int = 0, val childCount: Int = 0,
+    /** Smartfilter (Smartobjekte), unten zuerst angewendet; [smartFiltersVisible] = Augensymbol „Smartfilter“. */
+    val smartFilters: List<SmartFilterRow> = emptyList(), val smartFiltersVisible: Boolean = true, val filterMask: Boolean = false,
 ) {
     enum class Kind { PIXEL, GROUP, ADJUSTMENT, TEXT, SMART, SHAPE }
 }
+
+/** Ein Smartfilter in der Ebenenliste. */
+data class SmartFilterRow(val label: String, val enabled: Boolean, val blend: BlendMode, val opacity: Float, val editable: Boolean)
+
+/** Ursprung eines Fensters „Inhalt bearbeiten“: Fenster und Dokument des Smartobjekts (die Ebenen-ID wechselt bei jedem Übernehmen). */
+class SmartParent(val window: MainWindow, val session: Session, @Volatile var layerId: Int)

@@ -6,6 +6,9 @@ import de.photographics.core.doc.AdjustmentLayer
 import de.photographics.core.doc.Document
 import de.photographics.core.doc.RasterLayer
 import de.photographics.core.doc.SmartLayer
+import de.photographics.core.doc.with
+import de.photographics.core.doc.SmartFilter
+import de.photographics.core.doc.SmartFilters
 import de.photographics.core.doc.TextLayer
 import de.photographics.core.doc.TextStyle
 import de.photographics.core.image.Affine
@@ -112,7 +115,7 @@ class Editor(doc: Document) {
 
     private fun Layer.retainedBytes(): Long = when (this) {
         is GroupLayer -> children.sumOf { it.retainedBytes() }
-        is SmartLayer -> source.byteSize + raster.byteSize
+        is SmartLayer -> source.byteSize + raster.byteSize + (contents?.root?.retainedBytes() ?: 0L) + (smartFilters.mask?.grid?.byteSize ?: 0L)
         is RasterLayer -> raster.byteSize
         else -> 0L
     } + (mask?.grid?.byteSize ?: 0L)
@@ -285,6 +288,12 @@ class Editor(doc: Document) {
     fun mergeLayers(layers: Collection<Layer>): Boolean {
         val src = topLevel(layers)
         if (src.size < 2) return false
+        combineLayers(src, tr("Auf eine Ebene reduzieren")) { it }
+        return true
+    }
+
+    /** [src] (oberste Ebenen der Auswahl) zusammenrechnen und durch [make] (aus dem Ergebnis) ersetzen. */
+    private fun combineLayers(src: List<Layer>, label: String, make: (PixelLayer) -> Layer): Layer {
         history.makeRoom(doc.width.toLong() * doc.height * 12)
         val tmp = Document(doc.width, doc.height)
         var area = doc.bounds
@@ -297,10 +306,10 @@ class Editor(doc: Document) {
             if (l is RasterLayer) area = area.union(l.raster.extent)
         }
         val top = src.last()
-        val merged = renderedLayer(top.name, tmp, area).also { if (allClipped) it.clipped = true }
+        val merged = make(renderedLayer(top.name, tmp, area).also { if (allClipped) it.clipped = true })
         val p = doc.parentOf(top)
         val before = src.map { doc.parentOf(it) to doc.parentOf(it).children.indexOf(it) }
-        layerOperation(tr("Auf eine Ebene reduzieren"), src + merged, {
+        layerOperation(label, src + merged, {
             val idx = p.children.indexOf(top) + 1 - src.count { doc.parentOf(it) === p && p.children.indexOf(it) <= p.children.indexOf(top) }
             for (l in src) doc.parentOf(l).remove(l)
             p.add(merged, idx.coerceAtLeast(0))
@@ -309,7 +318,7 @@ class Editor(doc: Document) {
             p.remove(merged)
             for ((k, l) in src.withIndex().sortedBy { (k, _) -> before[k].second }) before[k].first.add(l, before[k].second)
         })
-        return true
+        return merged
     }
 
     /** Transparenz einer Ebene (Raster × Maske) als Auswahl laden (Photoshop: Strg+Klick aufs Miniaturbild). */
@@ -435,18 +444,37 @@ class Editor(doc: Document) {
 
     fun beginStroke(tool: PaintTool, settings: BrushSettings, target: PaintTarget): Stroke? {
         val layer = doc.activeLayer ?: return null
-        val grid = when (target) {
-            PaintTarget.PIXELS -> (layer as? PixelLayer)?.pixels
-            PaintTarget.MASK -> if (tool.supportsMask) layer.mask?.grid else null
-        } ?: return null
+        val grid = targetGrid(layer, target, tool.supportsMask) ?: return null
         if (!layer.visible) return null
-        return Stroke(StrokeContext(doc, layer, grid, target, settings), tool)
+        val stroke = Stroke(StrokeContext(doc, layer, grid, target, settings), tool)
+        if (target == PaintTarget.FILTER_MASK) (layer as? SmartLayer)?.let { smart ->
+            stroke.onDirty = { smart.filterMaskChanged(it) }
+            filterMaskStrokes[stroke] = smart
+        }
+        return stroke
+    }
+
+    /** Raster, das ein Werkzeug auf [layer] bei [target] bearbeitet (null = nicht möglich). */
+    private fun targetGrid(layer: Layer, target: PaintTarget, maskOk: Boolean = true): TileGrid? = when (target) {
+        PaintTarget.PIXELS -> (layer as? PixelLayer)?.pixels
+        PaintTarget.MASK -> if (maskOk) layer.mask?.grid else null
+        PaintTarget.FILTER_MASK -> if (maskOk) (layer as? SmartLayer)?.smartFilters?.mask?.grid else null
+    }
+
+    /** Laufende Striche auf einer Filtermaske (Rückgängig muss das Smartobjekt neu überblenden). */
+    private val filterMaskStrokes = java.util.WeakHashMap<Stroke, SmartLayer>()
+
+    /** Schritt, nach dessen Rückgängig/Wiederholen das Smartobjekt neu überblendet wird. */
+    private class FilterMaskEntry(private val inner: HistoryEntry, private val layer: SmartLayer) : HistoryEntry by inner {
+        override fun undo(doc: Document) { inner.undo(doc); layer.invalidate() }
+        override fun redo(doc: Document) { inner.redo(doc); layer.invalidate() }
     }
 
     /** Beendet einen Strich und legt ihn im Verlauf ab. */
     fun endStroke(stroke: Stroke): IntRect {
         val (patch, dirty) = stroke.finish()
-        if (patch != null) push(patch)
+        val smart = filterMaskStrokes.remove(stroke)
+        if (patch != null) push(if (smart != null) FilterMaskEntry(patch, smart) else patch)
         return dirty
     }
 
@@ -518,20 +546,26 @@ class Editor(doc: Document) {
      * Verzerren/Perspektive übernehmen: [before] → [after] in den Verlauf; eine verbundene Maske
      * wird mit derselben (projektiven) Abbildung mitgeführt.
      */
-    fun commitGeometry(layer: SmartLayer, before: Geometry, after: Geometry) {
+    fun commitGeometry(layer: SmartLayer, before: Geometry, after: Geometry, label: String = tr("Verzerren")) {
         val mask = layer.mask?.takeIf { it.linked }
         val same = before.transform == after.transform && (before.warp?.contentEquals(after.warp ?: DoubleArray(0)) ?: (after.warp == null))
         if (same) { setGeometry(layer, before); return }
-        if (mask == null) {
-            structural(tr("Verzerren"), { setGeometry(layer, after) }, { setGeometry(layer, before) })
+        val sfBefore = layer.smartFilters
+        if (mask == null && sfBefore.mask == null) {
+            structural(label, { setGeometry(layer, after) }, { setGeometry(layer, before) })
             return
         }
         val sw = layer.source.width.toDouble(); val sh = layer.source.height.toDouble()
         fun hom(g: Geometry) = g.warp?.let { de.photographics.core.image.Homography.rectToQuad(sw, sh, it) } ?: de.photographics.core.image.Homography.of(g.transform)
-        val oldMask = mask.grid
         val m = hom(before).inverse().then(hom(after))
-        val newMask = transformMaskWith(oldMask, doc.width, doc.height) { argb -> de.photographics.core.image.Resample.renderProjective(argb, m, doc.width, doc.height) }
-        structural(tr("Verzerren"), oldMask.byteSize, { setGeometry(layer, after); mask.grid = newMask }, { setGeometry(layer, before); mask.grid = oldMask })
+        fun moved(g: TileGrid) = transformMaskWith(g, doc.width, doc.height) { argb -> de.photographics.core.image.Resample.renderProjective(argb, m, doc.width, doc.height) }
+        val oldMask = mask?.grid
+        val newMask = oldMask?.let(::moved)
+        // Filtermaske wandert mit dem Smartobjekt
+        val sfAfter = sfBefore.mask?.let { fm -> sfBefore.copy(mask = LayerMask(moved(fm.grid), fm.enabled)) } ?: sfBefore
+        structural(label, (oldMask?.byteSize ?: 0L) + (sfBefore.mask?.grid?.byteSize ?: 0L),
+            { setGeometry(layer, after); if (mask != null) mask.grid = newMask!!; layer.smartFilters = sfAfter },
+            { setGeometry(layer, before); if (mask != null) mask.grid = oldMask!!; layer.smartFilters = sfBefore })
     }
 
     /**
@@ -594,6 +628,250 @@ class Editor(doc: Document) {
         smart.setCachedRaster(layer.pixels)
         replaceLayer(layer, smart, tr("In Smartobjekt konvertieren"))
         return smart
+    }
+
+    /** Smartobjekt aus Pixelebene [pl] (Inhalt auf seine Begrenzung zugeschnitten); null = leer. */
+    private fun smartFromPixels(pl: PixelLayer): SmartLayer? {
+        val b = pl.pixels.contentBounds()
+        if (b.isEmpty) return null
+        return SmartLayer(pl.name, pl.pixels.resized(b.width, b.height, -b.left, -b.top),
+            Affine.translate(b.left.toDouble(), b.top.toDouble()), doc.width, doc.height).also { it.setCachedRaster(pl.pixels) }
+    }
+
+    /**
+     * Beliebige Ebenen in ein Smartobjekt umwandeln (Photoshop: Ebene → Smartobjekte → In Smartobjekt
+     * konvertieren). Eine Pixelebene bleibt wie sie ist; Text, Formen, Gruppen und mehrere Ebenen
+     * werden dabei zu einem Bild zusammengerechnet. Null = nichts Sichtbares.
+     */
+    fun convertToSmartObject(layers: Collection<Layer>): SmartLayer? {
+        val src = topLevel(layers).filter { it !is SmartLayer || layers.size > 1 }
+        if (src.isEmpty()) return null
+        src.singleOrNull()?.let { one -> if (one is PixelLayer) return convertToSmartObject(one) }
+        if (src.none { it.visible }) return null
+        var result: SmartLayer? = null
+        val allClipped = src.all { it.clipped }
+        // Mit Ebenenstil und Deckkraft wie sichtbar zusammenrechnen; das Smartobjekt selbst ist dann neutral.
+        // Die Ebenen selbst (auch ausgeblendete) bleiben als Inhalt erhalten – „Inhalt bearbeiten“.
+        combineLayers(src, tr("In Smartobjekt konvertieren")) { pl ->
+            val b = pl.pixels.contentBounds()
+            val r = if (b.isEmpty) SmartLayer(pl.name, TileGrid(1, 1), Affine(), doc.width, doc.height) else {
+                val c = Document(doc.width, doc.height).also { d -> d.bitDepth = doc.bitDepth; d.dpi = doc.dpi; d.colorProfile = doc.colorProfile; d.preservedResources = doc.preservedResources }
+                for (l in src) c.root.add(l.deepCopy().also { it.name = l.name; if (allClipped) it.clipped = false })
+                c.resizeCanvas(b.width, b.height, -b.left, -b.top, keepOutside = true)
+                c.activeLayer = c.root.children.lastOrNull()
+                SmartLayer(pl.name, pl.pixels.resized(b.width, b.height, -b.left, -b.top),
+                    Affine.translate(b.left.toDouble(), b.top.toDouble()), doc.width, doc.height, c).also { it.setCachedRaster(pl.pixels) }
+            }
+            r.clipped = pl.clipped
+            result = r; r
+        }
+        return result
+    }
+
+    /**
+     * Inhalt eines Smartobjekts zum Bearbeiten (Photoshop: „Inhalt bearbeiten“): eigenständige Kopie
+     * des eingebetteten Dokuments bzw. bei reinen Bild-Smartobjekten ein Dokument mit dem Bild.
+     */
+    fun editableContents(layer: SmartLayer): Document = layer.contentsDocument(doc.dpi, doc.colorProfile)
+
+    /**
+     * Bearbeiteten Inhalt übernehmen (Speichern im Fenster „Inhalt bearbeiten“): neues Bild aus
+     * [contents] (wird kopiert), gleiche Lage – bei anderer Größe um dieselbe Mitte, Pixel im
+     * selben Maßstab. Smartfilter, Masken und Ebenenstil bleiben.
+     */
+    fun updateSmartContents(layer: SmartLayer, contents: Document): SmartLayer {
+        val c = contents.duplicate()
+        c.selection = null
+        val src = de.photographics.core.render.Compositor.renderGrid(c, c.bounds)
+        val ow = layer.source.width.toDouble(); val oh = layer.source.height.toDouble()
+        val fit = Affine.translate((ow - src.width) / 2, (oh - src.height) / 2)
+        return swapContents(layer, src, c, fit, layer.name, tr("Inhalt bearbeiten"))
+    }
+
+    /**
+     * In Ebenen umwandeln (Photoshop: Smartobjekt → In Ebenen umwandeln): der Inhalt ersetzt das
+     * Smartobjekt – mehrere Ebenen als Gruppe mit dessen Deckkraft, Modus und Maske. Geht nur, solange
+     * das Smartobjekt unverzerrt in Originalgröße liegt und keine Smartfilter wirken (sonst rastern).
+     */
+    fun convertSmartToLayers(layer: SmartLayer): Boolean {
+        val t = layer.transform
+        val tx = Math.round(t.tx).toInt(); val ty = Math.round(t.ty).toInt()
+        val plain = layer.warp == null && t.a == 1.0 && t.d == 1.0 && t.b == 0.0 && t.c == 0.0 &&
+            kotlin.math.abs(t.tx - tx) < 1e-6 && kotlin.math.abs(t.ty - ty) < 1e-6
+        if (!plain || layer.smartFilters.active) return false
+        val c = editableContents(layer)
+        c.resizeCanvas(doc.width, doc.height, tx, ty, keepOutside = true)
+        val kids = c.root.children.toList()
+        val neutral = layer.opacity == 1f && layer.fillOpacity == 1f && layer.blendMode == de.photographics.core.render.BlendMode.NORMAL &&
+            layer.mask == null && layer.effects == null && !layer.clipped
+        val replacement: Layer = if (kids.size == 1 && neutral) kids.single().also { c.root.remove(it) } else GroupLayer(layer.name).also { g ->
+            for (k in kids) g.add(k)
+            g.opacity = layer.opacity; g.mask = layer.mask; g.clipped = layer.clipped
+            if (layer.blendMode != de.photographics.core.render.BlendMode.NORMAL) g.blendMode = layer.blendMode
+            g.preservedBlocks = layer.preservedBlocks.filter { it.key in EFFECT_BLOCKS }
+        }
+        replaceLayer(layer, replacement, tr("In Ebenen umwandeln"))
+        return true
+    }
+
+    /**
+     * Platzieren wie in Photoshop: als eingebettetes Smartobjekt mittig über der aktiven Ebene;
+     * größere Bilder werden in die Arbeitsfläche eingepasst (nur verkleinert, nie vergrößert).
+     */
+    fun placeSmartObject(name: String, src: TileGrid): SmartLayer {
+        val s = minOf(1.0, doc.width.toDouble() / src.width, doc.height.toDouble() / src.height)
+        val t = Affine.scale(s).then(Affine.translate((doc.width - src.width * s) / 2, (doc.height - src.height * s) / 2))
+        val layer = SmartLayer(name, src, t, doc.width, doc.height)
+        layer.clipped = doc.activeLayer?.clipped == true
+        val (parent, index) = insertionPoint()
+        structural(tr("Platzieren"), { parent.add(layer, index); doc.activeLayer = layer }, { parent.remove(layer) })
+        return layer
+    }
+
+    /**
+     * Inhalt ersetzen: neues Bild [src] in den Rahmen des bisherigen Inhalts eingepasst (gleiche Lage,
+     * Drehung und Verzerrung; Seitenverhältnis bleibt). Smartfilter, Maske und Ebenenstil bleiben.
+     */
+    fun replaceSmartContents(layer: SmartLayer, src: TileGrid, name: String? = null, contents: Document? = null): SmartLayer {
+        val ow = layer.source.width.toDouble(); val oh = layer.source.height.toDouble()
+        val k = minOf(ow / src.width, oh / src.height)
+        // Neuer Inhalt → Koordinaten des alten Inhalts (mittig eingepasst)
+        val fit = Affine.scale(k).then(Affine.translate((ow - src.width * k) / 2, (oh - src.height * k) / 2))
+        return swapContents(layer, src, contents, fit, name ?: layer.name, tr("Inhalt ersetzen"))
+    }
+
+    /** Neues Smartobjekt mit Bild [src] (und Inhalt [contents]); [fit] bildet es in die Koordinaten des alten Inhalts ab. */
+    private fun swapContents(layer: SmartLayer, src: TileGrid, contents: Document?, fit: Affine, name: String, label: String): SmartLayer {
+        val new = SmartLayer(name, src, fit.then(layer.transform), layer.docWidth, layer.docHeight, contents)
+        layer.warp?.let {
+            val h = layer.homography()
+            val x0 = fit.mapX(0.0, 0.0); val y0 = fit.mapY(0.0, 0.0)
+            val x1 = fit.mapX(src.width.toDouble(), src.height.toDouble()); val y1 = fit.mapY(src.width.toDouble(), src.height.toDouble())
+            new.warp = doubleArrayOf(x0, y0, x1, y0, x1, y1, x0, y1).let { q -> DoubleArray(8) { i -> val x = q[i - i % 2]; val y = q[i - i % 2 + 1]; if (i % 2 == 0) h.mapX(x, y) else h.mapY(x, y) } }
+        }
+        copyLayerProps(layer, new)
+        new.smartFilters = layer.smartFilters.copy(mask = layer.smartFilters.mask?.let { LayerMask(it.grid.copy(), it.enabled) })
+        replaceLayer(layer, new, label)
+        return new
+    }
+
+    /** Neues Smartobjekt durch Kopie: unabhängige Kopie über dem Original (eigener Inhalt, eigene Filter). */
+    fun duplicateSmartObject(layer: SmartLayer): SmartLayer {
+        val copy = SmartLayer(tr("{0} Kopie", layer.name), layer.source, layer.transform, layer.docWidth, layer.docHeight, layer.contents?.duplicate())
+        copy.warp = layer.warp
+        copyLayerProps(layer, copy)
+        copy.mask = layer.mask?.let { LayerMask(it.grid.copy(), it.enabled).also { m -> m.linked = it.linked } }
+        copy.smartFilters = layer.smartFilters.copy(mask = layer.smartFilters.mask?.let { LayerMask(it.grid.copy(), it.enabled) })
+        val p = doc.parentOf(layer)
+        val idx = p.children.indexOf(layer) + 1
+        structural(tr("Neues Smartobjekt durch Kopie"), { p.add(copy, idx); doc.activeLayer = copy }, { p.remove(copy) })
+        return copy
+    }
+
+    /**
+     * Bild aus einer anderen Datei für Platzieren/Inhalt ersetzen: zusammengefügt und – wie Photoshop
+     * beim Platzieren – in das Profil dieses Dokuments umgerechnet.
+     */
+    fun importedContents(src: Document, intent: de.photographics.core.color.RenderingIntent = de.photographics.core.color.RenderingIntent.RELATIVE, bpc: Boolean = true): TileGrid {
+        val conv = de.photographics.core.color.ColorTransform.rgb(src.colorProfile, doc.colorProfile, intent, bpc)
+        return de.photographics.core.render.Compositor.renderGrid(src, src.bounds, conv?.let { c -> { px: IntArray ->
+            for (i in px.indices) { val v = px[i]; if ((v ushr 24) != 0) px[i] = (v and 0xFF000000.toInt()) or c.map(v and 0xFFFFFF) }
+        } }).also { it.compact() }
+    }
+
+    /** Transformation zurücksetzen: Inhalt in Originalgröße, ungedreht und unverzerrt um die bisherige Mitte. */
+    fun resetSmartTransform(layer: SmartLayer) {
+        val before = geometryOf(layer)
+        val h = layer.homography()
+        val w = layer.source.width.toDouble(); val ht = layer.source.height.toDouble()
+        val cx = h.mapX(w / 2, ht / 2); val cy = h.mapY(w / 2, ht / 2)
+        val after = Geometry(Affine.translate(Math.round(cx - w / 2).toDouble(), Math.round(cy - ht / 2).toDouble()))
+        commitGeometry(layer, before, after, tr("Transformation zurücksetzen"))
+    }
+
+    // ------------------------------------------------------------ Smartfilter
+
+    /** Smartfilter von [layer] ersetzen, als ein Schritt im Verlauf. */
+    fun setSmartFilters(layer: SmartLayer, after: SmartFilters, label: String) {
+        val before = layer.smartFilters
+        if (before == after) return
+        layer.smartFilters = after
+        push(LambdaEntry(label, { layer.smartFilters = before }, { layer.smartFilters = after }))
+    }
+
+    /** Vorschau beim Einstellen (ohne Verlauf); danach [commitSmartFilters] mit dem Stand vorher. */
+    fun previewSmartFilters(layer: SmartLayer, sf: SmartFilters) { layer.smartFilters = sf }
+
+    fun commitSmartFilters(layer: SmartLayer, before: SmartFilters, label: String) {
+        val after = layer.smartFilters
+        if (before == after) return
+        push(LambdaEntry(label, { layer.smartFilters = before }, { layer.smartFilters = after }))
+    }
+
+    /** Filter als obersten Smartfilter hinzufügen (Filter → … auf einem Smartobjekt). */
+    fun addSmartFilter(layer: SmartLayer, f: SmartFilter) =
+        setSmartFilters(layer, layer.smartFilters.with(-1, f, doc.selection), tr("Smartfilter: {0}", f.label))
+
+    /** Smartfilter [index] ersetzen (Nachregeln, Ein/Aus, Fülloptionen). */
+    fun updateSmartFilter(layer: SmartLayer, index: Int, f: SmartFilter, label: String = tr("Smartfilter ändern")) {
+        val list = layer.smartFilters.filters.toMutableList()
+        if (index !in list.indices) return
+        list[index] = f
+        setSmartFilters(layer, layer.smartFilters.copy(filters = list), label)
+    }
+
+    fun removeSmartFilter(layer: SmartLayer, index: Int) {
+        val list = layer.smartFilters.filters.toMutableList()
+        if (index !in list.indices) return
+        val f = list.removeAt(index)
+        // Ohne Filter bleibt auch keine Filtermaske (wie in Photoshop)
+        val sf = if (list.isEmpty()) SmartFilters() else layer.smartFilters.copy(filters = list)
+        setSmartFilters(layer, sf, tr("Smartfilter „{0}“ löschen", f.label))
+    }
+
+    /** Reihenfolge ändern: Filter [from] an Stelle [to] (0 = unterster, zuerst angewendet). */
+    fun moveSmartFilter(layer: SmartLayer, from: Int, to: Int) {
+        val list = layer.smartFilters.filters.toMutableList()
+        if (from !in list.indices || to !in list.indices || from == to) return
+        list.add(to, list.removeAt(from))
+        setSmartFilters(layer, layer.smartFilters.copy(filters = list), tr("Smartfilter verschieben"))
+    }
+
+    /** Augensymbol „Smartfilter“: alle Filter der Ebene ein- oder ausblenden. */
+    fun setSmartFiltersVisible(layer: SmartLayer, visible: Boolean) =
+        setSmartFilters(layer, layer.smartFilters.copy(visible = visible), if (visible) tr("Smartfilter einblenden") else tr("Smartfilter ausblenden"))
+
+    /** Filtermaske umkehren (Photoshop: Filtermaske auswählen, Strg+I). */
+    fun invertFilterMask(layer: SmartLayer) {
+        val m = layer.smartFilters.mask ?: return
+        val g = m.grid.copy()
+        val band = maxOf(1, (1 shl 20) / doc.width)
+        val row = IntArray(doc.width * band)
+        var y = 0
+        while (y < doc.height) {
+            val r = IntRect(0, y, doc.width, minOf(doc.height, y + band))
+            val px = if (r.height == band) row else IntArray(r.width * r.height)
+            g.readRect(r, px)
+            for (i in px.indices) px[i] = 255 - px[i]
+            g.writeRect(r, px)
+            y = r.bottom
+        }
+        g.compact()
+        setSmartFilters(layer, layer.smartFilters.copy(mask = LayerMask(g, m.enabled)), tr("Filtermaske umkehren"))
+    }
+
+    /** Filtermaske aus der Auswahl (ersetzt die vorhandene; ohne Auswahl: weiß). */
+    fun filterMaskFromSelection(layer: SmartLayer) {
+        val g = doc.selection?.mask?.copy() ?: TileGrid(doc.width, doc.height, 255)
+        setSmartFilters(layer, layer.smartFilters.copy(mask = LayerMask(g)), tr("Filtermaske aus Auswahl"))
+    }
+
+    /** Filtermaske anlegen (weiß = Filter wirken überall) bzw. entfernen. */
+    fun setFilterMask(layer: SmartLayer, on: Boolean) {
+        val sf = layer.smartFilters
+        if (on == (sf.mask != null)) return
+        val mask = if (on) LayerMask(TileGrid(doc.width, doc.height, 255)) else null
+        setSmartFilters(layer, sf.copy(mask = mask), if (on) tr("Filtermaske hinzufügen") else tr("Filtermaske löschen"))
     }
 
     /** Text, Smartobjekt oder Einstellung in eine normale Pixelebene umwandeln. */
@@ -662,14 +940,20 @@ class Editor(doc: Document) {
     fun commitTransform(layer: Layer, before: Affine, after: Affine) {
         if (before == after) { setTransform(layer, before); (layer as? SmartLayer)?.fastPreview = false; return }
         val mask = layer.mask?.takeIf { it.linked }
+        val delta = before.inverse().then(after)
+        // Filtermaske gehört zum Smartobjekt und wandert mit (wie in Photoshop)
+        val smart = layer as? SmartLayer
+        val sfBefore = smart?.smartFilters
+        val sfAfter = sfBefore?.mask?.let { m -> sfBefore.copy(mask = LayerMask(transformMask(m.grid, delta), m.enabled)) }
+        fun filters(sf: de.photographics.core.doc.SmartFilters?) { if (sfAfter != null && sf != null) smart.smartFilters = sf }
         if (mask == null) {
-            structural(tr("Frei transformieren"), { setTransform(layer, after) }, { setTransform(layer, before) })
+            structural(tr("Frei transformieren"), sfBefore?.mask?.grid?.byteSize ?: 0L, { setTransform(layer, after); filters(sfAfter) }, { setTransform(layer, before); filters(sfBefore) })
             return
         }
         // Verbundene Maske mittransformieren (Abbildung vom alten in den neuen Zustand)
         val oldMask = mask.grid
-        val newMask = transformMask(oldMask, before.inverse().then(after))
-        structural(tr("Frei transformieren"), oldMask.byteSize, { setTransform(layer, after); mask.grid = newMask }, { setTransform(layer, before); mask.grid = oldMask })
+        val newMask = transformMask(oldMask, delta)
+        structural(tr("Frei transformieren"), oldMask.byteSize, { setTransform(layer, after); mask.grid = newMask; filters(sfAfter) }, { setTransform(layer, before); mask.grid = oldMask; filters(sfBefore) })
     }
 
     /** Maske (Grauwerte) affin abbilden: über ein graues ARGB-Raster, außerhalb gilt der Standardwert. */
@@ -880,6 +1164,7 @@ class Editor(doc: Document) {
                     else -> {}
                 }
                 l.mask?.let { it.grid = transformMask(it.grid, m, nw, nh) }
+                (l as? SmartLayer)?.mapFilterMask { transformMask(it, m, nw, nh) }
             }
             doc.guides = mapGuides(doc.guides, m).filter { it.position in 0.0..(if (it.vertical) nw else nh).toDouble() }
             mapExtras(m) { g -> transformMask(g, m, nw, nh) }
@@ -927,6 +1212,7 @@ class Editor(doc: Document) {
                 // 16 Bit: untere Bits mitskalieren (Abweichung höchstens eine 8-Bit-Stufe)
                 if (l is PixelLayer) l.low = l.low?.let { lo -> Resample.resizeGrid(lo, newW, newH, method) }
                 l.mask?.let { m -> m.grid = Resample.resizeGrid(m.grid, newW, newH, method, gray = true) }
+                (l as? SmartLayer)?.mapFilterMask { Resample.resizeGrid(it, newW, newH, method, gray = true) }
             }
             doc.guides = mapGuides(doc.guides, scale)
             mapExtras(scale) { g -> transformMask(g, scale, newW, newH) }
@@ -981,6 +1267,7 @@ class Editor(doc: Document) {
                     else -> {}
                 }
                 l.mask?.let { it.grid = f(it.grid) }
+                (l as? SmartLayer)?.mapFilterMask(f)
             }
             doc.guides = mapGuides(doc.guides, m)
             mapExtras(m, f)
@@ -1102,6 +1389,29 @@ class Editor(doc: Document) {
     fun invertSelection() { doc.selection?.let { setSelection(it.inverted(), tr("Auswahl umkehren")) } }
     fun featherSelection(radius: Float) { doc.selection?.let { setSelection(it.feathered(radius), tr("Weiche Auswahlkante")) } }
 
+    /** Auswahl → Auswahl verändern: Erweitern/Verkleinern/Abrunden/Rand um [amount] Pixel. */
+    fun modifySelection(kind: de.photographics.core.selection.SelectionModifyKind, amount: Int, atCanvasBounds: Boolean = false) {
+        val sel = doc.selection ?: return
+        val M = de.photographics.core.selection.SelectionModify
+        val out = when (kind) {
+            de.photographics.core.selection.SelectionModifyKind.EXPAND -> M.expand(sel, amount)
+            de.photographics.core.selection.SelectionModifyKind.CONTRACT -> M.contract(sel, amount, atCanvasBounds)
+            de.photographics.core.selection.SelectionModifyKind.SMOOTH -> M.smooth(sel, amount, atCanvasBounds)
+            de.photographics.core.selection.SelectionModifyKind.BORDER -> M.border(sel, amount, atCanvasBounds)
+        }
+        if (out !== sel) setSelection(out, kind.label)
+    }
+
+    /**
+     * Auswahl → Farbbereich auf [src] (aktive Ebene oder sichtbares Bild), verknüpft mit der
+     * bestehenden Auswahl nach [op].
+     */
+    fun colorRangeSelection(src: de.photographics.core.image.TileGrid, spec: de.photographics.core.selection.ColorRange.Spec, op: SelectionOp = SelectionOp.REPLACE) {
+        val sel = de.photographics.core.selection.ColorRange.select(src, spec)
+        val existing = doc.selection
+        setSelection(if (existing != null && op != SelectionOp.REPLACE) existing.combine(sel, op) else sel, tr("Farbbereich"))
+    }
+
     /** Ausgewählte Pixel der aktiven Ebene löschen. */
     fun clearSelection(): IntRect? = editSelected(tr("Löschen")) { orig, s -> Colors.withAlpha(orig, (orig ushr 24) * (255 - s) / 255) }
 
@@ -1111,10 +1421,7 @@ class Editor(doc: Document) {
      */
     fun fillGradient(target: de.photographics.core.tools.PaintTarget, g: Gradient, opacity: Float): IntRect? {
         val layer = doc.activeLayer ?: return null
-        val grid = when (target) {
-            de.photographics.core.tools.PaintTarget.PIXELS -> (layer as? PixelLayer)?.pixels
-            de.photographics.core.tools.PaintTarget.MASK -> layer.mask?.grid
-        } ?: return null
+        val grid = targetGrid(layer, target) ?: return null
         val sel = doc.selection
         val area = (sel?.bounds ?: doc.bounds).intersect(doc.bounds)
         if (area.isEmpty) return null
@@ -1126,9 +1433,11 @@ class Editor(doc: Document) {
             // 16 Bit: stufenloser Verlauf in beide Raster
             tx.linked = TileTransaction(low).also { it.touch(area) }
             g.apply16(grid, low, area, opacity, sel?.mask, layer.lockTransparency)
-        } else g.apply(grid, area, opacity, sel?.mask, scalar = target == de.photographics.core.tools.PaintTarget.MASK,
+        } else g.apply(grid, area, opacity, sel?.mask, scalar = target.isMask,
             lockAlpha = target == de.photographics.core.tools.PaintTarget.PIXELS && layer.lockTransparency)
-        tx.commit(tr("Verlauf"))?.let { push(it) }
+        val smart = (layer as? SmartLayer)?.takeIf { target == de.photographics.core.tools.PaintTarget.FILTER_MASK }
+        smart?.filterMaskChanged(area)
+        tx.commit(tr("Verlauf"))?.let { push(if (smart != null) FilterMaskEntry(it, smart) else it) }
         return area
     }
 
@@ -1174,7 +1483,7 @@ class Editor(doc: Document) {
         if (x !in 0 until doc.width || y !in 0 until doc.height) return null
         val src = if (allLayers) doc.newGrid().also { g -> de.photographics.core.render.Compositor.renderBands(doc, doc.bounds) { r, buf -> g.writeRect(r, buf) } }
             else layer.pixels
-        var region = de.photographics.core.selection.MagicWand.select(src, x, y, tolerance, contiguous)
+        var region = de.photographics.core.selection.MagicWand.select(src, x, y, tolerance, contiguous, outlines = false)
         if (region.isEmpty) return null
         if (antiAlias) region = region.feathered(0.7f)
         return region
@@ -1182,35 +1491,42 @@ class Editor(doc: Document) {
 
     /** Wie [editSelected], aber für einen eigenen Bereich – innerhalb der Dokumentauswahl, falls vorhanden. */
     private fun editRegion(label: String, region: Selection, f: (Int, Int) -> Int): IntRect? {
-        val layer = doc.activeLayer as? PixelLayer ?: return null
         val sel = doc.selection
         val r = region.bounds.intersect(sel?.bounds ?: doc.bounds).intersect(doc.bounds)
-        if (r.isEmpty) return null
-        history.makeRoom(r.width.toLong() * r.height * 8)
-        val tx = TileTransaction(layer.pixels)
-        tx.touch(r)
-        for (yy in r.top until r.bottom) for (xx in r.left until r.right) {
-            val s = if (sel == null) region.at(xx, yy) else region.at(xx, yy) * sel.at(xx, yy) / 255
-            if (s == 0) continue
-            layer.pixels[xx, yy] = f(layer.pixels[xx, yy], s)
-        }
-        tx.commit(label)?.let { push(it) }
-        return r
+        return editMasked(label, r, listOfNotNull(region.mask, sel?.mask), f)
     }
 
     private fun editSelected(label: String, f: (Int, Int) -> Int): IntRect? {
-        val layer = doc.activeLayer as? PixelLayer ?: return null
         val sel = doc.selection ?: Selection.all(doc.width, doc.height)
-        val r = sel.bounds
+        return editMasked(label, sel.bounds, listOf(sel.mask), f)
+    }
+
+    /**
+     * Pixel der aktiven Ebene in [r] mit [f] (Pixel, Stärke 0..255) ändern; die Stärke ist das Produkt
+     * der [masks]. Kachelweise auf allen Kernen; gesichert und geschrieben werden nur Kacheln, in denen
+     * die Stärke irgendwo > 0 ist. [f] muss threadsicher sein.
+     */
+    private fun editMasked(label: String, r: IntRect, masks: List<TileGrid>, f: (Int, Int) -> Int): IntRect? {
+        val layer = doc.activeLayer as? PixelLayer ?: return null
         if (r.isEmpty) return null
+        val grid = layer.pixels
         history.makeRoom(r.width.toLong() * r.height * 8)
-        val tx = TileTransaction(layer.pixels)
-        tx.touch(r)
-        for (y in r.top until r.bottom) for (x in r.left until r.right) {
-            val s = sel.at(x, y)
-            if (s == 0) continue
-            layer.pixels[x, y] = f(layer.pixels[x, y], s)
-        }
+        val parts = ArrayList<IntRect>()
+        grid.forTilesIn(r) { tx, ty -> parts += grid.tileRect(tx, ty).intersect(r) }
+        val tx = TileTransaction(grid)
+        de.photographics.core.image.Parallel.bands(parts.size, TileGrid.TILE.toLong() * TileGrid.TILE * 12, compute = { i ->
+            val t = parts[i]; val n = t.width * t.height
+            val s = IntArray(n); masks[0].readRect(t, s)
+            if (masks.size > 1) {
+                val m = IntArray(n)
+                for (k in 1 until masks.size) { masks[k].readRect(t, m); for (j in 0 until n) if (s[j] != 0) s[j] = s[j] * m[j] / 255 }
+            }
+            if (s.all { it == 0 }) null else {
+                val px = IntArray(n); grid.readRect(t, px)
+                for (j in 0 until n) if (s[j] != 0) px[j] = f(px[j], s[j])
+                px
+            }
+        }, consume = { i, px -> if (px != null) { tx.touch(parts[i]); grid.writeRect(parts[i], px) } })
         tx.commit(label)?.let { push(it) }
         return r
     }

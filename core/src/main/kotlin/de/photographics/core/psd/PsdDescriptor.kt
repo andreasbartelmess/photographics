@@ -24,6 +24,13 @@ class PsdDescriptor(
     data class EnumValue(val type: String, val value: String)
     data class ClassRef(val name: String, val classId: String)
     class RawData(val bytes: ByteArray)
+    /** Mehrere Werte mit Einheit („UnFl“), z. B. Koordinaten aller Gitterpunkte einer Verkrümmung. */
+    class UnitFloats(val unit: String, val values: DoubleArray)
+    /**
+     * Objekt-Array („ObAr“, z. B. meshPoints der Verkrümmung): je Feld eine Werteliste über alle Objekte.
+     * [count] = vorangestellte Zahl (Anzahl der Objekte), wird unverändert zurückgeschrieben.
+     */
+    class ObjectArray(val count: Int, val name: String, val classId: String, val items: LinkedHashMap<String, Any?>)
 
     companion object {
         /** Liest einen Descriptor (ohne vorangestellte Versionsnummer). */
@@ -60,7 +67,21 @@ class PsdDescriptor(
             "alis" -> RawData(r.bytes(r.i32()))
             "tdta" -> RawData(r.bytes(r.i32()))
             "obj " -> { readReference(r); null }
-            "ObAr" -> throw PsdFormatException(tr("Objekt-Arrays werden nicht unterstützt"))
+            "ObAr" -> {
+                val count = r.i32()
+                val name = r.unicode()
+                val classId = readKey(r)
+                val n = r.i32()
+                val items = LinkedHashMap<String, Any?>()
+                repeat(n) {
+                    val key = readKey(r)
+                    items[key] = when (val t = r.ascii(4)) {
+                        "UnFl" -> { val unit = r.ascii(4); val m = r.i32(); UnitFloats(unit, DoubleArray(m) { r.f64() }) }
+                        else -> readValue(r, t)
+                    }
+                }
+                ObjectArray(count, name, classId, items)
+            }
             else -> throw PsdFormatException(tr("Unbekannter Descriptor-Typ {0}", type))
         }
 
@@ -78,8 +99,9 @@ class PsdDescriptor(
             }
         }
 
-        fun write(w: BinaryWriter, d: PsdDescriptor) {
-            w.unicodeNoTerm(d.name)
+        /** [terminatedName]: Name mit abschließender Null wie in Photoshops Ebenen-Metadaten. */
+        fun write(w: BinaryWriter, d: PsdDescriptor, terminatedName: Boolean = false) {
+            if (terminatedName) w.unicode(d.name) else w.unicodeNoTerm(d.name)
             writeKey(w, d.classId)
             w.i32(d.items.size)
             for ((k, v) in d.items) {
@@ -105,6 +127,11 @@ class PsdDescriptor(
                 is Boolean -> { w.ascii("bool"); w.u8(if (v) 1 else 0) }
                 is ClassRef -> { w.ascii("type"); w.unicodeNoTerm(v.name); writeKey(w, v.classId) }
                 is RawData -> { w.ascii("tdta"); w.i32(v.bytes.size); w.bytes(v.bytes) }
+                is UnitFloats -> { w.ascii("UnFl"); w.ascii(v.unit); w.i32(v.values.size); v.values.forEach { w.f64(it) } }
+                is ObjectArray -> {
+                    w.ascii("ObAr"); w.i32(v.count); w.unicode(v.name); writeKey(w, v.classId); w.i32(v.items.size)
+                    for ((k, x) in v.items) { writeKey(w, k); writeValue(w, x) }
+                }
                 else -> throw IllegalArgumentException(tr("Wert kann nicht geschrieben werden: {0}", v))
             }
         }

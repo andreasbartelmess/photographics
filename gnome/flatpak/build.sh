@@ -35,6 +35,40 @@ install -Dm644 gnome/src/main/resources/icons/hicolor/scalable/apps/$APP_ID.svg 
 install -Dm644 gnome/src/main/resources/icons/hicolor/symbolic/apps/$APP_ID-symbolic.svg "$F/share/icons/hicolor/symbolic/apps/$APP_ID-symbolic.svg"
 
 # Rechte wie im Manifest (finish-args)
+# Katalogdaten (Name, Beschreibung, Symbol, Bildschirmfotos) für GNOME Software und KDE Discover:
+# build-update-repo übernimmt sie aus share/app-info in den appstream-Zweig des Repositorys.
+# Selbst erzeugt statt „appstreamcli compose“: dessen Bildlader (glycin) startet in „flatpak build“ nicht.
+for s in 64 128; do
+    mkdir -p "$F/share/app-info/icons/flatpak/${s}x${s}"
+    flatpak build "$APP" rsvg-convert -w $s -h $s -o "/app/share/app-info/icons/flatpak/${s}x${s}/$APP_ID.png" \
+        "/app/share/icons/hicolor/scalable/apps/$APP_ID.svg"
+done
+mkdir -p "$F/share/app-info/xmls"
+python3 - "$F/share/metainfo/$APP_ID.metainfo.xml" "$F/share/app-info/xmls/$APP_ID.xml.gz" "$APP_ID" "$(flatpak --default-arch)" <<'PY'
+import gzip, sys, xml.etree.ElementTree as ET
+src, out, app, arch = sys.argv[1:]
+comp = ET.parse(src).getroot()
+# Im Katalog steht jede Sprache in einem eigenen <description xml:lang>, nicht pro Absatz.
+LANG = "{http://www.w3.org/XML/1998/namespace}lang"
+desc = comp.find("description")
+if desc is not None:
+    pos = list(comp).index(desc)
+    for el in [e for e in desc if e.get(LANG)]:
+        lang = el.attrib.pop(LANG)
+        desc.remove(el)
+        tr = next((d for d in comp.findall("description") if d.get(LANG) == lang), None)
+        if tr is None:
+            tr = ET.Element("description", {LANG: lang}); pos += 1; comp.insert(pos, tr)
+        tr.append(el)
+for s in (64, 128):
+    ET.SubElement(comp, "icon", type="cached", width=str(s), height=str(s)).text = app + ".png"
+ET.SubElement(comp, "bundle", type="flatpak").text = f"app/{app}/{arch}/stable"
+root = ET.Element("components", version="1.0", origin=app)
+root.append(comp)
+with gzip.open(out, "wb") as f:
+    ET.ElementTree(root).write(f, encoding="UTF-8", xml_declaration=True)
+PY
+
 flatpak build-finish "$APP" --command=photographics \
     --share=ipc --socket=wayland --socket=fallback-x11 --device=dri --share=network \
     --filesystem=home --filesystem=/media --filesystem=/run/media --env=JAVA_HOME=/app/jre

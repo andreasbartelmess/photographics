@@ -26,7 +26,16 @@ import org.gnome.gtk.Widget
  * Miniaturen aus dem eigenen Bild, rechts die Regler des gewählten Effekts und der Effektstapel
  * (mehrere Effekte nacheinander, einzeln ein- und ausblendbar).
  */
-class FilterGallery(private val parent: Widget, private val session: Session, private val view: IntRect, private val fg: Int, private val bg: Int, private val onApply: (GalleryChain) -> Unit) {
+/**
+ * [source]: Vorschauquelle statt der aktiven Pixelebene (Smartfilter: das Smartobjekt mit den Filtern
+ * darunter); [initial]: Effekte beim Öffnen (Smartfilter nachregeln). [onApply] erhält die Kette und
+ * die Effekte.
+ */
+class FilterGallery(
+    private val parent: Widget, private val session: Session, private val view: IntRect, private val fg: Int, private val bg: Int,
+    private val source: de.photographics.core.image.TileGrid? = null, initial: List<GalleryEffect>? = null,
+    private val onApply: (GalleryChain, List<GalleryEffect>) -> Unit,
+) {
     /** Ausgangsbild der Vorschau: ganze Ebene verkleinert oder ein Ausschnitt in 100 %. */
     private class Source(val px: IntArray, val w: Int, val h: Int, val ox: Int, val oy: Int, val scale: Float)
 
@@ -52,14 +61,14 @@ class FilterGallery(private val parent: Widget, private val session: Session, pr
     init {
         // PG_GALLERY_EFFECT=<id>: mit diesem Effekt öffnen (Bildschirmfotos)
         val first = System.getenv("PG_GALLERY_EFFECT")?.let { Gallery.byId(it) } ?: Gallery.specs.first()
-        effects += last ?: listOf(GalleryEffect(first, first.defaults()))
+        effects += initial?.takeIf { it.isNotEmpty() } ?: last ?: listOf(GalleryEffect(first, first.defaults()))
         dialog.title = tr("Filtergalerie")
         dialog.contentWidth = 1280; dialog.contentHeight = 820
         val header = org.gnome.adw.HeaderBar().apply { showEndTitleButtons = false; showStartTitleButtons = false }
         header.packStart(Button.withLabel(tr("Abbrechen")).apply { onClicked { closed = true; dialog.close() } })
         header.packEnd(Button.withLabel(tr("Anwenden")).apply {
             addCssClass("suggested-action")
-            onClicked { closed = true; last = effects.toList(); onApply(chain(1f)); dialog.close() }
+            onClicked { closed = true; last = effects.toList(); onApply(chain(1f), effects.toList()); dialog.close() }
         })
         header.packEnd(spinner)
         val zoom = org.gnome.gtk.DropDown.fromStrings(arrayOf(tr("Ganzes Bild"), tr("100 %"))).apply {
@@ -237,8 +246,7 @@ class FilterGallery(private val parent: Widget, private val session: Session, pr
     private fun loadSource(boxW: Int, boxH: Int) {
         spinner.spinning = true
         Engine.call({
-            val l = session.doc.activeLayer as? PixelLayer ?: return@call null
-            val g = l.pixels
+            val g = source ?: (session.doc.activeLayer as? PixelLayer)?.pixels ?: return@call null
             val d = session.doc
             val bw = boxW.coerceAtMost(4096); val bh = boxH.coerceAtMost(4096)
             val sc = minOf(1f, bw.toFloat() / d.width, bh.toFloat() / d.height)
@@ -276,7 +284,9 @@ class FilterGallery(private val parent: Widget, private val session: Session, pr
         // Ganzes Bild: verkleinert gerechnet sehen Striche, Korn und feine Linien anders aus als nach
         // dem Anwenden – nach der schnellen Vorschau daher in voller Auflösung rechnen und verkleinern
         val exact = !full && src.scale < 1f
-        val layer = session.doc.activeLayer as? PixelLayer
+        // Smartfilter: eigene Quelle ohne Auswahl (die Filter wirken auf das ganze Smartobjekt)
+        val exactDoc = if (source != null) de.photographics.core.doc.Document(session.doc.width, session.doc.height) else session.doc
+        val layer = if (source != null) PixelLayer("", source) else session.doc.activeLayer as? PixelLayer
         fun show(out: IntArray?) {
             val bytes = out?.let { CanvasView.toBytes(it) } ?: return
             onMain {
@@ -293,7 +303,7 @@ class FilterGallery(private val parent: Widget, private val session: Session, pr
         Thread {
             if (quick) show(runCatching { c.process(src.px.copyOf(), src.w, src.h, src.ox, src.oy, src.w, src.h) }.getOrNull())
             if (exact && layer != null) runCatching {
-                de.photographics.core.filters.FilterRunner.previewScaled(session.doc, layer, chain(1f, list), src.w, src.h) { closed }
+                de.photographics.core.filters.FilterRunner.previewScaled(exactDoc, layer, chain(1f, list), src.w, src.h) { closed }
             }.getOrNull()?.let { show(it); onMain { exactShownFor = src } }
             onMain {
                 running = false

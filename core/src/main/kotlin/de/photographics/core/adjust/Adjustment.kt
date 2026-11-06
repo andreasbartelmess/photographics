@@ -83,9 +83,17 @@ enum class AdjustmentType(val label: String, val psdKey: String) {
 // ---------------------------------------------------------------- Hilfen
 
 /** Tabelle für Operationen, die jeden Kanal gleich behandeln. */
+/**
+ * Kanalweise Abbildung über drei Tabellen (je 256 Einträge): Rot, Grün und Blau unabhängig. Die GPU
+ * erkennt diese Form und rechnet sie über eine kleine Tabellentextur statt einer 3D-Tabelle.
+ */
+class ChannelLuts(val r: IntArray, val g: IntArray, val b: IntArray) : RgbMap {
+    override fun map(rgb: Int): Int = (r[(rgb shr 16) and 0xFF] shl 16) or (g[(rgb shr 8) and 0xFF] shl 8) or b[rgb and 0xFF]
+}
+
 private fun lutMap(f: (Float) -> Float): RgbMap {
     val lut = IntArray(256) { (f(it / 255f) * 255f).roundToInt().coerceIn(0, 255) }
-    return RgbMap { c -> (lut[(c shr 16) and 0xFF] shl 16) or (lut[(c shr 8) and 0xFF] shl 8) or lut[c and 0xFF] }
+    return ChannelLuts(lut, lut, lut)
 }
 
 private fun pack(r: Float, g: Float, b: Float): Int =
@@ -159,11 +167,9 @@ data class CurvesAdj(
     override fun compile(): RgbMap {
         val m = table(master)
         val r = red?.let { table(it) }; val g = green?.let { table(it) }; val b = blue?.let { table(it) }
-        return RgbMap { c ->
-            var rr = (c shr 16) and 0xFF; var gg = (c shr 8) and 0xFF; var bb = c and 0xFF
-            if (r != null) rr = r[rr]; if (g != null) gg = g[gg]; if (b != null) bb = b[bb]
-            (m[rr] shl 16) or (m[gg] shl 8) or m[bb]
-        }
+        // Erst die Kanalkurve, dann die Gesamtkurve
+        fun chain(c: IntArray?) = IntArray(256) { m[c?.get(it) ?: it] }
+        return ChannelLuts(chain(r), chain(g), chain(b))
     }
 
     companion object {
@@ -242,9 +248,11 @@ data class HueSaturationAdj(val hue: Int = 0, val saturation: Int = 0, val light
     )
     override fun withValues(v: FloatArray) = copy(hue = v[0].roundToInt(), saturation = v[1].roundToInt(), lightness = v[2].roundToInt(), colorize = v[3] >= 0.5f)
     override fun compile(): RgbMap {
-        val hsl = FloatArray(3); val rgb = FloatArray(3)
+        // Hilfsarrays je Thread: Anzeige und GPU-Tabellen rufen die Abbildung parallel auf
+        val scratch = ThreadLocal.withInitial { FloatArray(3) to FloatArray(3) }
         val s = saturation / 100f; val l = lightness / 100f
         return RgbMap { c ->
+            val (hsl, rgb) = scratch.get()
             Colors.rgbToHsl(((c shr 16) and 0xFF) / 255f, ((c shr 8) and 0xFF) / 255f, (c and 0xFF) / 255f, hsl)
             if (colorize) {
                 hsl[0] = ((hue + 360) % 360).toFloat()
@@ -317,7 +325,8 @@ data class BlackWhiteAdj(
         v[6] >= 0.5f, v[7].roundToInt(), v[8].roundToInt(),
     )
     override fun compile(): RgbMap {
-        val rgb = FloatArray(3)
+        // Tönungsfarbe einmal vorab (die Abbildung läuft parallel auf mehreren Threads)
+        val rgb = FloatArray(3).also { Colors.hslToRgb(tintHue.toFloat(), tintSaturation / 100f, 0.5f, it) }
         val weights = floatArrayOf(red / 100f, yellow / 100f, green / 100f, cyan / 100f, blue / 100f, magenta / 100f)
         return RgbMap { c ->
             val r = ((c shr 16) and 0xFF) / 255f; val g = ((c shr 8) and 0xFF) / 255f; val b = (c and 0xFF) / 255f
@@ -330,7 +339,6 @@ data class BlackWhiteAdj(
             else { val m = min(rr, gg); gray = mn + weights[1] * m + (if (rr > gg) weights[0] * (rr - m) else weights[2] * (gg - m)) }
             val v = gray.coerceIn(0f, 1f)
             if (!tint) pack(v, v, v) else {
-                Colors.hslToRgb(tintHue.toFloat(), tintSaturation / 100f, 0.5f, rgb)
                 // Tönung wie „Ineinanderkopieren“ auf dem Grauwert
                 fun ov(t: Float) = if (v < 0.5f) 2f * v * t else 1f - 2f * (1f - v) * (1f - t)
                 pack(ov(rgb[0]), ov(rgb[1]), ov(rgb[2]))
@@ -366,7 +374,7 @@ object InvertAdj : Adjustment() {
     override val type get() = AdjustmentType.INVERT
     override fun params() = emptyList<AdjParam>()
     override fun withValues(v: FloatArray) = this
-    override fun compile() = RgbMap { c -> c.inv() and 0xFFFFFF }
+    override fun compile(): RgbMap { val t = IntArray(256) { 255 - it }; return ChannelLuts(t, t, t) }
 }
 
 data class PosterizeAdj(val levels: Int = 4) : Adjustment() {

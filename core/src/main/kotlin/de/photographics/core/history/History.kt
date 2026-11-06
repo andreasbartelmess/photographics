@@ -267,6 +267,20 @@ class TileTransaction(val grid: TileGrid) {
         return patch
     }
 
+    /**
+     * Vergleichen (Vorher/Nachher): tauscht die gesicherten Originalkacheln mit den aktuellen. Zweimal
+     * aufgerufen ist alles wie zuvor; vor [commit] oder [rollback] muss der Tausch zurückgenommen sein.
+     */
+    fun swapOriginals() {
+        linked?.swapOriginals()
+        for (key in originals.keys.toList()) {
+            val tx = key % grid.tilesX; val ty = key / grid.tilesX
+            val cur = grid.tile(tx, ty)
+            grid.setTile(tx, ty, originals[key])
+            originals[key] = cur
+        }
+    }
+
     fun rollback() {
         linked?.rollback()
         for ((key, t) in originals) grid.setTile(key % grid.tilesX, key / grid.tilesX, t)

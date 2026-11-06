@@ -16,6 +16,7 @@ import org.gnome.gtk.Orientation
 import org.gnome.gtk.SpinButton
 import org.gnome.gtk.ToggleButton
 import org.gnome.gtk.Widget
+import de.photographics.core.selection.SelectionModifyKind as K
 import kotlin.math.roundToInt
 
 /** Kleine Formulardialoge (Bildgröße, Arbeitsfläche, Drehen …) als libadwaita-Hinweisdialoge. */
@@ -168,6 +169,22 @@ object Dialogs {
         f.add(tr("Radius (px)"), r)
         show(parent, tr("Weiche Auswahlkante"), null, f, tr("OK")) { onOk(r.value.toFloat()) }
     }
+
+    /** Auswahl verändern: Breite bzw. Radius in Pixeln, optional am Arbeitsflächenrand. */
+    fun modifySelection(parent: Widget, kind: de.photographics.core.selection.SelectionModifyKind, onOk: (Int, Boolean) -> Unit) {
+        val f = Form()
+        val max = if (kind == K.BORDER) 200.0 else 500.0
+        val v = spin(1.0, max, lastModify[kind] ?: if (kind == K.SMOOTH) 5.0 else 10.0)
+        f.add(if (kind == K.BORDER) tr("Breite (px)") else tr("Radius (px)"), v)
+        val edge = CheckButton.withLabel(tr("Effekt am Arbeitsflächenrand anwenden")).apply { active = lastModifyEdge }
+        if (kind != K.EXPAND) f.add(null, edge)
+        show(parent, kind.label, null, f, tr("OK")) {
+            lastModify[kind] = v.value; lastModifyEdge = edge.active
+            onOk(v.value.toInt(), kind != K.EXPAND && edge.active)
+        }
+    }
+    private val lastModify = HashMap<de.photographics.core.selection.SelectionModifyKind, Double>()
+    private var lastModifyEdge = false
 
     /** Ebeneneigenschaften: Name, Deckkraft, Fläche, Mischmodus, Fixieren, Schnittmaske. */
     fun layerProps(parent: Widget, row: LayerRow, onOk: (String, Float, Float, BlendMode, Boolean) -> Unit) {

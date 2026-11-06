@@ -3,6 +3,7 @@ package de.photographics.core.selection
 import de.photographics.core.tr
 import de.photographics.core.image.Blur
 import de.photographics.core.image.IntRect
+import de.photographics.core.image.Parallel
 import de.photographics.core.image.TileGrid
 import kotlin.math.PI
 import kotlin.math.cos
@@ -84,23 +85,32 @@ class Selection(
         val pad = (radius * 3).toInt() + 1
         val r = bounds.inset(-pad).intersect(IntRect.ofSize(width, height))
         if (r.isEmpty) return this
-        // Streifenweise mit Überlappung – auch eine Auswahl über das ganze Bild braucht nur wenig Speicher
         val out = mask.copy()
-        val bandH = maxOf(64, 1_000_000 / maxOf(1, r.width))
-        var y0 = r.top
-        while (y0 < r.bottom) {
-            val y1 = minOf(r.bottom, y0 + bandH)
-            val read = IntRect(r.left, maxOf(r.top, y0 - pad), r.right, minOf(r.bottom, y1 + pad))
-            val buf = IntArray(read.width * read.height)
-            mask.readRect(read, buf)
-            val f = FloatArray(buf.size) { buf[it].toFloat() }
-            Blur.gaussPlane(f, read.width, read.height, radius)
-            val off = (y0 - read.top) * read.width
-            val res = IntArray((y1 - y0) * read.width) { f[off + it].roundToInt().coerceIn(0, 255) }
-            out.writeRect(IntRect(r.left, y0, r.right, y1), res)
-            y0 = y1
+        if (pad <= 32) {
+            // Kleiner Radius: kachelweise auf allen Kernen; Kacheln, deren Umgebung einheitlich ist, bleiben unverändert
+            val parts = ArrayList<IntRect>()
+            mask.forTilesIn(r) { tx, ty -> parts += mask.tileRect(tx, ty).intersect(r) }
+            Parallel.bands(parts.size, (TileGrid.TILE + 2L * pad) * (TileGrid.TILE + 2 * pad) * 8, compute = { i ->
+                val t = parts[i]
+                val read = t.inset(-pad).intersect(r)
+                val buf = IntArray(read.width * read.height)
+                mask.readRect(read, buf)
+                val v0 = buf[0]
+                if (buf.all { it == v0 }) null else {
+                    val f = FloatArray(buf.size) { buf[it].toFloat() }
+                    Blur.gaussPlane(f, read.width, read.height, radius)
+                    val res = IntArray(t.width * t.height)
+                    for (yy in 0 until t.height) {
+                        val src = (t.top - read.top + yy) * read.width + (t.left - read.left)
+                        for (xx in 0 until t.width) res[yy * t.width + xx] = f[src + xx].roundToInt().coerceIn(0, 255)
+                    }
+                    res
+                }
+            }, consume = { i, res -> if (res != null) out.writeRect(parts[i], res) })
+            out.compact()
+            return Selection(out, outlines)
         }
-        out.compact()
+        // Streifenweise        out.compact()
         return Selection(out, outlines)
     }
 

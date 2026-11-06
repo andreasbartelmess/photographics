@@ -22,7 +22,7 @@ class PhotographicsApp {
     private val windows = ArrayList<MainWindow>()
 
     init {
-        adw.onStartup { setupStyle() }
+        adw.onStartup { setupStyle(); GpuRender.warmUp() }
         adw.onActivate { (windows.lastOrNull() ?: newWindow()).also { it.present(); offerRecovery(it) } }
         adw.onOpen { files, _ ->
             for (f in files.orEmpty()) {
@@ -192,7 +192,8 @@ class PhotographicsApp {
     /** Fenster jetzt als PNG speichern (auch als Testaktion „shot:name“ mitten im Ablauf). */
     fun shoot(out: File, scale: Double = System.getenv("PG_SCREENSHOT_SCALE")?.toDoubleOrNull() ?: 1.0) {
         run {
-            val win = windows.lastOrNull()?.window
+            // PG_SCREENSHOT_WINDOW=0: erstes Fenster (z. B. Ursprung von „Inhalt bearbeiten“), sonst das neueste
+            val win = (System.getenv("PG_SCREENSHOT_WINDOW")?.toIntOrNull()?.let { windows.getOrNull(it) } ?: windows.lastOrNull())?.window
             if (win != null) {
                 val paintable = org.gnome.gtk.WidgetPaintable(win)
                 val snap = org.gnome.gtk.Snapshot()

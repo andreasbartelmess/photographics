@@ -42,11 +42,27 @@ class PropertiesPanel(private val onClosed: () -> Unit) {
     private val title = Label("").apply { addCssClass("heading"); hexpand = true; xalign = 0f; ellipsize = org.gnome.pango.EllipsizeMode.END }
     private val content = Box(Orientation.VERTICAL, 10).apply { marginStart = 12; marginEnd = 12; marginTop = 6; marginBottom = 12 }
     private var finish: ((Boolean) -> Unit)? = null
+    private val compareButton = Button.withLabel(tr("Vorher")).apply { addCssClass("flat"); visible = false }
+    /** Controller der laufenden Vorschau, die sich vergleichen lässt (sonst null: Knopf versteckt). */
+    private var compareWith: Controller? = null
+        set(v) { field = v; compareButton.visible = v != null }
     val open get() = finish != null
 
     init {
         val head = Box(Orientation.VERTICAL, 8).apply { marginStart = 12; marginEnd = 12; marginTop = 12; marginBottom = 6 }
-        head.append(title)
+        val top = Box(Orientation.HORIZONTAL, 6)
+        top.append(title)
+        // Gedrückt halten: Bild ohne die laufende Vorschau zeigen (Vorher/Nachher)
+        compareButton.tooltipText = tr("Gedrückt halten, um den Stand vorher zu sehen")
+        compareButton.valign = Align.CENTER
+        val hold = GestureClick().apply { propagationPhase = org.gnome.gtk.PropagationPhase.CAPTURE }
+        hold.onPressed { _, _, _ -> compareWith?.compare(true) }
+        hold.onReleased { _, _, _ -> compareWith?.compare(false) }
+        hold.onStopped { compareWith?.compare(false) }
+        hold.onCancel { _ -> compareWith?.compare(false) }
+        compareButton.addController(hold)
+        top.append(compareButton)
+        head.append(top)
         val buttons = Box(Orientation.HORIZONTAL, 6).apply { homogeneous = true }
         buttons.append(Button.withLabel(tr("Abbrechen")).apply { onClicked { close(false) } })
         buttons.append(Button.withLabel(tr("Anwenden")).apply { addCssClass("suggested-action"); onClicked { close(true) } })
@@ -63,12 +79,14 @@ class PropertiesPanel(private val onClosed: () -> Unit) {
     fun close(apply: Boolean) {
         val f = finish ?: return
         finish = null
+        compareWith = null
         f(apply)
         onClosed()
     }
 
     private fun reset(heading: String, done: (Boolean) -> Unit) {
         finish?.invoke(false)
+        compareWith = null
         var c = content.firstChild
         while (c != null) { val n = c.nextSibling; content.remove(c); c = n }
         title.label = heading
@@ -114,9 +132,26 @@ class PropertiesPanel(private val onClosed: () -> Unit) {
     /** Filter mit Live-Vorschau. */
     fun showFilter(spec: FilterSpec, c: Controller) {
         reset(spec.label) { apply -> c.filterFinish(apply, spec.label) }
+        compareWith = c
         if (spec.params.isEmpty()) content.append(Label(tr("Keine Einstellungen")).apply { addCssClass("dim-label") })
         params(spec.params) { v -> c.filterPreview(spec.build(v)) }
         c.filterPreview(spec.build(FloatArray(spec.params.size) { spec.params[it].default }))
+    }
+
+    /**
+     * Smartfilter einstellen: neu ([index] = -1, oben angehängt) oder ein vorhandener ([base] mit
+     * seinen Werten und Fülloptionen). Live-Vorschau auf dem Smartobjekt.
+     */
+    fun showSmartFilter(spec: FilterSpec, c: Controller, layerId: Int, index: Int, base: de.photographics.core.doc.SmartFilter?) {
+        reset(tr("{0} (Smartfilter)", spec.label)) { apply -> c.smartFilterFinish(apply) }
+        c.smartFilterBegin(layerId, index)
+        compareWith = c
+        val start = FloatArray(spec.params.size) { i -> base?.values?.getOrNull(i) ?: spec.params[i].default }
+        val ps = spec.params.mapIndexed { i, p -> FilterParam(p.label, p.min, p.max, start[i], p.decimals, p.kind, p.choices) }
+        if (ps.isEmpty()) content.append(Label(tr("Keine Einstellungen")).apply { addCssClass("dim-label") })
+        fun filter(v: FloatArray) = (base ?: de.photographics.core.doc.SmartFilter(spec.id)).copy(values = v.toList())
+        params(ps) { v -> c.smartFilterPreview(filter(v)) }
+        c.smartFilterPreview(filter(start))
     }
 
     /** Korrektur direkt auf die Pixelebene (wie ein Filter). */
@@ -124,6 +159,7 @@ class PropertiesPanel(private val onClosed: () -> Unit) {
         val def = t.createDefault()
         val ps = def.params().map { it.toFilterParam() }
         reset(t.label) { apply -> c.filterFinish(apply, t.label) }
+        compareWith = c
         params(ps) { v -> c.filterPreview(AdjustmentFilter(def.withValues(v))) }
         c.filterPreview(AdjustmentFilter(def))
     }
@@ -131,6 +167,7 @@ class PropertiesPanel(private val onClosed: () -> Unit) {
     /** Einstellungsebene bearbeiten (nicht destruktiv). */
     fun showAdjustment(id: Int, a: Adjustment, histogram: IntArray?, c: Controller) {
         reset(a.label) { apply -> c.finishAdjustment(id, apply) }
+        compareWith = c
         if (a is CurvesAdj) {
             var cur: CurvesAdj = a
             val editor = CurveEditor()

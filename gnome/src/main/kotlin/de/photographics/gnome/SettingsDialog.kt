@@ -40,6 +40,10 @@ object SettingsDialog {
                 Settings.language) { Settings.language = it })
         })
         page.add(PreferencesGroup().apply {
+            title = tr("Leistung")
+            add(switch(tr("Grafikkarte verwenden"), GpuRender.status(), Settings.gpuCompose) { Settings.gpuCompose = it; GpuRender.settingChanged() })
+        })
+        page.add(PreferencesGroup().apply {
             title = tr("Farbmanagement")
             add(combo(tr("Arbeitsfarbraum"), tr("Für CMYK-, Graustufen- und Lab-Dateien beim Öffnen"), IccProfiles.Builtin.entries, { it.label }, Settings.workingRgb) { Settings.workingRgb = it })
             add(switch(tr("Beim Export in sRGB umwandeln"), tr("Sonst wird das Dokumentprofil in PNG/JPEG eingebettet"), Settings.exportToSrgb) { Settings.exportToSrgb = it })

@@ -218,6 +218,8 @@ private fun Workspace(s: AppSettings, onChange: ((AppSettings) -> AppSettings) -
         Slider(s.layersWidth.toFloat(), { v -> onChange { it.copy(layersWidth = (v / 10).roundToInt() * 10) } }, valueRange = 260f..520f, modifier = Modifier.weight(1f))
         Text(tr("{0} dp", s.layersWidth), style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(64.dp).padding(start = 8.dp))
     }
+    Section(tr("Leistung"))
+    SwitchRow(tr("Grafikkarte verwenden"), de.photographics.app.gpu.GpuState.status(), s.gpuCompose) { v -> onChange { it.copy(gpuCompose = v) } }
     Section(tr("Werkzeugoptionen und Schnellregler"))
     LabeledSegmented(tr("Optionsleiste"), BarPosition.entries, s.optionsBar, { it.label }) { v -> onChange { it.copy(optionsBar = v) } }
     Spacer(Modifier.height(8.dp))

@@ -12,8 +12,12 @@ onnxruntime = "1.27.0"
 print = "1.0.0"
 okhttp = "5.4.0"
 javagi = "1.0.0-RC3"
+lwjgl = "3.3.6"
 
 [libraries]
+lwjgl = { module = "org.lwjgl:lwjgl", version.ref = "lwjgl" }
+lwjgl-egl = { module = "org.lwjgl:lwjgl-egl", version.ref = "lwjgl" }
+lwjgl-opengles = { module = "org.lwjgl:lwjgl-opengles", version.ref = "lwjgl" }
 javagi-adw = { module = "org.java-gi:adw", version.ref = "javagi" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }

@@ -58,6 +58,15 @@ class LayersPanel(private val act: Actions) {
         fun drop(ids: List<Int>, parentId: Int, index: Int)
         fun deleteLayers(ids: List<Int>)
         fun duplicateLayers(ids: List<Int>)
+        // Smartfilter (Index: 0 = unterster, zuerst angewendet)
+        fun smartFilterToggle(id: Int, index: Int)
+        fun smartFiltersVisible(id: Int, visible: Boolean)
+        fun smartFilterEdit(id: Int, index: Int)
+        fun smartFilterBlending(id: Int, index: Int)
+        fun smartFilterDelete(id: Int, index: Int)
+        fun smartFilterMove(id: Int, from: Int, to: Int)
+        fun filterMask(id: Int, on: Boolean)
+        fun filterMaskOp(id: Int, op: FilterMaskOp)
     }
 
     val widget = Box(Orientation.VERTICAL, 0)
@@ -198,6 +207,12 @@ class LayersPanel(private val act: Actions) {
         appendSection(null, org.gnome.gio.Menu().apply {
             append(tr("Schnittmaske erstellen/lösen"), "win.toggle-clip")
             append(tr("In Smartobjekt umwandeln"), "win.smart")
+            append(tr("Inhalt bearbeiten"), "win.smart-edit")
+            append(tr("Neues Smartobjekt durch Kopie"), "win.smart-copy")
+            append(tr("In Ebenen umwandeln"), "win.smart-layers")
+            append(tr("Inhalt ersetzen …"), "win.smart-replace")
+            append(tr("Inhalt exportieren …"), "win.smart-export")
+            append(tr("Transformation zurücksetzen"), "win.smart-reset")
             append(tr("Rastern"), "win.rasterize")
             append(tr("Ebenenstil rastern"), "win.rasterize-style")
         })
@@ -279,6 +294,7 @@ class LayersPanel(private val act: Actions) {
                 val img = w as? Image ?: return@walk
                 if (img.hasCssClass("layer-thumb")) thumbs[r.id]?.let { img.setFromPaintable(it) }
                 if (img.hasCssClass("mask-thumb")) thumbs[-r.id]?.let { img.setFromPaintable(it) }
+                if (img.hasCssClass("filter-mask-thumb")) thumbs[filterMaskKey(r.id)]?.let { img.setFromPaintable(it) }
             }
         }
     }
@@ -333,10 +349,84 @@ class LayersPanel(private val act: Actions) {
         if (r.kind == LayerRow.Kind.TEXT) box.append(Image.fromIconName("pg-text-symbolic").apply { addCssClass("dim-label") })
         if (r.kind == LayerRow.Kind.SMART) box.append(Image.fromIconName("pg-smart-symbolic").apply { addCssClass("dim-label"); tooltipText = tr("Smartobjekt") })
         if (r.lockTransparency) box.append(Image.fromIconName("pg-lock-alpha-symbolic").apply { addCssClass("dim-label"); tooltipText = tr("Transparente Pixel fixiert") })
-        val row = ListBoxRow().apply { child = box }
+        val content: Widget = if (r.smartFilters.isEmpty()) box else Box(Orientation.VERTICAL, 0).apply {
+            append(box)
+            append(smartFilterLines(r))
+        }
+        val row = ListBoxRow().apply { child = content }
         if (!r.visible) row.addCssClass("hidden-layer")
         dnd(row, r)
         return row
+    }
+
+    /** Smartfilter unter dem Smartobjekt: Kopfzeile „Smartfilter“, darunter die Filter (zuletzt angewendeter oben). */
+    private fun smartFilterLines(r: LayerRow): Widget {
+        val col = Box(Orientation.VERTICAL, 0).apply { marginStart = 36 + r.depth * 14; addCssClass("smart-filters") }
+        fun eye(on: Boolean, tip: String, click: () -> Unit) = Button().apply {
+            iconName = if (on) "view-reveal-symbolic" else "pg-hidden-symbolic"
+            addCssClass("flat"); addCssClass("eye"); valign = Align.CENTER; focusOnClick = false
+            tooltipText = tip
+            onClicked { click() }
+        }
+        fun menu(items: List<Pair<String, () -> Unit>>) = org.gnome.gtk.MenuButton().apply {
+            iconName = "view-more-symbolic"; addCssClass("flat"); valign = Align.CENTER
+            tooltipText = tr("Smartfilter-Optionen")
+            val pop = org.gnome.gtk.Popover()
+            val list = Box(Orientation.VERTICAL, 0)
+            for ((label, f) in items) list.append(Button.withLabel(label).apply {
+                addCssClass("flat"); (child as? Label)?.xalign = 0f
+                onClicked { pop.popdown(); f() }
+            })
+            pop.child = list
+            popover = pop
+        }
+        val head = Box(Orientation.HORIZONTAL, 4)
+        head.append(eye(r.smartFiltersVisible, tr("Alle Smartfilter ein-/ausblenden")) { act.smartFiltersVisible(r.id, !r.smartFiltersVisible) })
+        if (r.filterMask) {
+            // Filtermaske wie die Ebenenmaske: Klick = darauf malen
+            val sel = r.active && target == PaintTarget.FILTER_MASK
+            val frame = Box(Orientation.HORIZONTAL, 0).apply { addCssClass("thumb-frame"); if (sel) addCssClass("thumb-selected"); valign = Align.CENTER }
+            frame.append(Image().apply { pixelSize = THUMB * 2 / 3; addCssClass("filter-mask-thumb"); thumbs[filterMaskKey(r.id)]?.let { setFromPaintable(it) } })
+            frame.tooltipText = tr("Filtermaske – Klick: auf der Filtermaske malen")
+            frame.addController(GestureClick().apply { button = 1; onPressed { _, _, _ -> act.target(r.id, PaintTarget.FILTER_MASK) } })
+            head.append(frame)
+        } else head.append(Image.fromIconName("pg-smart-symbolic").apply { addCssClass("dim-label"); tooltipText = tr("Smartfilter") })
+        head.append(Label(tr("Smartfilter")).apply { xalign = 0f; hexpand = true; addCssClass("dim-label"); addCssClass("caption-heading") })
+        head.append(menu(if (r.filterMask) listOf(
+            tr("Filtermaske umkehren") to { act.filterMaskOp(r.id, FilterMaskOp.INVERT) },
+            tr("Filtermaske aus Auswahl") to { act.filterMaskOp(r.id, FilterMaskOp.FROM_SELECTION) },
+            tr("Filtermaske löschen") to { act.filterMask(r.id, false) },
+        ) else listOf(
+            tr("Filtermaske hinzufügen") to { act.filterMask(r.id, true) },
+            tr("Filtermaske aus Auswahl") to { act.filterMaskOp(r.id, FilterMaskOp.FROM_SELECTION) },
+        )))
+        col.append(head)
+        val n = r.smartFilters.size
+        for (i in n - 1 downTo 0) {
+            val f = r.smartFilters[i]
+            val line = Box(Orientation.HORIZONTAL, 4).apply { marginStart = 18 }
+            line.append(eye(f.enabled, tr("Filter ein-/ausblenden")) { act.smartFilterToggle(r.id, i) })
+            val name = Label(f.label).apply {
+                xalign = 0f; hexpand = true; ellipsize = EllipsizeMode.END
+                if (!f.enabled || !r.smartFiltersVisible) addCssClass("dim-label")
+                tooltipText = if (f.editable) tr("Doppelklick: Filter nachregeln") else tr("Dieser Filter ist in dieser Version nicht verfügbar.")
+            }
+            val dbl = GestureClick().apply { button = 1 }
+            dbl.onPressed { k, _, _ -> if (k == 2 && f.editable) act.smartFilterEdit(r.id, i) }
+            name.addController(dbl)
+            line.append(name)
+            if (f.blend != BlendMode.NORMAL || f.opacity < 1f) line.append(Label("${f.blend.label} ${(f.opacity * 100).toInt()} %").apply { addCssClass("dim-label"); addCssClass("caption") })
+            val items = buildList {
+                if (f.editable) add(tr("Filter nachregeln …") to { act.smartFilterEdit(r.id, i) })
+                add(tr("Fülloptionen …") to { act.smartFilterBlending(r.id, i) })
+                if (i < n - 1) add(tr("Nach oben") to { act.smartFilterMove(r.id, i, i + 1) })
+                if (i > 0) add(tr("Nach unten") to { act.smartFilterMove(r.id, i, i - 1) })
+                add(tr("Smartfilter löschen") to { act.smartFilterDelete(r.id, i) })
+            }
+            line.append(menu(items))
+            col.append(line)
+        }
+        return col
     }
 
     /** Name; Doppelklick schaltet auf ein Eingabefeld um (Eingabe übernimmt, Esc bricht ab). */
@@ -456,3 +546,9 @@ class LayersPanel(private val act: Actions) {
 
     companion object { const val THUMB = 36 }
 }
+
+/** Befehle für die Filtermaske eines Smartobjekts. */
+enum class FilterMaskOp { INVERT, FROM_SELECTION }
+
+/** Schlüssel des Filtermasken-Miniaturbilds von Ebene [id] in der Miniaturbild-Tabelle. */
+fun filterMaskKey(id: Int) = -1_000_000 - id

@@ -147,6 +147,11 @@ report (`report.html`, `report.csv`) with side-by-side previews of every file th
 
 No fixed dates, and the order may change. Suggestions are welcome.
 
+- **Done in 0.5:** layer compositing on the GPU (Android and Linux, can be switched off); editable
+  smart filters with filter mask; place smart objects, replace contents, reset transform, several layers
+  into one smart object; read and write Photoshop smart objects, verified with Photoshop 2026 (opens
+  without warnings, saving in Photoshop keeps everything); select colour range, expand/contract/smooth/border
+  selection; faster fill and magic wand
 - **Done in 0.4.2:** preview matches the result (Threshold/Posterize when zoomed out, exact filter gallery
   preview); photocopy look with Stamp and Grain size; rasterize layer style
 - **Done in 0.4.1:** autosave and crash recovery (Android and Linux); unsaved-changes prompt and Ctrl+S back into the
@@ -158,22 +163,20 @@ No fixed dates, and the order may change. Suggestions are welcome.
 - **Done in 0.3:** GPU preview for moving, transforming and opacity; rendering layer effects; English
   user interface; liquify; gradient tool, magic wand, object selection and auto-select; per-channel
   curves with histogram; better content-aware fill
-- **Next:** custom fonts (TTF/OTF); history panel with snapshots; select
-  subject and sky with an on-device model; refine edge for hair
+- **Next:** save smart filters as Photoshop smart filters; select subject and sky with an on-device model,
+  refine edge for hair; custom fonts (TTF/OTF); history panel with snapshots
 - **After that:** frequency separation helper; batch export (several sizes and formats at once);
   patterns and pattern overlay
-- **Later:** CMYK documents and export; display colour management; full GPU compositing; iPad
+- **Later:** CMYK documents and export; display colour management; iPad
 
 ## Help wanted
 
 photographics is a one-person project so far. If any of this sounds like you, I'd be glad to hear from you:
 
-- **Testing with real Photoshop files.** PSD support has been verified with GIMP and ImageMagick, not yet
-  with files from current Photoshop versions. The PSD check above produces a report you can share
-  without sharing the files.
+- **Testing with real Photoshop files.** PSD files are checked against Photoshop 2026, but only with my own
+  files. The PSD check above produces a report you can share without sharing the files.
 - **Translations.** English and German exist. Translations are plain tab-separated text files in
   `core/src/main/resources/i18n/` (German text → translation, see `en.tsv`).
-- **GPU compositing.** Live previews run on the GPU, the final composite still runs on the CPU.
 - **Layer effects.** Rendered and editable; pattern overlay is still missing.
 - **Ports.** Linux (GNOME) exists since 0.4; iOS is planned. The core is plain Kotlin/JVM without Android dependencies.
 

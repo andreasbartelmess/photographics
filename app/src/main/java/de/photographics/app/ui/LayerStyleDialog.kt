@@ -74,6 +74,7 @@ fun LayerStyleDialog(
     initial: LayerEffects,
     onPreview: (LayerEffects) -> Unit,
     onFinish: (Boolean) -> Unit,
+    onCompare: ((Boolean) -> Unit)? = null,
 ) {
     var fx by remember { mutableStateOf(initial) }
     var selected by remember { mutableIntStateOf(LayerStyles.effects.indexOfFirst { it.get(initial) != null }.coerceAtLeast(0)) }
@@ -109,7 +110,10 @@ fun LayerStyleDialog(
                     TopAppBar(
                         title = { Text(tr("Ebenenstil")) },
                         navigationIcon = { IconButton(onClick = { onFinish(false) }) { Icon(Icons.Filled.Close, tr("Abbrechen")) } },
-                        actions = { Button(onClick = { onFinish(true) }, modifier = Modifier.padding(end = 12.dp)) { Text(tr("OK")) } },
+                        actions = {
+                            if (onCompare != null) CompareButton(onCompare)
+                            Button(onClick = { onFinish(true) }, modifier = Modifier.padding(end = 12.dp)) { Text(tr("OK")) }
+                        },
                         colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     )
                     HorizontalDivider()

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Bedien-Benchmark auf dem verbundenen Gerät: Verschieben, Regler, Einstellungsebene, Transformieren
 # und Pinsel auf einem großen Dokument, je Einzelbild gemessen (Logcat-Tag PG-Bench).
-#   tools/device_bench.sh [Megapixel, Standard 24]
+#   tools/device_bench.sh [Megapixel, Standard 24]    (PG_GPU=0: ohne Grafikkarte zum Vergleich)
 set -uo pipefail
 ADB="${ANDROID_HOME:-$HOME/Android/Sdk}/platform-tools/adb"
 "$ADB" get-state >/dev/null 2>&1 || { echo "Kein Gerät verbunden."; exit 2; }
 "$ADB" shell input keyevent KEYCODE_WAKEUP   # schlafendes Gerät misst gedrosselt
 "$ADB" shell am force-stop de.photographics.app
 "$ADB" logcat -c
-"$ADB" shell am start -n de.photographics.app/.MainActivity --ez benchmark true --ei megapixel "${1:-24}" --ei skip "${PG_SKIP:-0}" >/dev/null
+"$ADB" shell am start -n de.photographics.app/.MainActivity --ez benchmark true --ei megapixel "${1:-24}" --ei skip "${PG_SKIP:-0}" --ez gpu "$([ "${PG_GPU:-1}" = 0 ] && echo false || echo true)" >/dev/null
 GFX=""
 for _ in $(seq 1 3000); do
     sleep 0.2

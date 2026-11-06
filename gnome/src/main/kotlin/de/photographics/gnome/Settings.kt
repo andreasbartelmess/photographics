@@ -49,6 +49,10 @@ object Settings {
     var tiffCompression: TiffWriter.Compression
         get() = enum("tiffCompression", TiffWriter.Compression.LZW, TiffWriter.Compression.entries.toTypedArray())
         set(v) = set("tiffCompression", v.name)
+    /** Bild auf der Grafikkarte zusammensetzen (sonst Prozessor); gleiche Ergebnisse, deutlich schneller. */
+    var gpuCompose: Boolean
+        get() = bool("gpuCompose", true)
+        set(v) = set("gpuCompose", v)
     var snap: Boolean
         get() = bool("snap", true)
         set(v) = set("snap", v)

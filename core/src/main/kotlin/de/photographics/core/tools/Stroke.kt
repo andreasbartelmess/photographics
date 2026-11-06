@@ -13,8 +13,15 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.sqrt
 
-/** Was ein Strich bearbeitet: die Pixel oder die Maske der aktiven Ebene. */
-enum class PaintTarget { PIXELS, MASK }
+/**
+ * Was ein Strich bearbeitet: die Pixel, die Ebenenmaske oder (Smartobjekt) die Filtermaske der
+ * aktiven Ebene. Beide Masken sind Graustufen ([isMask]).
+ */
+enum class PaintTarget {
+    PIXELS, MASK, FILTER_MASK;
+
+    val isMask: Boolean get() = this != PIXELS
+}
 
 /**
  * Laufzeitkontext eines Pinselstrichs. Jeder Pixel wird immer aus seinem Originalzustand und der
@@ -102,14 +109,21 @@ class Stroke(private val ctx: StrokeContext, private val tool: PaintTool, seed: 
     }
 
     /** Airbrush: an der letzten Position weiter Farbe auftragen (vom Aufrufer zeitgesteuert). */
-    fun airbrushTick(): IntRect = if (started && ctx.settings.airbrush) dab(lastX, lastY, rawPressure) else IntRect.EMPTY
+    fun airbrushTick(): IntRect = notify(if (started && ctx.settings.airbrush) dab(lastX, lastY, rawPressure) else IntRect.EMPTY)
+
+    /** Wird mit jedem geänderten Bereich aufgerufen (z. B. Filtermaske: Smartobjekt neu überblenden). */
+    var onDirty: ((IntRect) -> Unit)? = null
+
+    private fun notify(r: IntRect): IntRect { if (!r.isEmpty) onDirty?.invoke(r); return r }
 
     private var rawX = 0f
     private var rawY = 0f
     private var rawPressure = 1f
 
     /** Fügt einen Punkt hinzu und gibt den neu zu zeichnenden Bereich zurück. */
-    fun addPoint(x: Float, y: Float, pressure: Float = 1f): IntRect {
+    fun addPoint(x: Float, y: Float, pressure: Float = 1f): IntRect = notify(addPointRaw(x, y, pressure))
+
+    private fun addPointRaw(x: Float, y: Float, pressure: Float): IntRect {
         rawX = x; rawY = y; rawPressure = pressure
         if (!started) {
             started = true
@@ -139,11 +153,11 @@ class Stroke(private val ctx: StrokeContext, private val tool: PaintTool, seed: 
 
     /** Geglätteten Strich bis zum letzten echten Zeigerpunkt nachziehen. */
     fun catchUp(): IntRect =
-        if (started && (lastX != rawX || lastY != rawY)) segmentTo(rawX, rawY, rawPressure) else IntRect.EMPTY
+        notify(if (started && (lastX != rawX || lastY != rawY)) segmentTo(rawX, rawY, rawPressure) else IntRect.EMPTY)
 
     fun finish(): Pair<TilePatch?, IntRect> {
         val caught = catchUp()
-        val extra = tool.finish(ctx).union(caught)
+        val extra = notify(tool.finish(ctx)).union(caught)
         val dirty = ctx.touched.union(extra)
         return ctx.tx.commit(tool.label) to dirty
     }
@@ -151,7 +165,7 @@ class Stroke(private val ctx: StrokeContext, private val tool: PaintTool, seed: 
     fun cancel(): IntRect {
         val r = ctx.touched
         ctx.tx.rollback()
-        return r
+        return notify(r)
     }
 
     private fun control(c: DynControl, pressure: Float, min: Float): Float = when (c) {

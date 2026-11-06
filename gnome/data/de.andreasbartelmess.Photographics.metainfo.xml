@@ -23,12 +23,27 @@
   <url type="homepage">https://photographics.andreasbartelmess.de</url>
   <url type="vcs-browser">https://github.com/andreasbartelmess/photographics</url>
   <url type="bugtracker">https://github.com/andreasbartelmess/photographics/issues</url>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Layers, adjustment layers and tools</caption>
+      <image>https://photographics.andreasbartelmess.de/img/gnome-ebenen.jpg</image>
+    </screenshot>
+    <screenshot>
+      <caption>Filter gallery</caption>
+      <image>https://photographics.andreasbartelmess.de/img/gnome-filter.jpg</image>
+    </screenshot>
+  </screenshots>
+  <branding>
+    <color type="primary" scheme_preference="light">#deddda</color>
+    <color type="primary" scheme_preference="dark">#3d3846</color>
+  </branding>
   <content_rating type="oars-1.1"/>
   <supports>
     <control>pointing</control>
     <control>keyboard</control>
   </supports>
   <releases>
+    <release version="0.5.0" date="2026-11-06"/>
     <release version="0.4.2" date="2026-11-04"/>
     <release version="0.4.1" date="2026-11-03"/>
     <release version="0.4.0" date="2026-11-01"/>

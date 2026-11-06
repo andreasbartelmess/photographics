@@ -395,13 +395,8 @@ fun ToolOptionsBar(state: EditorUiState, vm: EditorViewModel, onFeatherClick: ()
                     Hint(if (state.tool == Tool.BUCKET) tr("Tippen füllt ähnliche Farben mit der Vordergrundfarbe") else tr("Tippen macht ähnliche Farben transparent"))
                 }
                 Tool.BRUSH, Tool.PENCIL, Tool.ERASER -> {
-                    val hasMask = state.layers.firstOrNull { it.id == state.activeLayerId }?.hasMask == true
-                    if (hasMask) {
-                        Segmented(
-                            listOf(tr("Ebene") to PaintTarget.PIXELS, tr("Maske") to PaintTarget.MASK),
-                            state.paintTarget,
-                        ) { vm.setPaintTarget(it) }
-                    }
+                    val targets = paintTargets(state)
+                    if (targets.size > 1) Segmented(targets, state.paintTarget) { vm.setPaintTarget(it) }
                 }
                 Tool.CLONE, Tool.HEAL -> {
                     Divider()
@@ -416,8 +411,7 @@ fun ToolOptionsBar(state: EditorUiState, vm: EditorViewModel, onFeatherClick: ()
                     ToggleChip(tr("Alle Ebenen"), state.sampleAllLayers) { vm.setSampleAll(!state.sampleAllLayers) }
                 }
                 Tool.GRADIENT -> {
-                    if (state.layers.firstOrNull { it.id == state.activeLayerId }?.hasMask == true)
-                        Segmented(listOf(tr("Ebene") to PaintTarget.PIXELS, tr("Maske") to PaintTarget.MASK), state.paintTarget) { vm.setPaintTarget(it) }
+                    paintTargets(state).takeIf { it.size > 1 }?.let { Segmented(it, state.paintTarget) { t -> vm.setPaintTarget(t) } }
                     Segmented(de.photographics.core.editor.GradientType.entries.map { it.label to it }, state.gradientType) { vm.setGradientType(it) }
                     Segmented(listOf(tr("Vorder- → Hintergrund") to false, tr("Vordergrund → Transparent") to true), state.gradientToTransparent) { vm.setGradientToTransparent(it) }
                     OptionSlider(tr("Deckkraft"), "${(state.gradientOpacity * 100).roundToInt()} %", state.gradientOpacity, 0.01f..1f) { vm.setGradientOpacity(it) }
@@ -601,5 +595,15 @@ private fun BlendChoice(mode: BlendMode, onChange: (BlendMode) -> Unit) {
         DropdownMenu(open, { open = false }) {
             for (m in de.photographics.core.doc.LayerStyles.blendModes) DropdownMenuItem(text = { Text(m.label) }, onClick = { open = false; onChange(m) })
         }
+    }
+}
+
+/** Malziele der aktiven Ebene: Pixel, Ebenenmaske, Filtermaske (Smartobjekt). */
+private fun paintTargets(state: de.photographics.app.EditorUiState): List<Pair<String, PaintTarget>> {
+    val item = state.layers.firstOrNull { it.id == state.activeLayerId } ?: return emptyList()
+    return buildList {
+        add(tr("Ebene") to PaintTarget.PIXELS)
+        if (item.hasMask) add(tr("Maske") to PaintTarget.MASK)
+        if (item.filterMask) add(tr("Filtermaske") to PaintTarget.FILTER_MASK)
     }
 }

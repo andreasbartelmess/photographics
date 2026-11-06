@@ -99,9 +99,9 @@ app/    Android-Oberfläche (Compose, Material 3)
 | 16-Bit-Ebenendaten in `Lr16`/`Lr32` | ✅ | – |
 | Einstellungsebenen (Helligkeit/Kontrast, Tonwert, Kurven, Belichtung, Dynamik, Farbton/Sättigung, Farbbalance, Schwarzweiß, Fotofilter, Umkehren, Tontrennung, Schwellenwert) | ✅ editierbar, gerendert | ✅ im Photoshop-Format |
 | Textebenen | ✅ Text, Größe, Farbe, Ausrichtung, Lage (Originalpixel bis zur Änderung) | unverändert: Photoshop-Text bleibt editierbar; geändert/neu: als Pixel + eigene Textdaten |
-| Smartobjekte (eigene) | ✅ Original in voller Auflösung | ✅ |
+| Smartobjekte (eigene und aus Photoshop mit eingebetteter PSD/PSB, PNG oder JPEG) | ✅ Inhalt in voller Auflösung, Transformation, Smartfilter mit Filtermaske | ✅ als echtes Photoshop-Smartobjekt; Ebenen mit aktiven Smartfiltern gerastert, in photographics weiter bearbeitbar |
 | Ebeneneffekte (Schlagschatten, Schatten nach innen, Schein, Kontur, Farbüberlagerung) | ✅ werden angezeigt | Rohdaten werden **unverändert zurückgeschrieben** |
-| Photoshop-Smartobjekte, Füllebenen, übrige Effekte | erkannt, als Pixel angezeigt | Rohdaten werden **unverändert zurückgeschrieben** |
+| Verkrümmte Photoshop-Smartobjekte, Photoshop-Smartfilter, Füllebenen, übrige Effekte | erkannt, als Pixel angezeigt | Rohdaten werden **unverändert zurückgeschrieben** |
 | ICC-Profil | ✅ als Dokumentprofil | ✅ |
 | Color-Lookup-Ebenen (LUT) | ✅ | ✅ |
 | XMP, EXIF, IPTC, Hilfslinien | übernommen | ✅ |
@@ -413,6 +413,11 @@ Druckerei. Der Proof betrifft nur die Anzeige – Export und gespeicherte Dateie
 
 Ohne feste Termine, die Reihenfolge kann sich ändern. Vorschläge sind willkommen.
 
+- **Erledigt in 0.5:** Zusammensetzen der Ebenen auf der Grafikkarte (Android und Linux, abschaltbar);
+  bearbeitbare Smartfilter mit Filtermaske; Smartobjekte platzieren, Inhalt ersetzen, Transformation
+  zurücksetzen, mehrere Ebenen in ein Smartobjekt; Photoshop-Smartobjekte lesen und schreiben, mit
+  Photoshop 2026 geprüft (öffnet ohne Warnung, Speichern in Photoshop behält alles); Farbbereich auswählen,
+  Auswahl erweitern/verkleinern/abrunden/Rand; schnelleres Füllen und Zauberstab
 - **Erledigt in 0.4.2:** Vorschau entspricht dem Ergebnis (Schwellenwert/Tontrennung in verkleinerter Ansicht,
   exakte Filtergalerie-Vorschau); Fotokopie-Optik mit Stempel und Körnungsgröße; Ebenenstil rastern
 - **Erledigt in 0.4.1:** automatisches Sichern und Wiederherstellen nach Abstürzen (Android und Linux); Nachfrage bei
@@ -426,12 +431,11 @@ Ohne feste Termine, die Reihenfolge kann sich ändern. Vorschläge sind willkomm
 - **Erledigt in 0.3:** Verschieben, Transformieren und Deckkraft live über die GPU; Ebeneneffekte
   anzeigen; Oberfläche auf Englisch; Verflüssigen; Verlauf, Zauberstab, Objektauswahl und automatische
   Ebenenauswahl; Kurven je Kanal mit Histogramm; besseres inhaltsbasiertes Füllen
-- **Als Nächstes:** eigene Schriften (TTF/OTF); Protokoll-Panel mit Schnappschüssen; Motiv und Himmel per KI auswählen (Modell auf dem Gerät),
-  Auswahlkante für Haare verbessern
+- **Als Nächstes:** Smartfilter als Photoshop-Smartfilter speichern; Motiv und Himmel per KI auswählen
+  (Modell auf dem Gerät), Auswahlkante für Haare verbessern; eigene Schriften (TTF/OTF); Protokoll-Panel mit Schnappschüssen
 - **Danach:** Frequenztrennung als Retusche-Hilfe; Stapelexport (mehrere Größen/Formate auf einmal);
   Muster und Musterüberlagerung
-- **Später:** CMYK-Dokumente und -Export; Anzeige über das Farbprofil des Bildschirms; vollständiges
-  Zusammensetzen auf der GPU; Version für iPad
+- **Später:** CMYK-Dokumente und -Export; Anzeige über das Farbprofil des Bildschirms; Version für iPad
 
 ## Über mich
 

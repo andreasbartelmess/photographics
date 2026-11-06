@@ -19,5 +19,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "Photographics"
 include(":core", ":app")
+// GPU-Engine auf dem Desktop (LWJGL): Anbindung für GNOME und die Tests GPU gegen CPU
+include(":gpu-desktop")
 // GNOME-Version (in Arbeit, noch nicht veröffentlicht): nur einbinden, wenn der Ordner vorhanden ist
 if (file("gnome/build.gradle.kts").exists()) include(":gnome")

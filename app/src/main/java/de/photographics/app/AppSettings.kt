@@ -101,6 +101,8 @@ data class AppSettings(
     val showGuides: Boolean = true,
     val snap: Boolean = true,
     val smartGuides: Boolean = true,
+    /** Bild auf der Grafikkarte zusammensetzen (gleiches Ergebnis wie der Prozessor, deutlich schneller). */
+    val gpuCompose: Boolean = true,
     // TIFF speichern
     val tiffCompression: TiffWriter.Compression = TiffWriter.Compression.LZW,
     val tiffLayers: Boolean = true,
@@ -173,6 +175,7 @@ class SettingsStore(context: Context) {
             showGuides = prefs.getBoolean("showGuides", d.showGuides),
             snap = prefs.getBoolean("snap", d.snap),
             smartGuides = prefs.getBoolean("smartGuides", d.smartGuides),
+            gpuCompose = prefs.getBoolean("gpuCompose", d.gpuCompose),
             tiffCompression = enumOf("tiffCompression", d.tiffCompression),
             tiffLayers = prefs.getBoolean("tiffLayers", d.tiffLayers),
             introSeen = prefs.getBoolean("introSeen", d.introSeen),
@@ -211,6 +214,7 @@ class SettingsStore(context: Context) {
             .putBoolean("showGuides", s.showGuides)
             .putBoolean("snap", s.snap)
             .putBoolean("smartGuides", s.smartGuides)
+            .putBoolean("gpuCompose", s.gpuCompose)
             .putString("tiffCompression", s.tiffCompression.name)
             .putBoolean("tiffLayers", s.tiffLayers)
             .putBoolean("introSeen", s.introSeen)

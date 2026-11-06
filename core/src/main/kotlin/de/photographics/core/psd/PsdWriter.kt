@@ -143,9 +143,23 @@ object PsdWriter {
      * erste Zusatzkanal des Gesamtbilds ist die Transparenz. Null, wenn das Dokument keine Ebenen hat.
      */
     internal fun layerInfo(doc: Document, tmpDir: File?, compositeHasAlpha: Boolean, deep: Boolean = false): LayerInfo? {
-        deepWrite.set(deep)
-        try { return layerInfoInner(doc, tmpDir, compositeHasAlpha) } finally { deepWrite.set(false) }
+        val prevDeep = deepWrite.get(); val prevLinks = smartLinks.get()
+        deepWrite.set(deep); smartLinks.set(null)   // TIFF: keine Photoshop-Smartobjekt-Verknüpfungen
+        try { return layerInfoInner(doc, tmpDir, compositeHasAlpha) } finally { deepWrite.set(prevDeep); smartLinks.set(prevLinks) }
     }
+
+    /**
+     * Unsere Smartobjekte zusätzlich als echte Photoshop-Smartobjekte speichern („SoLd“ + eingebettete
+     * PSD in „lnk2“). Seit 2026-11-06 an: Photoshop 2026 öffnet die Dateien ohne Warnung und behält beim
+     * Speichern unsere Ebenen-XMP-Daten. Ebenen mit aktiven Smartfiltern bleiben gerastert (+ XMP).
+     */
+    @Volatile var photoshopSmartObjects = true
+
+    /** Beim Schreiben: Smartobjekte, die als Photoshop-Smartobjekt verknüpft werden (Ebene → Kennung). */
+    private val smartLinks = ThreadLocal<java.util.IdentityHashMap<SmartLayer, String>?>()
+
+    /** Ohne Smartfilter (Photoshop kennt unsere nicht und würde sie beim Neuberechnen verlieren). */
+    private fun linkable(l: SmartLayer) = photoshopSmartObjects && !l.smartFilters.active && l.source.width > 1
 
     private fun layerInfoInner(doc: Document, tmpDir: File?, compositeHasAlpha: Boolean): LayerInfo? {
         tmpDir?.mkdirs()
@@ -168,8 +182,13 @@ object PsdWriter {
     }
 
     private fun writeStreaming(doc: Document, entries: List<Entry>, ids: IntArray, output: OutputStream, tmpDir: File?, spools: MutableList<Spool>) {
+        // Verschachtelt (Inhalt eines Smartobjekts) aufrufbar: vorherigen Zustand wiederherstellen
+        val prevDeep = deepWrite.get(); val prevLinks = smartLinks.get()
         deepWrite.set(doc.bitDepth == 16)
-        try { writeStreamingInner(doc, entries, ids, output, tmpDir, spools) } finally { deepWrite.set(false) }
+        smartLinks.set(java.util.IdentityHashMap<SmartLayer, String>().also { m ->
+            for (e in entries) ((e as? Entry.Pixel)?.layer as? SmartLayer)?.takeIf { linkable(it) }?.let { m[it] = java.util.UUID.randomUUID().toString() }
+        })
+        try { writeStreamingInner(doc, entries, ids, output, tmpDir, spools) } finally { deepWrite.set(prevDeep); smartLinks.set(prevLinks) }
     }
 
     private fun writeStreamingInner(doc: Document, entries: List<Entry>, ids: IntArray, output: OutputStream, tmpDir: File?, spools: MutableList<Spool>) {
@@ -230,10 +249,20 @@ object PsdWriter {
         val tail2 = BinaryWriter()
         // 16 Bit mit Transparenz im Gesamtbild: Photoshop kennzeichnet das mit einem leeren „Mt16“
         if (deep && hasAlpha && entries.isNotEmpty()) { tail2.ascii("8BIM"); tail2.ascii("Mt16"); tail2.i32(0) }
+        // Eingebettete Dateien: erhaltene Photoshop-Einträge plus die eigenen Smartobjekte
+        val links = smartLinks.get().orEmpty()
+        val linkData = java.io.ByteArrayOutputStream()
+        for (b in doc.preservedGlobalBlocks) if (b.key == "lnk2") linkData.write(b.data)
+        for ((l, uuid) in links) linkData.write(PsdLinked.writeEntry(uuid, l.name + ".psd", "8BPS", write(l.contentsDocument(doc.dpi, doc.colorProfile))))
         for (b in doc.preservedGlobalBlocks) {
             if (deep && (b.key == "Lr16" || b.key == "Mt16")) continue
+            if (b.key == "lnk2") continue
             tail2.ascii(b.signature); tail2.ascii(b.key); tail2.i32(b.data.size); tail2.bytes(b.data)
             var n = b.data.size; while (n % 4 != 0) { tail2.u8(0); n++ }
+        }
+        if (linkData.size() > 0) {
+            tail2.ascii("8BIM"); tail2.ascii("lnk2"); tail2.i32(linkData.size()); tail2.bytes(linkData.toByteArray())
+            var n = linkData.size(); while (n % 4 != 0) { tail2.u8(0); n++ }
         }
         val tailBytes = tail.toByteArray(); val tail2Bytes = tail2.toByteArray()
         // 16 Bit: Ebenen im Zusatzblock „Lr16“ nach der globalen Maskeninfo, der Ebenenabschnitt bleibt leer
@@ -427,7 +456,10 @@ object PsdWriter {
         block(w, "luni") { it.unicodeNoTerm(name) }
         block(w, "lyid") { it.i32(id) }
         if (layer != null) block(w, "iOpa") { it.u8((layer.fillOpacity * 255f).roundToInt().coerceIn(0, 255)); it.zeros(3) }
-        if (layer?.mask?.linked == false) block(w, MASK_LINK_KEY) { it.u8(0); it.zeros(3) }
+        // Eigene Daten: gesammelt und ins Ebenen-XMP („shmd“) geschrieben – eigene Zusatzblöcke
+        // würden Photoshop beim Öffnen warnen lassen
+        val own = LinkedHashMap<String, ByteArray>()
+        if (layer?.mask?.linked == false) own[MASK_LINK_KEY] = byteArrayOf(0, 0, 0, 0)
         when (e) {
             is Entry.GroupStart -> block(w, "lsct") {
                 it.i32(if (e.group.expanded) 1 else 2); it.ascii("8BIM"); it.ascii(e.group.blendMode.psdKey)
@@ -437,6 +469,7 @@ object PsdWriter {
         }
         // Typ-spezifische Daten
         val skip = HashSet(GENERATED_KEYS)
+        skip += PsdLayerXmp.OWN_KEYS.keys; skip += PsdLayerXmp.SHMD
         when (layer) {
             is AdjustmentLayer -> {
                 skip += PsdAdjustments.KEYS
@@ -445,7 +478,7 @@ object PsdWriter {
             is TextLayer -> if (!layer.unchangedFromPsd) {
                 // Geänderter/neuer Text: Photoshop-Textdaten verwerfen, eigene Daten schreiben
                 skip += "TySh"; skip += "tySh"
-                block(w, PsdTextSmart.TEXT_KEY) { it.bytes(PsdTextSmart.writeText(layer.style, layer.transform)) }
+                own[PsdTextSmart.TEXT_KEY] = PsdTextSmart.writeText(layer.style, layer.transform)
             }
             is de.photographics.core.doc.ShapeLayer -> {
                 // Wie Photoshops Formebenen: Volltonfüllung, Vektormaske (Dokumentkoordinaten), Kontur
@@ -456,10 +489,21 @@ object PsdWriter {
             }
             is SmartLayer -> {
                 skip += setOf("SoLd", "PlLd", "SoLE")
-                block(w, PsdTextSmart.SMART_KEY) { it.bytes(PsdTextSmart.writeSmart(layer.source, layer.transform, layer.warp)) }
+                own[PsdTextSmart.SMART_KEY] = PsdTextSmart.writeSmart(layer.source, layer.transform, layer.warp)
+                // Als Photoshop-Smartobjekt: Lage in „SoLd“, der Inhalt steht in „lnk2“ (global)
+                val link = smartLinks.get()?.get(layer)
+                if (link != null) {
+                    block(w, "PlLd") { it.bytes(PsdLinked.writePlacedLegacy(link, layer.corners(), layer.source.width, layer.source.height)) }
+                    block(w, "SoLd") { it.bytes(PsdLinked.writePlaced(link, layer.corners(), layer.source.width, layer.source.height, doc.dpi.toDouble())) }
+                }
+                // Sonst eingebetteter Inhalt mit Ebenen als eigene PSD
+                if (link == null) layer.contents?.let { c -> own[PsdTextSmart.CONTENTS_KEY] = write(c) }
+                if (layer.smartFilters.filters.isNotEmpty()) own[PsdSmartFilters.KEY] = PsdSmartFilters.write(layer.smartFilters)
             }
             else -> {}
         }
+        val shmd = PsdLayerXmp.shmd(layer?.preservedBlocks?.lastOrNull { it.key == PsdLayerXmp.SHMD }?.data, own)
+        if (shmd != null) block(w, PsdLayerXmp.SHMD) { it.bytes(shmd) }
         if (layer != null) for (b in layer.preservedBlocks) {
             if (b.key in skip) continue
             w.ascii(b.signature); w.ascii(b.key); w.i32(b.data.size); w.bytes(b.data)

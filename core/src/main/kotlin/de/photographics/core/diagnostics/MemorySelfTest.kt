@@ -250,6 +250,60 @@ object MemorySelfTest {
                 check(d.width == doc.width) { "XCF: ${d.width} px" }
             }
             xcf.delete()
+            // Zum Schluss mit leerem Verlauf (sonst reicht das Budget für die Dateischritte davor nicht)
+            ed.history.clear()
+            step("Smartfilter (Weichzeichner, Galerie, Maske, Rückgängig)") {
+                val l = doc.root.children.filterIsInstance<de.photographics.core.doc.PixelLayer>().last()
+                val smart = checkNotNull(ed.convertToSmartObject(l)) { "Smartobjekt nicht angelegt" }
+                ed.addSmartFilter(smart, de.photographics.core.doc.SmartFilter.of("gaussian-blur", floatArrayOf(8f)))
+                val wc = de.photographics.core.filters.Gallery.byId("watercolor")!!
+                ed.addSmartFilter(smart, de.photographics.core.doc.SmartFilter.gallery(
+                    listOf(de.photographics.core.filters.GalleryEffect(wc, wc.params.map { it.default }.toFloatArray())),
+                    0xFF000000.toInt(), 0xFFFFFFFF.toInt()).copy(opacity = 0.6f))
+                ed.setFilterMask(smart, true)
+                smart.raster
+                ed.moveSmartFilter(smart, 1, 0); smart.raster
+                ed.setSmartFiltersVisible(smart, false); smart.raster
+                repeat(6) { ed.undo() }
+                check(doc.root.children.none { it is de.photographics.core.doc.SmartLayer }) { "Smartobjekt nach Rückgängig noch da" }
+            }
+            step("Smartobjekte: Platzieren, Inhalt ersetzen, mehrere Ebenen umwandeln") {
+                val n = doc.root.children.size
+                val placed = ed.placeSmartObject("Platziert", photoLayer("p", doc.width * 2, doc.height, 7).pixels)
+                val replaced = ed.replaceSmartContents(placed, photoLayer("q", doc.width / 2, doc.height / 2, 3).pixels)
+                ed.resetSmartTransform(replaced); replaced.raster
+                val all = ed.convertToSmartObject(doc.root.children.toList())
+                check(all != null && doc.root.children.size == 1) { "Mehrere Ebenen nicht umgewandelt" }
+                // Bei knappem Speicher fallen die ältesten Schritte aus dem Verlauf – dann bleibt das platzierte Smartobjekt
+                repeat(4) { if (ed.history.canUndo) ed.undo() }
+                check(doc.root.children.size in n..n + 1) { "Rückgängig: ${doc.root.children.size} statt $n Ebenen" }
+            }
+            step("Smartobjekt-Inhalt bearbeiten, Filtermaske malen, in Ebenen umwandeln") {
+                val n = doc.root.children.size
+                val all = checkNotNull(ed.convertToSmartObject(doc.root.children.toList())) { "Umwandeln fehlgeschlagen" }
+                val contents = ed.editableContents(all)
+                contents.root.children.firstOrNull()?.visible = false
+                val updated = ed.updateSmartContents(all, contents)
+                ed.addSmartFilter(updated, de.photographics.core.doc.SmartFilter.of("gaussian-blur", floatArrayOf(6f)))
+                ed.setFilterMask(updated, true)
+                val st = checkNotNull(ed.beginStroke(de.photographics.core.tools.BrushTool(0xFF000000.toInt()),
+                    BrushSettings(size = 600f, hardness = 0.5f), PaintTarget.FILTER_MASK)) { "Filtermaske: kein Strich" }
+                st.addPoint(doc.width * 0.2f, doc.height * 0.5f); st.addPoint(doc.width * 0.8f, doc.height * 0.5f)
+                ed.endStroke(st); updated.raster
+                ed.removeSmartFilter(updated, 0)
+                check(ed.convertSmartToLayers(updated)) { "In Ebenen umwandeln fehlgeschlagen" }
+                repeat(7) { if (ed.history.canUndo) ed.undo() }
+                check(doc.root.children.none { it is de.photographics.core.doc.GroupLayer }) { "In Ebenen umwandeln nicht rückgängig gemacht" }
+            }
+            step("Auswahl verändern (Erweitern, Verkleinern, Abrunden, Rand) und Farbbereich") {
+                val src = checkNotNull(doc.root.children.filterIsInstance<de.photographics.core.doc.RasterLayer>().firstOrNull()) { "Keine Pixelebene" }.raster
+                ed.colorRangeSelection(src, de.photographics.core.selection.ColorRange.Spec(de.photographics.core.selection.ColorRange.Preset.MIDTONES))
+                if (doc.selection == null) ed.setSelection(de.photographics.core.selection.Selection.ellipse(doc.width, doc.height,
+                    doc.width * 0.2f, doc.height * 0.2f, doc.width * 0.8f, doc.height * 0.8f))
+                for (k in de.photographics.core.selection.SelectionModifyKind.entries) ed.modifySelection(k, 40)
+                ed.modifySelection(de.photographics.core.selection.SelectionModifyKind.EXPAND, 500)
+                repeat(6) { if (ed.history.canUndo) ed.undo() }
+            }
             ed.history.clear()
             Result(true, null, null, maxHeap, maxTiles, System.currentTimeMillis() - start)
         } catch (t: Throwable) {

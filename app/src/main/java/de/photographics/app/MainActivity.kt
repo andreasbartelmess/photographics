@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
                 window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 FrameStats.attach(window)
                 FrameStats.skip = intent.getIntExtra("skip", 0)
-                vm.runBenchmark(intent.getIntExtra("megapixel", 24))
+                vm.runBenchmark(intent.getIntExtra("megapixel", 24), gpu = intent.getBooleanExtra("gpu", true))
             }
             return
         }

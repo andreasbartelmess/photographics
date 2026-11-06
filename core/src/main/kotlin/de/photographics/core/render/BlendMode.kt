@@ -58,7 +58,8 @@ enum class BlendMode(val psdKey: String, val label: String, val separable: Boole
         VIVID_LIGHT -> if (cs <= 0.5f) colorBurn(cb, 2f * cs) else colorDodge(cb, 2f * (cs - 0.5f))
         LINEAR_LIGHT -> (cb + 2f * cs - 1f).coerceIn(0f, 1f)
         PIN_LIGHT -> if (cs <= 0.5f) min(cb, 2f * cs) else max(cb, 2f * cs - 1f)
-        HARD_MIX -> if (cb + cs >= 1f) 1f else 0f
+        // Gleichstand (A + B = 255) zählt wie in Photoshop als hell; die Toleranz fängt Gleitkomma-Rundung ab
+        HARD_MIX -> if (cb + cs >= 1f - 1e-4f) 1f else 0f
         DIFFERENCE -> abs(cb - cs)
         EXCLUSION -> cb + cs - 2f * cb * cs
         SUBTRACT -> max(0f, cb - cs)

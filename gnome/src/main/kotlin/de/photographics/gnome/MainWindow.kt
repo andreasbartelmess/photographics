@@ -241,7 +241,7 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
     private fun Menu.section(build: Menu.() -> Unit) = appendSection(null, Menu().apply(build))
 
     private fun mainMenu() = Menu().apply {
-        section { item(tr("Neues Bild …"), "new"); item(tr("Öffnen …"), "open"); item(tr("Als Ebene platzieren …"), "place") }
+        section { item(tr("Neues Bild …"), "new"); item(tr("Öffnen …"), "open"); item(tr("Platzieren …"), "place") }
         section { item(tr("Speichern"), "save"); item(tr("Speichern unter …"), "save-as"); item(tr("Exportieren als …"), "export"); item(tr("Drucken …"), "print") }
         submenu(tr("Ansicht")) {
             section { item(tr("Einpassen"), "zoom-fit"); item(tr("Originalgröße"), "zoom-100") }
@@ -295,13 +295,34 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
             item(tr("Ebenenmaske hinzufügen"), "add-mask"); item(tr("Maske aus Auswahl"), "add-mask-selection")
             item(tr("Maske aktivieren/deaktivieren"), "toggle-mask"); item(tr("Maske anwenden"), "apply-mask"); item(tr("Maske löschen"), "delete-mask")
         }
-        section { item(tr("Schnittmaske erstellen/lösen"), "toggle-clip"); item(tr("In Smartobjekt umwandeln"), "smart"); item(tr("Rastern"), "rasterize"); item(tr("Ebenenstil rastern"), "rasterize-style") }
+        section {
+            item(tr("Schnittmaske erstellen/lösen"), "toggle-clip")
+            submenu(tr("Smartobjekte")) {
+                append(tr("In Smartobjekt umwandeln"), "win.smart")
+                append(tr("Neues Smartobjekt durch Kopie"), "win.smart-copy")
+                append(tr("Inhalt bearbeiten"), "win.smart-edit")
+                append(tr("In Ebenen umwandeln"), "win.smart-layers")
+                append(tr("Inhalt ersetzen …"), "win.smart-replace")
+                append(tr("Inhalt exportieren …"), "win.smart-export")
+                append(tr("Transformation zurücksetzen"), "win.smart-reset")
+            }
+            item(tr("Rastern"), "rasterize"); item(tr("Ebenenstil rastern"), "rasterize-style")
+        }
         section { item(tr("Nach oben"), "layer-up"); item(tr("Nach unten"), "layer-down"); item(tr("Ebeneneigenschaften …"), "layer-props"); item(tr("Ebenenstil") + " …", "layer-style") }
     }
 
     private fun selectMenu() = Menu().apply {
         section { item(tr("Alles auswählen"), "select-all"); item(tr("Auswahl aufheben"), "deselect"); item(tr("Auswahl umkehren"), "invert-selection") }
-        section { item(tr("Weiche Auswahlkante …"), "feather") }
+        section {
+            item(tr("Farbbereich …"), "color-range")
+            submenu(tr("Auswahl verändern")) {
+                append(tr("Rand …"), "win.modify-selection::BORDER")
+                append(tr("Abrunden …"), "win.modify-selection::SMOOTH")
+                append(tr("Erweitern …"), "win.modify-selection::EXPAND")
+                append(tr("Verkleinern …"), "win.modify-selection::CONTRACT")
+            }
+            item(tr("Weiche Auswahlkante …"), "feather")
+        }
         section {
             item(tr("Mit Vordergrundfarbe füllen"), "fill-fg")
             item(tr("Mit Hintergrundfarbe füllen"), "fill-bg"); item(tr("Löschen"), "clear-selection")
@@ -488,13 +509,19 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
         action("apply-mask") { c.setOptions { it.copy(paintTarget = PaintTarget.PIXELS) }; c.edit(null) { it.applyMask(); null } }
         action("toggle-mask") { c.edit(tr("Maske")) { e -> e.doc.activeLayer?.let { l -> l.mask?.let { m -> val on = !m.enabled; e.setProps(l, tr("Maske")) { m.enabled = on } } }; null } }
         action("toggle-clip", arrayOf("<Control><Alt>g")) { c.edit(null) { e -> e.doc.activeLayer?.let { l -> if (!e.setClipping(l, !l.clipped)) toastLater(tr("Diese Ebene kann keine Schnittmaske bilden.")) }; null } }
-        action("smart") { c.edit(null) { e -> (e.doc.activeLayer as? de.photographics.core.doc.PixelLayer)?.let { e.convertToSmartObject(it) ?: toastLater(tr("Die Ebene ist leer.")) }; IntRect.EMPTY } }
+        action("smart") { val ids = selectedIds(); c.edit(null, busy = true) { e -> if (e.convertToSmartObject(e.selectedLayers(ids)) == null) toastLater(tr("Nichts Sichtbares zum Umwandeln.")); null } }
+        action("smart-replace") { chooseReplaceContents() }
+        action("smart-edit") { state?.active?.takeIf { it.kind == LayerRow.Kind.SMART }?.let { editSmartContents(it.id) } }
+        action("smart-copy") { c.edit(null) { e -> (e.doc.activeLayer as? de.photographics.core.doc.SmartLayer)?.let { e.duplicateSmartObject(it) }; null } }
+        action("smart-layers") { c.edit(null, busy = true) { e -> (e.doc.activeLayer as? de.photographics.core.doc.SmartLayer)?.let { if (!e.convertSmartToLayers(it)) toastLater(tr("Nur möglich, solange das Smartobjekt unverzerrt in Originalgröße liegt und keine Smartfilter hat – sonst Rastern.")) }; null } }
+        action("smart-export") { exportSmartContents() }
+        action("smart-reset") { c.edit(null) { e -> (e.doc.activeLayer as? de.photographics.core.doc.SmartLayer)?.let { e.resetSmartTransform(it) }; null } }
         action("rasterize") { c.edit(null) { e -> e.doc.activeLayer?.let { e.rasterize(it) }; null } }
         action("rasterize-style") { c.edit(null) { e -> if (e.doc.activeLayer?.let { e.rasterizeStyle(it) } != true) toastLater(tr("Die Ebene hat keinen sichtbaren Ebenenstil.")); null } }
         action("layer-style") {
             state?.active?.let { row ->
                 c.startEffects(row.id) { fx ->
-                    styleDialog = LayerStyleDialog(window, fx, onPreview = { c.previewEffects(row.id, it) }, onFinish = { c.finishEffects(row.id, it) }).also { it.present() }
+                    styleDialog = LayerStyleDialog(window, fx, onPreview = { c.previewEffects(row.id, it) }, onFinish = { c.finishEffects(row.id, it) }, onCompare = { c.compare(it) }).also { it.present() }
                 }
             }
         }
@@ -514,6 +541,17 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
         action("deselect", arrayOf("<Control>d")) { c.edit(null) { it.deselect(); IntRect.EMPTY } }
         action("invert-selection", arrayOf("<Control><Shift>i")) { c.edit(null) { it.invertSelection(); IntRect.EMPTY } }
         action("feather", arrayOf("<Shift>F6")) { Dialogs.feather(window) { r -> c.edit(null) { it.featherSelection(r); IntRect.EMPTY } } }
+        action("color-range") {
+            val s = session ?: return@action
+            colorRangeDialog = ColorRangeDialog(window, s, c.opts.sampleAll) { src, spec ->
+                c.edit(tr("Farbbereich"), busy = true) { it.colorRangeSelection(src, spec); IntRect.EMPTY }
+            }.also { it.present() }
+        }
+        paramAction("modify-selection") { name ->
+            val kind = de.photographics.core.selection.SelectionModifyKind.valueOf(name)
+            if (state?.hasSelection != true) { toast(tr("Zuerst einen Bereich auswählen.")); return@paramAction }
+            Dialogs.modifySelection(window, kind) { amount, atCanvas -> c.edit(kind.label, busy = true) { it.modifySelection(kind, amount, atCanvas); IntRect.EMPTY } }
+        }
         // Strg+J wie Photoshop: Auswahl in neue Ebene, ohne Auswahl die Ebene(n) duplizieren
         action("layer-via-copy", arrayOf("<Control>j")) {
             val ids = selectedIds()
@@ -551,23 +589,22 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
 
         // Korrekturen und Filter
         paramAction("adjust-layer") { n -> AdjustmentType.entries.firstOrNull { it.name == n }?.let { t -> c.addAdjustment(t, ::openAdjustment) } }
-        paramAction("adjust-direct") { n -> AdjustmentType.entries.firstOrNull { it.name == n }?.let { t -> c.filterStart { showProps(); props.showDirectAdjustment(t, c) } } }
-        paramAction("filter") { n -> n.toIntOrNull()?.let { FilterSpecs.getOrNull(it) }?.let { spec -> c.filterStart { showProps(); props.showFilter(spec, c) } } }
-        action("filter-gallery") {
-            val s = session ?: return@action
-            c.filterStart {
-                FilterGallery(window, s, canvas.liveView().region, c.opts.color, c.opts.bgColor) { chain ->
-                    if (!chain.isEmpty) c.edit(tr("Filtergalerie"), busy = true) { ed ->
-                        ed.previewFilter(chain)?.let { (tx, r) -> ed.commitFilter(tx, tr("Filtergalerie")); r } ?: IntRect.EMPTY
-                    }
-                }.present()
-            }
-        }
+        // Auf einem Smartobjekt werden Filter und direkte Korrekturen zu Smartfiltern (bleiben nachregelbar)
+        paramAction("adjust-direct") { n -> AdjustmentType.entries.firstOrNull { it.name == n }?.let { t ->
+            c.filterTarget { smart -> showProps(); if (smart == null) props.showDirectAdjustment(t, c) else props.showSmartFilter(de.photographics.core.filters.FilterCatalog.adjustment(t), c, smart, -1, null) }
+        } }
+        paramAction("filter") { n -> n.toIntOrNull()?.let { FilterSpecs.getOrNull(it) }?.let { spec ->
+            c.filterTarget { smart -> showProps(); if (smart == null) props.showFilter(spec, c) else props.showSmartFilter(spec, c, smart, -1, null) }
+        } }
+        action("filter-gallery") { openGallery(null, -1) }
         action("levels", arrayOf("<Control>l")) { c.addAdjustment(AdjustmentType.LEVELS, ::openAdjustment) }
         action("curves", arrayOf("<Control>m")) { c.addAdjustment(AdjustmentType.CURVES, ::openAdjustment) }
         action("hue-sat", arrayOf("<Control>u")) { c.addAdjustment(AdjustmentType.HUE_SATURATION, ::openAdjustment) }
         action("color-balance", arrayOf("<Control>b")) { c.addAdjustment(AdjustmentType.COLOR_BALANCE, ::openAdjustment) }
-        action("invert", arrayOf("<Control>i")) { c.filterStart { c.filterPreview(AdjustmentFilter(AdjustmentType.INVERT.createDefault())); c.filterFinish(true, AdjustmentType.INVERT.label) } }
+        action("invert", arrayOf("<Control>i")) { c.filterTarget { smart ->
+            if (smart == null) { c.filterPreview(AdjustmentFilter(AdjustmentType.INVERT.createDefault())); c.filterFinish(true, AdjustmentType.INVERT.label) }
+            else c.smartFilterChange(smart) { ed, l -> ed.addSmartFilter(l, de.photographics.core.doc.SmartFilter("adjust:INVERT")) }
+        } }
         action("transform", arrayOf("<Control>t")) { c.setOptions { it.copy(tool = Tool.TRANSFORM) } }
     }
 
@@ -753,12 +790,13 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
         for (n in listOf("delete-mask", "apply-mask", "toggle-mask")) actions[n]?.enabled = a?.hasMask == true
         actions["add-mask"]?.enabled = a != null && !a.hasMask
         actions["add-mask-selection"]?.enabled = a != null && !a.hasMask && s.hasSelection
-        actions["smart"]?.enabled = a?.kind == LayerRow.Kind.PIXEL
+        actions["smart"]?.enabled = a != null && a.kind != LayerRow.Kind.ADJUSTMENT && (a.kind != LayerRow.Kind.SMART || selectedIds().size > 1)
+        for (n in listOf("smart-replace", "smart-export", "smart-reset", "smart-edit", "smart-copy", "smart-layers")) actions[n]?.enabled = a?.kind == LayerRow.Kind.SMART
         // Effekte rechnet der Compositor für Pixel-, Text-, Form- und Smartobjektebenen
         actions["layer-style"]?.enabled = a != null && a.kind != LayerRow.Kind.GROUP && a.kind != LayerRow.Kind.ADJUSTMENT
         actions["rasterize"]?.enabled = a != null && (a.kind == LayerRow.Kind.TEXT || a.kind == LayerRow.Kind.SMART)
         actions["rasterize-style"]?.enabled = a != null && a.kind != LayerRow.Kind.GROUP && a.kind != LayerRow.Kind.ADJUSTMENT
-        for (n in listOf("deselect", "invert-selection", "feather", "fill-fg", "fill-bg", "clear-selection", "content-fill", "ai-fill")) actions[n]?.enabled = s?.hasSelection == true
+        for (n in listOf("deselect", "invert-selection", "feather", "modify-selection", "fill-fg", "fill-bg", "clear-selection", "content-fill", "ai-fill")) actions[n]?.enabled = s?.hasSelection == true
         zoomLabel.sensitive = has
         for (w in docWidgets) w.visible = has
     }
@@ -852,6 +890,7 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
         channels.update(st)
         if (st.profileName != proofProfileName) { proofProfileName = st.profileName; updateProof() }
         if (st.active?.hasMask != true && c.opts.paintTarget == PaintTarget.MASK) c.setOptions { it.copy(paintTarget = PaintTarget.PIXELS) }
+        if (st.active?.filterMask != true && c.opts.paintTarget == PaintTarget.FILTER_MASK) c.setOptions { it.copy(paintTarget = PaintTarget.PIXELS) }
         options.update(c.opts, st.active?.hasMask == true)
         updateTitle(); updateActions()
         requestThumbs()
@@ -950,6 +989,61 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
     private fun selectedIds(): Set<Int> = layers.selected.ifEmpty { setOfNotNull(state?.active?.id) }
     private fun Editor.selectedLayers(ids: Set<Int>): List<Layer> = ids.mapNotNull { doc.findLayer(it) }
 
+    /**
+     * Filtergalerie: auf einer Pixelebene wie bisher; auf einem Smartobjekt als Smartfilter – neu
+     * ([index] -1) oder einen vorhandenen nachregeln ([layerId], [index]).
+     */
+    private fun openGallery(layerId: Int?, index: Int) {
+        val s = session ?: return
+        fun open(source: de.photographics.core.image.TileGrid?, initial: List<de.photographics.core.filters.GalleryEffect>?, smart: Int?, base: de.photographics.core.doc.SmartFilter?) {
+            FilterGallery(window, s, canvas.liveView().region, c.opts.color, c.opts.bgColor, source, initial) { chain, effects ->
+                if (chain.isEmpty) return@FilterGallery
+                if (smart == null) c.edit(tr("Filtergalerie"), busy = true) { ed ->
+                    ed.previewFilter(chain)?.let { (tx, r) -> ed.commitFilter(tx, tr("Filtergalerie")); r } ?: IntRect.EMPTY
+                } else c.smartFilterChange(smart) { ed, l ->
+                    val f = (base ?: de.photographics.core.doc.SmartFilter.gallery(effects, c.opts.color, c.opts.bgColor)).copy(gallery = effects)
+                    if (base == null) ed.addSmartFilter(l, f) else ed.updateSmartFilter(l, index, f)
+                }
+            }.present()
+        }
+        if (layerId != null) { c.smartFilterOf(layerId, index, { f, below -> open(below, f.gallery, layerId, f) }, withSourceBelow = true); return }
+        c.filterTarget { smart ->
+            if (smart == null) open(null, null, null, null)
+            else Engine.call({ (s.doc.findLayer(smart) as? de.photographics.core.doc.SmartLayer)?.raster }) { r -> open(r.getOrNull(), null, smart, null) }
+        }
+    }
+
+    /** Smartfilter nachregeln (Doppelklick in der Ebenenliste). */
+    private fun editSmartFilter(layerId: Int, index: Int) {
+        c.smartFilterOf(layerId, index, { f, _ ->
+            if (f.gallery != null) { openGallery(layerId, index); return@smartFilterOf }
+            val spec = de.photographics.core.filters.FilterCatalog.byId(f.filterId) ?: run { toast(tr("Dieser Filter ist in dieser Version nicht verfügbar.")); return@smartFilterOf }
+            showProps(); props.showSmartFilter(spec, c, layerId, index, f)
+        })
+    }
+
+    /** Fülloptionen eines Smartfilters: Mischmodus und Deckkraft. */
+    private fun smartFilterBlending(layerId: Int, index: Int) {
+        c.smartFilterOf(layerId, index, { f, _ ->
+            val modes = BlendMode.entries.filter { it != BlendMode.PASS_THROUGH }
+            val dd = org.gnome.gtk.DropDown.fromStrings(modes.map { it.label }.toTypedArray()).apply { selected = modes.indexOf(f.blendMode).coerceAtLeast(0) }
+            val op = org.gnome.gtk.SpinButton.withRange(0.0, 100.0, 1.0).apply { value = (f.opacity * 100.0) }
+            val box = org.gnome.gtk.Box(org.gnome.gtk.Orientation.VERTICAL, 8)
+            box.append(org.gnome.gtk.Label(tr("Modus")).apply { xalign = 0f; addCssClass("dim-label") }); box.append(dd)
+            box.append(org.gnome.gtk.Label(tr("Deckkraft (%)")).apply { xalign = 0f; addCssClass("dim-label") }); box.append(op)
+            val d = org.gnome.adw.AlertDialog(tr("Fülloptionen: {0}", f.label), null)
+            d.extraChild = box
+            d.addResponse("cancel", tr("Abbrechen")); d.addResponse("ok", tr("OK"))
+            d.setResponseAppearance("ok", org.gnome.adw.ResponseAppearance.SUGGESTED)
+            d.defaultResponse = "ok"; d.closeResponse = "cancel"
+            d.onResponse("ok") {
+                val mode = modes[dd.selected]; val o = (op.value / 100.0).toFloat()
+                c.smartFilterChange(layerId) { ed, l -> ed.updateSmartFilter(l, index, f.copy(blendMode = mode, opacity = o), tr("Fülloptionen")) }
+            }
+            d.present(window)
+        })
+    }
+
     private inner class LayerActions : LayersPanel.Actions {
         override fun select(active: Int, selected: Set<Int>) { c.query { e -> e.doc.findLayer(active)?.let { e.setActive(it) }; IntRect.EMPTY } }
 
@@ -973,6 +1067,25 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
             null
         }
 
+        override fun smartFilterToggle(id: Int, index: Int) = c.smartFilterChange(id) { ed, l ->
+            l.smartFilters.filters.getOrNull(index)?.let { f -> ed.updateSmartFilter(l, index, f.copy(enabled = !f.enabled), if (f.enabled) tr("Smartfilter ausblenden") else tr("Smartfilter einblenden")) }
+        }
+        override fun smartFiltersVisible(id: Int, visible: Boolean) = c.smartFilterChange(id) { ed, l -> ed.setSmartFiltersVisible(l, visible) }
+        override fun smartFilterEdit(id: Int, index: Int) = editSmartFilter(id, index)
+        override fun smartFilterBlending(id: Int, index: Int) = this@MainWindow.smartFilterBlending(id, index)
+        override fun smartFilterDelete(id: Int, index: Int) = c.smartFilterChange(id) { ed, l -> ed.removeSmartFilter(l, index) }
+        override fun smartFilterMove(id: Int, from: Int, to: Int) = c.smartFilterChange(id) { ed, l -> ed.moveSmartFilter(l, from, to) }
+        override fun filterMask(id: Int, on: Boolean) {
+            c.smartFilterChange(id) { ed, l -> ed.setFilterMask(l, on) }
+            // Wie bei der Ebenenmaske: nach dem Anlegen wird auf der Filtermaske gemalt
+            c.setOptions { it.copy(paintTarget = if (on) PaintTarget.FILTER_MASK else PaintTarget.PIXELS) }
+        }
+
+        override fun filterMaskOp(id: Int, op: FilterMaskOp) {
+            c.smartFilterChange(id) { ed, l -> if (op == FilterMaskOp.INVERT) ed.invertFilterMask(l) else ed.filterMaskFromSelection(l) }
+            c.setOptions { it.copy(paintTarget = PaintTarget.FILTER_MASK) }
+        }
+
         override fun opacity(v: Float) = liveChange(tr("Deckkraft")) { it.opacity = v }
         override fun fill(v: Float) = liveChange(tr("Fläche")) { it.fillOpacity = v }
         override fun blend(mode: BlendMode) = changeLayers(tr("Mischmodus"), selectedIds()) { it.blendMode = mode }
@@ -983,6 +1096,8 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
                 LayerRow.Kind.ADJUSTMENT -> c.openAdjustment(row.id, ::openAdjustment)
                 LayerRow.Kind.TEXT -> c.editTextLayer(row.id)
                 LayerRow.Kind.SHAPE -> editShape(row.id)
+                // Doppelklick auf ein Smartobjekt öffnet wie in Photoshop seinen Inhalt
+                LayerRow.Kind.SMART -> editSmartContents(row.id)
                 else -> actions["layer-props"]?.activate(null)
             }
         }
@@ -1086,6 +1201,14 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
                         }
                         out[-l.id] = CanvasView.toBytes(mv)
                     }
+                    (l as? de.photographics.core.doc.SmartLayer)?.smartFilters?.mask?.let { m ->
+                        val mv = IntArray(r.width * r.height)
+                        for (y in 0 until r.height) for (x in 0 until r.width) {
+                            val v = m.grid[minOf(doc.width - 1, x * step), minOf(doc.height - 1, y * step)] and 0xFF
+                            mv[y * r.width + x] = (0xFF shl 24) or (v shl 16) or (v shl 8) or v
+                        }
+                        out[filterMaskKey(l.id)] = CanvasView.toBytes(mv)
+                    }
                 }
                 out to r
             }) { res ->
@@ -1177,21 +1300,100 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
         d.open(window, null) { res -> runCatching { d.openFinish(res) }.getOrNull()?.local()?.let { openFile(it) } }
     }
 
-    /** Datei als neue Ebene (PSD: zusammengeführt) mittig über der aktiven Ebene einfügen. */
+    /**
+     * Datei platzieren wie Photoshop: als eingebettetes Smartobjekt (PSD zusammengeführt) mittig über
+     * der aktiven Ebene, in das Dokumentprofil umgerechnet; zu große Bilder eingepasst.
+     */
     private fun choosePlace() {
         val d = FileDialog()
-        d.title = tr("Als Ebene platzieren")
+        d.title = tr("Platzieren")
         d.filters = imageFilters()
         d.open(window, null) { res ->
             val f = runCatching { d.openFinish(res) }.getOrNull()?.local() ?: return@open
             c.edit(tr("Platzieren"), busy = true) { ed ->
-                val src = FileIO.open(f).doc
-                val g = ed.doc.newGrid()
-                val ox = (ed.doc.width - src.width) / 2; val oy = (ed.doc.height - src.height) / 2
-                Compositor.renderBands(src, src.bounds) { r, px -> g.writeRect(r.offset(ox, oy), px) }
-                g.compact()
-                ed.addLayer(f.nameWithoutExtension, g, tr("Platzieren"))
+                ed.placeSmartObject(f.nameWithoutExtension, ed.importedContents(FileIO.open(f, Settings.workingRgb.profile).doc))
                 null
+            }
+        }
+    }
+
+    /** Smartobjekt: Inhalt in einem eigenen Fenster bearbeiten; Speichern dort übernimmt ihn. */
+    private fun editSmartContents(layerId: Int) {
+        val s = session ?: return
+        busy(true)
+        Engine.call({
+            val l = s.doc.findLayer(layerId) as? de.photographics.core.doc.SmartLayer ?: return@call null
+            l.name to s.editor.editableContents(l)
+        }) { r ->
+            busy(false)
+            val (name, doc) = r.getOrNull() ?: return@call
+            app.newWindow().also { it.present() }.openContents(doc, "$name.psb", SmartParent(this, s, layerId))
+        }
+    }
+
+    /** Fenster „Inhalt bearbeiten“: Dokument [doc] ohne Datei, gekoppelt an das Smartobjekt [parent]. */
+    fun openContents(doc: Document, name: String, parent: SmartParent) {
+        Engine.call({
+            val s = Session(newEditor(doc), null, name, true)
+            s.smartParent = parent
+            s to s.state()
+        }) { r -> r.onSuccess { (s, st) -> attach(s, st); toast(tr("Speichern (Strg+S) übernimmt den Inhalt in das Smartobjekt.")) } }
+    }
+
+    /** Speichern im Fenster „Inhalt bearbeiten“: Inhalt in das Smartobjekt des Ursprungsdokuments übernehmen. */
+    private fun saveToSmartObject(s: Session, p: SmartParent, then: () -> Unit) {
+        if (p.window.session !== p.session) {
+            toast(tr("Das Ursprungsdokument ist geschlossen – bitte unter einem Namen speichern."))
+            save(true, then); return
+        }
+        p.window.c.edit(tr("Inhalt bearbeiten"), busy = true) { ed ->
+            val l = ed.doc.findLayer(p.layerId) as? de.photographics.core.doc.SmartLayer ?: run { toastLater(tr("Das Smartobjekt gibt es nicht mehr.")); return@edit null }
+            p.layerId = ed.updateSmartContents(l, s.doc).id
+            null
+        }
+        // Danach (gleicher Engine-Thread, also nach dem Übernehmen) als gespeichert markieren
+        c.query { s.markSaved(); IntRect.EMPTY }
+        Engine.call({ }) { then() }
+    }
+
+    /** Smartobjekt: Inhalt durch eine Datei ersetzen (Lage, Smartfilter und Ebenenstil bleiben). */
+    private fun chooseReplaceContents() {
+        val id = state?.active?.takeIf { it.kind == LayerRow.Kind.SMART }?.id ?: return
+        val d = FileDialog()
+        d.title = tr("Inhalt ersetzen")
+        d.filters = imageFilters()
+        d.open(window, null) { res ->
+            val f = runCatching { d.openFinish(res) }.getOrNull()?.local() ?: return@open
+            c.edit(tr("Inhalt ersetzen"), busy = true) { ed ->
+                (ed.doc.findLayer(id) as? de.photographics.core.doc.SmartLayer)?.let { l ->
+                    ed.replaceSmartContents(l, ed.importedContents(FileIO.open(f, Settings.workingRgb.profile).doc))
+                }
+                null
+            }
+        }
+    }
+
+    /** Smartobjekt: Inhalt (ohne Transformation und Smartfilter) als PSD oder PNG speichern. */
+    private fun exportSmartContents() {
+        val s = session ?: return
+        val row = state?.active?.takeIf { it.kind == LayerRow.Kind.SMART } ?: return
+        val d = FileDialog()
+        d.title = tr("Inhalt exportieren")
+        d.initialName = row.name + ".psd"
+        d.filters = filters("Photoshop (PSD)" to listOf("psd"), "PNG" to listOf("png"), "TIFF" to listOf("tif", "tiff"))
+        d.save(window, null) { res ->
+            val g = runCatching { d.saveFinish(res) }.getOrNull()?.local() ?: return@save
+            val fmt = FileIO.Format.of(g)?.takeIf { it != FileIO.Format.JPEG && it != FileIO.Format.XCF }
+            val target = if (fmt == null) File(g.path + ".psd") else g
+            busy(true)
+            Engine.call({
+                val l = s.doc.findLayer(row.id) as? de.photographics.core.doc.SmartLayer ?: return@call
+                val out = s.editor.editableContents(l)
+                val format = fmt ?: FileIO.Format.PSD
+                if (format.layered) FileIO.save(out, target, format) else FileIO.export(out, target, format)
+            }) { r ->
+                busy(false)
+                r.exceptionOrNull()?.let { error(tr("Export fehlgeschlagen"), it) } ?: toast(tr("Inhalt exportiert: {0}", target.name))
             }
         }
     }
@@ -1200,6 +1402,7 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
         val s = session ?: return
         // Offene Transformation erst übernehmen – sonst landet die schwebende Auswahl als eigene Ebene in der Datei
         if (c.transforming) c.applyTransform()
+        s.smartParent?.let { p -> if (!chooseName && s.file == null) { saveToSmartObject(s, p, then); return } }
         val f = s.file
         if (!chooseName && f != null) { writeTo(s, f, FileIO.Format.of(f) ?: FileIO.Format.PSD, then); return }
         val d = FileDialog()
@@ -1290,11 +1493,20 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
      */
     /** Zuletzt geöffneter Ebenenstil (für Testaktionen „fx:…“). */
     private var styleDialog: LayerStyleDialog? = null
+    private var colorRangeDialog: ColorRangeDialog? = null
 
     fun debugAction(name: String) {
         when {
             // „fx:bevel“ schaltet einen Effekt im offenen Ebenenstil ein, „fx:ok“ übernimmt
             name.startsWith("fx:") -> styleDialog?.debug(name.substring(3))
+            // „cr:pick;0.5;0.3[;add|sub]“ nimmt im Farbbereich eine Farbe auf (Bildanteile), „cr:ok“, „cr:image“
+            name.startsWith("cr:") -> colorRangeDialog?.debug(name.substring(3))
+            // „sfilter:gaussian-blur;8“ legt auf dem aktiven Smartobjekt einen Smartfilter an, „fmask“ eine Filtermaske
+            name.startsWith("sfilter:") -> state?.active?.id?.let { id ->
+                val p = name.substring(8).split(';')
+                c.smartFilterChange(id) { ed, l -> ed.addSmartFilter(l, de.photographics.core.doc.SmartFilter.of(p[0], p.drop(1).map { it.toFloat() }.toFloatArray())) }
+            }
+            name == "fmask" -> state?.active?.id?.let { LayerActions().filterMask(it, true) }
             name.startsWith("tool:") -> Tool.entries.firstOrNull { it.name == name.substring(5) }?.let { t -> c.setOptions { it.copy(tool = t) } }
             name.startsWith("drag:") -> {
                 val v = name.substring(5).split(';').map { it.toDouble() }
@@ -1311,9 +1523,15 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
                 for (i in 1..12) c.drag(v[0] + (v[2] - v[0]) * i / 12, v[1] + (v[3] - v[1]) * i / 12, 1f, m)
                 heldAt = v[2] to v[3]
             }
+            name == "compare:on" -> c.compare(true)
+            name == "compare:off" -> c.compare(false)
             name == "pathmode" -> c.setOptions { it.copy(shapeLayerMode = false) }
             name.startsWith("chview:") -> canvas.channelView = name.substring(7).toInt()
             name == "savesel" -> c.edit(null) { it.saveSelectionAsChannel(); IntRect.EMPTY }
+            // „modsel:BORDER;30“ – Auswahl verändern ohne Dialog
+            name.startsWith("modsel:") -> name.substring(7).split(';').let { (k, v) ->
+                c.edit(null) { it.modifySelection(de.photographics.core.selection.SelectionModifyKind.valueOf(k), v.toInt()); IntRect.EMPTY }
+            }
             name.startsWith("click:") -> name.substring(6).split(';').map { it.toDouble() }.let { (x, y) -> c.press(x, y, 1f, emptySet()); c.release(x, y, emptySet()) }
             name == "release" -> heldAt?.let { (x, y) -> c.release(x, y, emptySet()); heldAt = null }
             name.startsWith("color:") -> name.substring(6).toLongOrNull(16)?.let { col -> c.setOptions { it.copy(color = col.toInt()) } }

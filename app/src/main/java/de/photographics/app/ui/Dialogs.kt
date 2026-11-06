@@ -41,6 +41,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Compare
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,10 +60,12 @@ import kotlin.math.roundToInt
 
 /** Schwebende Karte mit Live-Vorschau (das Bild bleibt sichtbar). */
 @Composable
-fun FilterPanel(spec: FilterSpec, onPreview: (FloatArray) -> Unit, onApply: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
-    val values = remember(spec) { mutableStateListOf(*spec.params.map { it.default }.toTypedArray()) }
+fun FilterPanel(spec: FilterSpec, onPreview: (FloatArray) -> Unit, onApply: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier,
+                onCompare: ((Boolean) -> Unit)? = null, initial: FloatArray? = null) {
+    // [initial]: gespeicherte Werte (Smartfilter nachregeln), sonst die Grundeinstellung
+    val values = remember(spec, initial) { mutableStateListOf(*spec.params.mapIndexed { i, p -> initial?.getOrNull(i) ?: p.default }.toTypedArray()) }
     LaunchedEffect(spec) { onPreview(values.toFloatArray()) }
-    PanelCard(spec.icon, spec.label, modifier, actions = {
+    PanelCard(spec.icon, spec.label, modifier, onCompare = onCompare, actions = {
         PanelActions(
             onReset = { for (i in values.indices) values[i] = spec.params[i].default; onPreview(values.toFloatArray()) },
             onCancel = onCancel, onApply = onApply,
@@ -67,12 +75,40 @@ fun FilterPanel(spec: FilterSpec, onPreview: (FloatArray) -> Unit, onApply: () -
     }
 }
 
+/** „Vorher“: solange gedrückt, zeigt das Bild den Stand ohne die laufende Vorschau. */
+@Composable
+fun CompareButton(onCompare: (Boolean) -> Unit) {
+    val cb by androidx.compose.runtime.rememberUpdatedState(onCompare)
+    var held by remember { androidx.compose.runtime.mutableStateOf(false) }
+    val label = tr("Vorher")
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = if (held) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+        modifier = Modifier
+            .semantics { contentDescription = tr("Gedrückt halten, um den Stand vorher zu sehen") }
+            .pointerInput(Unit) {
+                detectTapGestures(onPress = {
+                    held = true; cb(true)
+                    try { tryAwaitRelease() } finally { held = false; cb(false) }
+                })
+            },
+    ) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Compare, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(6.dp))
+            Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        }
+    }
+}
+
 /** Gemeinsamer Rahmen der schwebenden Panels. */
 @Composable
 fun PanelCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, modifier: Modifier = Modifier,
     /** Schaltflächen am unteren Rand – bleiben sichtbar, auch wenn der Inhalt scrollt. */
     actions: (@Composable () -> Unit)? = null,
+    /** Gedrückt halten zum Vergleichen (Knopf „Vorher“ neben dem Titel). */
+    onCompare: ((Boolean) -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     Surface(modifier, color = MaterialTheme.colorScheme.surfaceContainerHigh, shadowElevation = 6.dp, shape = RoundedCornerShape(28.dp)) {
@@ -80,7 +116,8 @@ fun PanelCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(12.dp))
-                Text(title, style = MaterialTheme.typography.titleLarge)
+                Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                if (onCompare != null) CompareButton(onCompare)
             }
             Spacer(Modifier.height(8.dp))
             val scroll = rememberScrollState()

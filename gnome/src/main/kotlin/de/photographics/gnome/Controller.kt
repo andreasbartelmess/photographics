@@ -4,6 +4,7 @@ import de.photographics.core.doc.Layer
 import de.photographics.core.doc.PixelLayer
 import de.photographics.core.doc.RasterLayer
 import de.photographics.core.doc.SmartLayer
+import de.photographics.core.doc.with
 import de.photographics.core.doc.TextLayer
 import de.photographics.core.doc.TextStyle
 import de.photographics.core.editor.Editor
@@ -683,13 +684,13 @@ class Controller(private val canvas: CanvasView, private val ui: Ui) : CanvasInp
             val ed = s.editor
             val layer = ed.doc.activeLayer
             val tool = createTool(o, off, layer?.lockTransparency == true) ?: return@post
-            val target = if (o.paintTarget == PaintTarget.MASK && tool.supportsMask && layer?.mask != null) PaintTarget.MASK else PaintTarget.PIXELS
+            val target = paintTargetFor(o.paintTarget, layer, tool.supportsMask)
             val st = ed.beginStroke(tool, o.brush, target)
             if (st == null) {
                 message(when {
                     layer == null -> tr("Keine Ebene ausgewählt.")
                     !layer.visible -> tr("Die Ebene ist ausgeblendet.")
-                    o.paintTarget == PaintTarget.MASK && !tool.supportsMask -> tr("{0} funktioniert nicht auf Masken.", tool.label)
+                    o.paintTarget.isMask && !tool.supportsMask -> tr("{0} funktioniert nicht auf Masken.", tool.label)
                     else -> tr("Auf dieser Ebene kann nicht gemalt werden (Gruppe?).")
                 })
                 return@post
@@ -1054,11 +1055,18 @@ class Controller(private val canvas: CanvasView, private val ui: Ui) : CanvasInp
         return inside
     }
 
+    /** Gewünschtes Malziel, sofern die Ebene es hat (sonst die Pixel). */
+    private fun paintTargetFor(want: PaintTarget, layer: Layer?, maskOk: Boolean): PaintTarget = when {
+        want == PaintTarget.MASK && maskOk && layer?.mask != null -> PaintTarget.MASK
+        want == PaintTarget.FILTER_MASK && maskOk && (layer as? SmartLayer)?.smartFilters?.mask != null -> PaintTarget.FILTER_MASK
+        else -> PaintTarget.PIXELS
+    }
+
     private fun applyGradient(x0: Double, y0: Double, x1: Double, y1: Double) {
         val o = opts
         edit(tr("Verlauf"), busy = true) { ed ->
             val l = ed.doc.activeLayer
-            val target = if (o.paintTarget == PaintTarget.MASK && l?.mask != null) PaintTarget.MASK else PaintTarget.PIXELS
+            val target = paintTargetFor(o.paintTarget, l, true)
             val c1 = if (o.gradientToTransparent) o.color and 0x00FFFFFF else o.bgColor
             ed.fillGradient(target, Gradient(o.gradientType, x0.toFloat(), y0.toFloat(), x1.toFloat(), y1.toFloat(), o.color, c1), o.gradientOpacity)
                 ?: run { message(tr("Verlauf nur auf Pixelebenen oder Masken.")); IntRect.EMPTY }
@@ -1557,11 +1565,13 @@ class Controller(private val canvas: CanvasView, private val ui: Ui) : CanvasInp
     /** Vorschau; schnelle Folgen von Änderungen werden zusammengefasst (nur die letzte zählt). */
     fun filterPreview(f: de.photographics.core.filters.ImageFilter) {
         filterWanted = f
+        filterOpen = true
         if (!filterRunning) runFilterPreview()
     }
 
     private fun runFilterPreview() {
         val s = session ?: return
+        if (comparing) return
         val f = filterWanted ?: return
         filterWanted = null
         filterRunning = true
@@ -1583,7 +1593,9 @@ class Controller(private val canvas: CanvasView, private val ui: Ui) : CanvasInp
 
     fun filterFinish(apply: Boolean, label: String) {
         filterWanted = null
+        compareOffNow(); filterOpen = false
         edit(label) { ed ->
+            eCompareUndo?.invoke(); eCompareUndo = null
             val tx = eFilterTx
             val region = eFilterRegion
             eFilterTx = null; eFilterRegion = IntRect.EMPTY
@@ -1601,11 +1613,12 @@ class Controller(private val canvas: CanvasView, private val ui: Ui) : CanvasInp
         val s = session ?: return
         Engine.call({
             val l = s.editor.addAdjustmentLayer(type.createDefault())
-            eAdjustBefore = l.adjustment
+            eAdjustBefore = l.adjustment; eAdjustId = l.id; eAdjustNew = true
             Triple(l, histogramFor(s, l), s.state())
         }) { r ->
             val (l, h, st) = r.getOrNull() ?: return@call
             publish(st, null)
+            adjustOpen = true
             open(l.id, l.adjustment, h)
         }
     }
@@ -1615,11 +1628,12 @@ class Controller(private val canvas: CanvasView, private val ui: Ui) : CanvasInp
         Engine.call({
             val l = s.doc.findLayer(id) as? de.photographics.core.doc.AdjustmentLayer ?: return@call null
             s.editor.setActive(l)
-            eAdjustBefore = l.adjustment
+            eAdjustBefore = l.adjustment; eAdjustId = l.id; eAdjustNew = false
             Triple(l.adjustment, histogramFor(s, l), s.state())
         }) { r ->
             val (a, h, st) = r.getOrNull() ?: return@call
             publish(st, IntRect.EMPTY)
+            adjustOpen = true
             open(id, a, h)
         }
     }
@@ -1627,6 +1641,179 @@ class Controller(private val canvas: CanvasView, private val ui: Ui) : CanvasInp
     private fun histogramFor(s: Session, l: de.photographics.core.doc.AdjustmentLayer): IntArray? =
         if (l.adjustment is de.photographics.core.adjust.CurvesAdj || l.adjustment is de.photographics.core.adjust.LevelsAdj)
             de.photographics.core.adjust.Histogram.below(s.doc, l) else null
+
+    // ------------------------------------------------------------ Smartfilter
+
+    /** Engine-Thread: Filter des Smartobjekts vor dem Bearbeiten, bearbeitete Stelle (-1 = neu oben). */
+    private var eSmartBefore: de.photographics.core.doc.SmartFilters? = null
+    private var eSmartLayer = -1
+    private var eSmartIndex = -1
+    private var smartWanted: de.photographics.core.doc.SmartFilter? = null
+    private var smartRunning = false
+    private var smartOpen = false
+
+    private fun smartLayer(s: Session, id: Int) = s.doc.findLayer(id) as? de.photographics.core.doc.SmartLayer
+
+    /**
+     * Ziel eines Filters: [done] mit null für eine Pixelebene, mit der Ebenen-ID für ein Smartobjekt
+     * (der Filter wird dann ein Smartfilter); sonst ein Hinweis.
+     */
+    fun filterTarget(done: (Int?) -> Unit) {
+        val s = session ?: return
+        Engine.call({
+            when (val l = s.doc.activeLayer) { is PixelLayer -> 0; is de.photographics.core.doc.SmartLayer -> l.id; else -> -1 }
+        }) { r ->
+            when (val v = r.getOrNull()) {
+                0 -> done(null)
+                null, -1 -> ui.toast(tr("Filter benötigen eine Pixelebene oder ein Smartobjekt (Text ggf. rastern oder eine Einstellungsebene verwenden)."))
+                else -> done(v)
+            }
+        }
+    }
+
+    /** Smartfilter [index] (-1 = neuer Filter oben) von Ebene [layerId] bearbeiten; danach [smartFilterPreview]/[smartFilterFinish]. */
+    fun smartFilterBegin(layerId: Int, index: Int) {
+        val s = session ?: return
+        smartOpen = true
+        Engine.post {
+            gpuEnd()
+            eSmartBefore = smartLayer(s, layerId)?.smartFilters
+            eSmartLayer = layerId; eSmartIndex = index
+        }
+    }
+
+    /** Vorschau eines bearbeiteten Smartfilters; schnelle Folgen werden zusammengefasst. */
+    fun smartFilterPreview(f: de.photographics.core.doc.SmartFilter) {
+        smartWanted = f
+        if (!smartRunning) runSmartPreview()
+    }
+
+    private fun withEdited(before: de.photographics.core.doc.SmartFilters, f: de.photographics.core.doc.SmartFilter): de.photographics.core.doc.SmartFilters {
+        val s = session ?: return before
+        return before.with(eSmartIndex, f, s.doc.selection)
+    }
+
+    private fun runSmartPreview() {
+        val s = session ?: return
+        if (comparing) return
+        val f = smartWanted ?: return
+        smartWanted = null
+        smartRunning = true
+        ui.busy(true)
+        Engine.call({
+            val l = smartLayer(s, eSmartLayer) ?: return@call
+            val before = eSmartBefore ?: return@call
+            s.editor.previewSmartFilters(l, withEdited(before, f))
+        }) { _ ->
+            smartRunning = false
+            ui.busy(false)
+            state?.let { canvas.invalidate(null, it, live = true) }
+            if (smartWanted != null) runSmartPreview()
+        }
+    }
+
+    /** Bearbeitung beenden: übernehmen (ein Schritt im Verlauf) oder verwerfen. */
+    fun smartFilterFinish(apply: Boolean) {
+        val pending = smartWanted
+        smartWanted = null
+        compareOffNow(); smartOpen = false
+        edit(tr("Smartfilter")) { ed ->
+            eCompareUndo?.invoke(); eCompareUndo = null
+            val l = smartLayer(session ?: return@edit null, eSmartLayer) ?: return@edit null
+            val before = eSmartBefore ?: return@edit null
+            eSmartBefore = null
+            if (apply) {
+                pending?.let { ed.previewSmartFilters(l, withEdited(before, it)) }
+                ed.commitSmartFilters(l, before, if (eSmartIndex < 0) tr("Smartfilter: {0}", l.smartFilters.filters.lastOrNull()?.label ?: "") else tr("Smartfilter ändern"))
+            } else ed.previewSmartFilters(l, before)
+            null
+        }
+    }
+
+    /** Smartfilter [index] von [layerId] holen (zum Öffnen), im Hauptthread an [done]. */
+    fun smartFilterOf(layerId: Int, index: Int, done: (de.photographics.core.doc.SmartFilter, de.photographics.core.image.TileGrid?) -> Unit, withSourceBelow: Boolean = false) {
+        val s = session ?: return
+        Engine.call({
+            val l = smartLayer(s, layerId) ?: return@call null
+            val f = l.smartFilters.filters.getOrNull(index) ?: return@call null
+            // Für die Filtergalerie: Bild mit den Filtern darunter als Vorschauquelle
+            val below = if (withSourceBelow) l.rasterBelow(index) else null
+            f to below
+        }) { r -> r.getOrNull()?.let { (f, g) -> done(f, g) } }
+    }
+
+    /** Einfache Änderung an den Smartfiltern von [layerId] (ein Schritt im Verlauf). */
+    fun smartFilterChange(layerId: Int, op: (Editor, de.photographics.core.doc.SmartLayer) -> Unit) = edit(null, busy = true) { ed ->
+        smartLayer(session ?: return@edit null, layerId)?.let { op(ed, it) }
+        null
+    }
+
+    // ------------------------------------------------------------ Vorher/Nachher
+
+    private var eAdjustId = -1
+    private var eAdjustNew = false
+    private var eFxId = -1
+    /** Engine-Thread: nimmt den Vergleich zurück (null = kein Vergleich aktiv). */
+    private var eCompareUndo: (() -> Unit)? = null
+    /** Hauptthread: Vergleich gedrückt gehalten. */
+    var comparing = false
+        private set
+
+    /** Läuft gerade eine Vorschau (Filter, Einstellungsebene, Ebenenstil), die man vergleichen kann? */
+    val canCompare: Boolean get() = filterOpen || adjustOpen || fxOpen || smartOpen
+    private var filterOpen = false
+    private var adjustOpen = false
+    private var fxOpen = false
+
+    /**
+     * Gedrückt halten zum Vergleichen: [on] zeigt den Stand vor der laufenden Vorschau, false wieder
+     * die Vorschau. Vorschau-Rechnungen warten so lange.
+     */
+    fun compare(on: Boolean) {
+        val s = session ?: return
+        if (on == comparing || (on && !canCompare)) return
+        comparing = on
+        Engine.call({
+            if (on) {
+                if (eCompareUndo != null) return@call IntRect.EMPTY
+                val tx = eFilterTx
+                val adj = eAdjustBefore?.let { b -> (s.doc.findLayer(eAdjustId) as? de.photographics.core.doc.AdjustmentLayer)?.let { it to b } }
+                val fxl = eFxBefore?.let { b -> s.doc.findLayer(eFxId)?.let { it to b } }
+                val sml = eSmartBefore?.let { b -> smartLayer(s, eSmartLayer)?.let { it to b } }
+                when {
+                    sml != null -> {
+                        val (l, before) = sml
+                        val cur = l.smartFilters; l.smartFilters = before; eCompareUndo = { l.smartFilters = cur }
+                        null
+                    }
+                    tx != null -> { tx.swapOriginals(); eCompareUndo = { tx.swapOriginals() }; eFilterRegion }
+                    adj != null -> {
+                        val (l, before) = adj
+                        if (eAdjustNew) { val v = l.visible; l.visible = false; eCompareUndo = { l.visible = v } }
+                        else { val cur = l.adjustment; l.adjustment = before; eCompareUndo = { l.adjustment = cur } }
+                        null
+                    }
+                    fxl != null -> {
+                        val (l, before) = fxl
+                        val cur = l.preservedBlocks; l.preservedBlocks = before; eCompareUndo = { l.preservedBlocks = cur }
+                        null
+                    }
+                    else -> IntRect.EMPTY
+                }
+            } else {
+                val u = eCompareUndo ?: return@call IntRect.EMPTY
+                u(); eCompareUndo = null
+                if (eFilterTx != null) eFilterRegion else null
+            }
+        }) { r ->
+            val rect = r.getOrNull()
+            if (rect == null || !rect.isEmpty) state?.let { canvas.invalidate(rect, it, live = true) }
+            if (!on) { if (!filterRunning) runFilterPreview(); if (!adjustRunning) runAdjustPreview(); if (!fxRunning) runFxPreview(); if (!smartRunning) runSmartPreview() }
+        }
+    }
+
+    /** Vor dem Übernehmen/Abbrechen: Vergleich beenden (die Rücknahme läuft im selben Engine-Auftrag). */
+    private fun compareOffNow() { comparing = false }
 
     // ------------------------------------------------------------ Ebenenstil
 
@@ -1641,9 +1828,9 @@ class Controller(private val canvas: CanvasView, private val ui: Ui) : CanvasInp
         Engine.call({
             gpuEnd()
             val l = s.doc.findLayer(id) ?: return@call null
-            eFxBefore = l.preservedBlocks
+            eFxBefore = l.preservedBlocks; eFxId = id
             l.effects ?: de.photographics.core.doc.LayerEffects()
-        }) { r -> r.getOrNull()?.let(open) }
+        }) { r -> r.getOrNull()?.let { fxOpen = true; open(it) } }
     }
 
     fun previewEffects(id: Int, fx: de.photographics.core.doc.LayerEffects) {
@@ -1653,6 +1840,7 @@ class Controller(private val canvas: CanvasView, private val ui: Ui) : CanvasInp
 
     private fun runFxPreview() {
         val s = session ?: return
+        if (comparing) return
         val (id, fx) = fxWanted ?: return
         fxWanted = null
         fxRunning = true
@@ -1668,7 +1856,9 @@ class Controller(private val canvas: CanvasView, private val ui: Ui) : CanvasInp
 
     fun finishEffects(id: Int, commit: Boolean) {
         fxWanted = null
+        compareOffNow(); fxOpen = false
         edit(tr("Ebenenstil")) { ed ->
+            eCompareUndo?.invoke(); eCompareUndo = null
             val l = ed.doc.findLayer(id) ?: return@edit null
             val before = eFxBefore ?: return@edit null
             eFxBefore = null
@@ -1684,6 +1874,7 @@ class Controller(private val canvas: CanvasView, private val ui: Ui) : CanvasInp
 
     private fun runAdjustPreview() {
         val s = session ?: return
+        if (comparing) return
         val (id, a) = adjustWanted ?: return
         adjustWanted = null
         adjustRunning = true
@@ -1702,7 +1893,9 @@ class Controller(private val canvas: CanvasView, private val ui: Ui) : CanvasInp
         // Letzte Reglerstellung, deren Vorschau noch nicht gelaufen ist, nicht verlieren
         val pending = adjustWanted?.takeIf { it.first == id }?.second
         adjustWanted = null
+        compareOffNow(); adjustOpen = false
         edit(tr("Einstellungsebene")) { ed ->
+            eCompareUndo?.invoke(); eCompareUndo = null
             val l = ed.doc.findLayer(id) as? de.photographics.core.doc.AdjustmentLayer ?: return@edit null
             val before = eAdjustBefore ?: return@edit null
             eAdjustBefore = null

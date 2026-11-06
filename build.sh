@@ -15,7 +15,7 @@ ADB="$ANDROID_HOME/platform-tools/adb"
 # Schlägt einer fehl, wird keine Release-Version gebaut.
 run_tests() {
     echo "== Tests und Speicher-Sperre =="
-    if ! ./gradlew :core:test :core:memoryTest --console=plain; then
+    if ! ./gradlew :core:test :core:memoryTest :gpu-desktop:test --console=plain; then
         echo
         echo "✗ Tests fehlgeschlagen – keine Release-Version gebaut."
         echo "  Bericht: core/build/reports/tests/test/index.html und core/build/reports/tests/memoryTest/index.html"
