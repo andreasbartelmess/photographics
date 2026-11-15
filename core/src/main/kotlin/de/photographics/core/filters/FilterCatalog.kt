@@ -16,6 +16,8 @@ class FilterParam(
     val kind: ParamKind = ParamKind.SLIDER,
     /** Beschriftungen für [ParamKind.CHOICE] (Wert = Index). */
     val choices: List<String> = emptyList(),
+    /** Gruppe (wie AdjParam.group): die Oberfläche zeigt eine Auswahl und nur die Regler der gewählten Gruppe. */
+    val group: String? = null,
 )
 
 /**
@@ -92,7 +94,7 @@ object FilterCatalog {
                 de.photographics.core.adjust.AdjParam.Kind.SWITCH -> ParamKind.SWITCH
                 de.photographics.core.adjust.AdjParam.Kind.HUE -> ParamKind.HUE
                 else -> ParamKind.SLIDER
-            })
+            }, group = p.group)
         }
         return FilterSpec("adjust:${t.name}", t.label, tr("Korrekturen"), params) { v -> AdjustmentFilter(def.withValues(v)) }
     }

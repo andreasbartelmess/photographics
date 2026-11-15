@@ -187,6 +187,7 @@ private fun LutRow(title: String, subtitle: String, selected: Boolean, onClick: 
 private fun AdjParam.toFilterParam() = FilterParam(
     label, min, max, value, decimals,
     when (kind) { AdjParam.Kind.SWITCH -> ParamKind.SWITCH; AdjParam.Kind.HUE -> ParamKind.HUE; else -> ParamKind.SLIDER },
+    group = group,
 )
 
 private val IDENTITY = listOf(0 to 0, 255 to 255)

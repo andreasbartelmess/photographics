@@ -3,6 +3,8 @@ package de.photographics.core.psd
 import de.photographics.core.adjust.Adjustment
 import de.photographics.core.adjust.BlackWhiteAdj
 import de.photographics.core.adjust.BrightnessContrastAdj
+import de.photographics.core.adjust.ChannelMixerAdj
+import de.photographics.core.adjust.SelectiveColorAdj
 import de.photographics.core.adjust.ColorBalanceAdj
 import de.photographics.core.adjust.ColorLookupAdj
 import de.photographics.core.color.Lut3D
@@ -20,7 +22,7 @@ import kotlin.math.roundToInt
 
 /** Einstellungsebenen im PSD-Format (Blöcke levl, curv, hue2, brit/CgEd, expA, vibA, blnc, blwh, phfl, nvrt, post, thrs). */
 object PsdAdjustments {
-    val KEYS = setOf("levl", "curv", "hue2", "hue ", "brit", "CgEd", "expA", "vibA", "blnc", "blwh", "phfl", "nvrt", "post", "thrs", "clrL")
+    val KEYS = setOf("levl", "curv", "hue2", "hue ", "brit", "CgEd", "expA", "vibA", "blnc", "blwh", "phfl", "nvrt", "post", "thrs", "clrL", "mixr", "selc")
 
     fun read(blocks: Map<String, PsdTaggedBlock>): Adjustment? = runCatching { readUnsafe(blocks) }.getOrNull()
 
@@ -60,7 +62,7 @@ object PsdAdjustments {
             val colorize = r.u8() != 0; r.u8()
             val cHue = r.i16(); val cSat = r.i16(); val cLight = r.i16()
             val mHue = r.i16(); val mSat = r.i16(); val mLight = r.i16()
-            return if (colorize) HueSaturationAdj(cHue, cSat * 2 - 100, cLight, colorize = true)
+            return if (colorize) HueSaturationAdj(cHue, cSat, cLight, colorize = true)
             else HueSaturationAdj(mHue, mSat, mLight, false)
         }
         b["expA"]?.let { blk -> val r = BinaryReader(blk.data); r.u16(); return ExposureAdj(r.f32(), r.f32(), r.f32()) }
@@ -109,6 +111,20 @@ object PsdAdjustments {
         b["post"]?.let { blk -> return PosterizeAdj(BinaryReader(blk.data).u16().coerceIn(2, 255)) }
         b["thrs"]?.let { blk -> return ThresholdAdj(BinaryReader(blk.data).u16().coerceIn(1, 255)) }
         b["clrL"]?.let { blk -> return readColorLookup(blk.data) }
+        // Kanalmixer: Version, Monochrom, 4 Ausgabekanäle × (R, G, B, K, Konstante) – nur RGB genutzt
+        b["mixr"]?.let { blk ->
+            val r = BinaryReader(blk.data); r.u16()
+            val mono = r.u16() != 0
+            val rows = List(3) { val v = List(5) { r.i16() }; listOf(v[0], v[1], v[2], v[4]) }
+            return ChannelMixerAdj(rows, mono)
+        }
+        // Selektive Farbkorrektur: Version, Methode (1 = absolut), 10 × (C, M, Y, K), der erste reserviert
+        b["selc"]?.let { blk ->
+            val r = BinaryReader(blk.data); r.u16()
+            val absolute = r.u16() == 1
+            repeat(4) { r.i16() }
+            return SelectiveColorAdj(List(9) { List(4) { r.i16() } }, absolute)
+        }
         return null
     }
 
@@ -196,7 +212,7 @@ object PsdAdjustments {
             }
             is HueSaturationAdj -> {
                 w.u16(2); w.u8(if (a.colorize) 1 else 0); w.u8(0)
-                if (a.colorize) { w.u16(a.hue and 0xFFFF); w.u16(((a.saturation + 100) / 2) and 0xFFFF); w.u16(a.lightness and 0xFFFF); w.zeros(6) }
+                if (a.colorize) { w.u16(((a.hue + 360) % 360) and 0xFFFF); w.u16(a.saturation.coerceIn(0, 100) and 0xFFFF); w.u16(a.lightness and 0xFFFF); w.zeros(6) }
                 else { w.u16(0); w.u16(25); w.u16(0); w.u16(a.hue and 0xFFFF); w.u16(a.saturation and 0xFFFF); w.u16(a.lightness and 0xFFFF) }
                 // Sechs Farbbereiche (Rot, Gelb, Grün, Cyan, Blau, Magenta) mit Standardgrenzen, ohne Änderung
                 val ranges = intArrayOf(315, 345, 15, 45, 15, 45, 75, 105, 75, 105, 135, 165, 135, 165, 195, 225, 195, 225, 255, 285, 255, 285, 315, 345)
@@ -231,13 +247,28 @@ object PsdAdjustments {
                 val c = a.color
                 w.u16(2); w.u16(0)
                 w.u16(((c shr 16) and 0xFF) * 257); w.u16(((c shr 8) and 0xFF) * 257); w.u16((c and 0xFF) * 257); w.u16(0)
-                w.i32(a.density); w.u8(if (a.preserveLuminosity) 1 else 0); w.u8(0)
+                // Wie Photoshop: nach dem Luminanz-Flag drei Füllbytes (Blocklänge 20) – mit 18 Bytes öffnet Photoshop die Datei nicht
+                w.i32(a.density); w.u8(if (a.preserveLuminosity) 1 else 0); w.zeros(3)
                 listOf("phfl" to w.toByteArray())
             }
             InvertAdj -> listOf("nvrt" to ByteArray(0))
             is PosterizeAdj -> { w.u16(a.levels); w.u16(0); listOf("post" to w.toByteArray()) }
             is ThresholdAdj -> { w.u16(a.level); w.u16(0); listOf("thrs" to w.toByteArray()) }
             is ColorLookupAdj -> listOf("clrL" to writeColorLookup(a))
+            is ChannelMixerAdj -> {
+                w.u16(1); w.u16(if (a.monochrome) 1 else 0)
+                for (o in 0 until 4) {
+                    val row = a.rows.getOrNull(o)
+                    if (row == null) repeat(5) { w.u16(0) } else { w.u16(row[0] and 0xFFFF); w.u16(row[1] and 0xFFFF); w.u16(row[2] and 0xFFFF); w.u16(0); w.u16(row[3] and 0xFFFF) }
+                }
+                listOf("mixr" to w.toByteArray())
+            }
+            is SelectiveColorAdj -> {
+                w.u16(1); w.u16(if (a.absolute) 1 else 0)
+                repeat(4) { w.u16(0) }
+                for (r in a.values) r.forEach { w.u16(it and 0xFFFF) }
+                listOf("selc" to w.toByteArray())
+            }
         }
     }
 }

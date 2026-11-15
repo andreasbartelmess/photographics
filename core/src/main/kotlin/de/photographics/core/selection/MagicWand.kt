@@ -7,8 +7,8 @@ import java.lang.Long.numberOfLeadingZeros
 import java.lang.Long.numberOfTrailingZeros
 
 /**
- * Zauberstab: wählt Pixel, deren Farbe in jedem Kanal (auch Deckung) höchstens [tolerance] vom
- * angetippten Pixel abweicht – zusammenhängend (Füllung ab dem Startpunkt) oder im ganzen Bild.
+ * Zauberstab: wählt Pixel, deren Farbe in jedem Kanal höchstens [tolerance] vom angetippten Pixel
+ * abweicht (wie Photoshop: Deckkraft zählt nicht, Transparentes nur zu Transparentem) – zusammenhängend (Füllung ab dem Startpunkt) oder im ganzen Bild.
  *
  * Ablauf: Erst wird auf allen Kernen für jedes Pixel ein Treffer-Bit berechnet (1 Bit je Pixel,
  * zeilenweise auf 64 Bit aufgefüllt), dann läuft die Füllung nur noch über diese Bits – wortweise,
@@ -96,11 +96,12 @@ object MagicWand {
                 var word = 0L
                 for (xx in 0 until w) {
                     val c = px[row + xx]
-                    val hit = c == seed || (
-                        kotlin.math.abs((c ushr 24) - sa) <= tol &&
+                    // Wie Photoshop (nachgemessen): transparente Pixel bilden eine eigene Gruppe; sichtbare
+                    // werden nur über die Farbe verglichen – die Deckkraft zählt nicht
+                    val hit = if (sa == 0) (c ushr 24) == 0 else (c ushr 24) != 0 && (c == seed || (
                         kotlin.math.abs(((c shr 16) and 0xFF) - sr) <= tol &&
                         kotlin.math.abs(((c shr 8) and 0xFF) - sg) <= tol &&
-                        kotlin.math.abs((c and 0xFF) - sb) <= tol)
+                        kotlin.math.abs((c and 0xFF) - sb) <= tol))
                     if (hit) word = word or (1L shl xx)
                     if (xx and 63 == 63 || xx == w - 1) { out.words[base + (xx ushr 6)] = word; word = 0L }
                 }
@@ -159,4 +160,58 @@ object MagicWand {
             }
         }, consume = { _, res -> if (res != null) mask.writeRect(res.first, res.second) })
     }
+
+    /**
+     * Glätten wie Photoshops Füllwerkzeug (nachgemessen): die Fläche selbst bleibt voll, nur Pixel direkt
+     * daneben werden anteilig mitgefüllt – je ähnlicher, desto stärker. Beim Start im Transparenten zählt
+     * die Durchsichtigkeit (1 − Deckkraft), sonst der Farbabstand jenseits der Toleranz.
+     */
+    fun antiAliased(src: TileGrid, region: Selection, x: Int, y: Int, tolerance: Int): Selection {
+        val w = src.width; val h = src.height
+        val seed = src[x, y]; val sa = seed ushr 24
+        val sr = (seed shr 16) and 0xFF; val sg = (seed shr 8) and 0xFF; val sb = seed and 0xFF
+        val tol = tolerance.coerceIn(0, 255)
+        val b = region.bounds
+        if (b.isEmpty) return region
+        val all = IntRect(maxOf(0, b.left - 1), maxOf(0, b.top - 1), minOf(w, b.right + 1), minOf(h, b.bottom + 1))
+        val mask = region.mask.copy()
+        // Kachelweise (je Kachel mit 1 px Rand), damit große Flächen nicht das ganze Rechteck im Speicher brauchen
+        val tiles = ArrayList<IntRect>()
+        mask.forTilesIn(all) { tx, ty -> tiles += mask.tileRect(tx, ty).intersect(all) }
+        Parallel.bands(tiles.size, TileGrid.TILE.toLong() * TileGrid.TILE * 16, compute = { k ->
+            val t = tiles[k]
+            val r = IntRect(maxOf(0, t.left - 1), maxOf(0, t.top - 1), minOf(w, t.right + 1), minOf(h, t.bottom + 1))
+            val rw = r.width; val rh = r.height
+            val m = IntArray(rw * rh); region.mask.readRect(r, m)
+            if (m.all { it == 0 } || m.all { it >= 255 }) null else {
+                val px = IntArray(rw * rh); src.readRect(r, px)
+                val out = IntArray(t.width * t.height)
+                for (yy in t.top until t.bottom) for (xx in t.left until t.right) {
+                    val i = (yy - r.top) * rw + (xx - r.left)
+                    var v = m[i]
+                    if (v < 255) {
+                        var near = false
+                        for (dy in -1..1) for (dx in -1..1) {
+                            val nx = xx - r.left + dx; val ny = yy - r.top + dy
+                            if (nx in 0 until rw && ny in 0 until rh && m[ny * rw + nx] >= 255) near = true
+                        }
+                        if (near) {
+                            val c = px[i]; val a = c ushr 24
+                            val cov = if (sa == 0) 255 - a
+                                else if (a == 0) 0
+                                else {
+                                    val d = maxOf(kotlin.math.abs(((c shr 16) and 0xFF) - sr), kotlin.math.abs(((c shr 8) and 0xFF) - sg), kotlin.math.abs((c and 0xFF) - sb))
+                                    (255 - (d - tol) * 255 / maxOf(1, 255 - tol)).coerceIn(0, 255)
+                                }
+                            v = maxOf(v, cov)
+                        }
+                    }
+                    out[(yy - t.top) * t.width + (xx - t.left)] = v
+                }
+                out
+            }
+        }, consume = { k, out -> if (out != null) mask.writeRect(tiles[k], out) })
+        return Selection(mask, region.outlines)
+    }
 }
+

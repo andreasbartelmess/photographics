@@ -86,4 +86,30 @@ class MagicWandTest {
         assertEquals(2, Selection.outlinesOf(diag).size)
         assertTrue(Selection.outlinesOf(TileGrid(10, 10, 0)).isEmpty())
     }
+
+    @Test fun bucketFillLikePhotoshop() {
+        // Photoshop 2026 nachgemessen: gleiche Farbe mit 100/50/10 % Deckkraft gilt als gleich (auch bei Toleranz 0),
+        // Transparentes nur zu Transparentem; gefüllte Pixel werden voll deckend, Glätten schwächt die Fläche nicht ab
+        val w = 300; val h = 60
+        val red = 0xC82828
+        val px = IntArray(w * h) { i -> val x = i % w
+            when { x < 60 -> 0xFF000000.toInt() or red; x < 120 -> (128 shl 24) or red; x < 180 -> (26 shl 24) or red; x < 240 -> 0xFF28C828.toInt(); else -> 0 } }
+        for (aa in listOf(false, true)) {
+            val doc = de.photographics.core.doc.Document(w, h)
+            val l = de.photographics.core.doc.PixelLayer("e", de.photographics.core.image.TileGrid.fromPixels(w, h, px.copyOf()))
+            doc.root.add(l); doc.activeLayer = l
+            de.photographics.core.editor.Editor(doc).bucketFill(30, 30, 0xFF1414C8.toInt(), 0, contiguous = true, allLayers = false, antiAlias = aa)
+            for (x in listOf(5, 30, 59, 60, 90, 119, 120, 150, 178)) assertEquals("x=$x aa=$aa", 0xFF1414C8.toInt(), l.pixels[x, 30])
+            assertEquals(0xFF28C828.toInt(), l.pixels[210, 30])
+            assertEquals(0, l.pixels[270, 30] ushr 24)
+        }
+        // Start im Transparenten: Pixel mit 10 % Deckkraft gehören nicht dazu
+        val doc = de.photographics.core.doc.Document(w, h)
+        val l = de.photographics.core.doc.PixelLayer("e", de.photographics.core.image.TileGrid.fromPixels(w, h, px.copyOf()))
+        doc.root.add(l); doc.activeLayer = l
+        de.photographics.core.editor.Editor(doc).bucketFill(270, 30, 0xFF1414C8.toInt(), 32, contiguous = true, allLayers = false, antiAlias = false)
+        assertEquals(0xFF1414C8.toInt(), l.pixels[270, 30])
+        assertEquals((26 shl 24) or red, l.pixels[150, 30])
+    }
 }
+

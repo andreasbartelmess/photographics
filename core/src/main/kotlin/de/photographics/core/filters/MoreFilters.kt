@@ -44,21 +44,34 @@ private fun lumaPlane(px: IntArray) = FloatArray(px.size) { lumOf(px[it]) }
 /** Bewegungsunschärfe: Mittelung entlang einer Linie mit Winkel und Distanz (Pixel). */
 class MotionBlur(private val angle: Float, private val distance: Int) : ImageFilter {
     override val label = tr("Bewegungsunschärfe")
-    override val margin get() = distance + 1
+    override val margin get() = distance / 2 + 2
+    /*
+     * Wie Photoshop (Punktantwort in Photoshop 2026 gemessen): Distanz + 1 gleich gewichtete Abtastungen
+     * im Abstand von 1 px entlang der Richtung, zentriert (−Distanz/2 … +Distanz/2); waagerecht/senkrecht
+     * exakt Photoshops Kastenfilter, schräg bilinear interpoliert.
+     */
     override fun process(px: IntArray, w: Int, h: Int): IntArray {
         val rad = Math.toRadians(angle.toDouble())
         val dx = cos(rad).toFloat(); val dy = -sin(rad).toFloat()
-        val steps = max(1, distance)
+        val n = max(1, distance) + 1
+        val half = (n - 1) / 2f
         return IntArray(px.size) { i ->
             val x = i % w; val y = i / w
-            val acc = FloatArray(4); var n = 0
-            for (k in -steps..steps) {
-                val t = k / 2f
-                val sx = (x + dx * t).roundToInt().coerceIn(0, w - 1); val sy = (y + dy * t).roundToInt().coerceIn(0, h - 1)
-                val c = px[sy * w + sx]; val a = Colors.a(c) / 255f
-                acc[3] += a; acc[0] += Colors.r(c) * a; acc[1] += Colors.g(c) * a; acc[2] += Colors.b(c) * a; n++
+            var sa = 0f; var sr = 0f; var sg = 0f; var sb = 0f
+            for (k in 0 until n) {
+                val t = k - half
+                val fx = (x + dx * t).coerceIn(0f, (w - 1).toFloat()); val fy = (y + dy * t).coerceIn(0f, (h - 1).toFloat())
+                val x0 = fx.toInt(); val y0 = fy.toInt(); val ax = fx - x0; val ay = fy - y0
+                val x1 = min(x0 + 1, w - 1); val y1 = min(y0 + 1, h - 1)
+                for (q in 0 until 4) {
+                    val wgt = (if (q and 1 == 0) 1f - ax else ax) * (if (q < 2) 1f - ay else ay)
+                    if (wgt <= 0f) continue
+                    val c = px[(if (q < 2) y0 else y1) * w + (if (q and 1 == 0) x0 else x1)]
+                    val a = Colors.a(c) / 255f * wgt
+                    sa += a; sr += Colors.r(c) * a; sg += Colors.g(c) * a; sb += Colors.b(c) * a
+                }
             }
-            if (acc[3] <= 0f) 0 else Colors.argb((acc[3] / n * 255).roundToInt(), (acc[0] / acc[3]).roundToInt(), (acc[1] / acc[3]).roundToInt(), (acc[2] / acc[3]).roundToInt())
+            if (sa <= 0f) 0 else Colors.argb((sa / n * 255).roundToInt(), (sr / sa).roundToInt(), (sg / sa).roundToInt(), (sb / sa).roundToInt())
         }
     }
 }
@@ -66,55 +79,77 @@ class MotionBlur(private val angle: Float, private val distance: Int) : ImageFil
 /** Radialer Weichzeichner: Kreisförmig (Drehen) oder Strahlenförmig (Zoom) um die Bildmitte. */
 class RadialBlur(private val amount: Float, private val zoom: Boolean, private val cxRel: Float = 0.5f, private val cyRel: Float = 0.5f) : RandomAccessFilter {
     override val label = tr("Radialer Weichzeichner")
+    /*
+     * Wie Photoshop (Qualität „Sehr gut“, in Photoshop 2026 nachgemessen): kreisförmig = gleich gewichtete
+     * Abtastung über einen Bogen von insgesamt „Stärke“ Grad, strahlenförmig = über den Faktor 1 ± Stärke/400
+     * des Abstands zur Mitte; bilinear, Mittelpunkt in Pixelmitte. Etwa eine Abtastung je Pixel Spurlänge,
+     * jeweils in der Mitte ihres Teilstücks.
+     */
     override fun processBand(src: PixelSource, band: IntRect, docW: Int, docH: Int): IntArray {
-        val cx = docW * cxRel; val cy = docH * cyRel
-        val samples = 24
+        val cx = docW * cxRel - 0.5; val cy = docH * cyRel - 0.5
+        val span = if (zoom) amount / 400.0 else Math.toRadians(amount.toDouble()) / 2
         val w = band.width
         return IntArray(w * band.height) { i ->
             val x = band.left + i % w; val y = band.top + i / w
             val vx = x - cx; val vy = y - cy
-            var aa = 0f; var ar = 0f; var ag = 0f; var ab = 0f
-            for (k in 0 until samples) {
-                val t = (k / (samples - 1f) - 0.5f) * amount / 100f
-                val sx: Float; val sy: Float
-                if (zoom) { sx = cx + vx * (1 + t * 0.6f); sy = cy + vy * (1 + t * 0.6f) }
-                else { val a = t * 0.5f; val ca = cos(a); val sa = sin(a); sx = cx + vx * ca - vy * sa; sy = cy + vx * sa + vy * ca }
-                val c = src.get(sx.roundToInt().coerceIn(0, docW - 1), sy.roundToInt().coerceIn(0, docH - 1))
-                val al = Colors.a(c) / 255f
+            val r = kotlin.math.sqrt(vx * vx + vy * vy)
+            val n = (2 * span * r).toInt().coerceIn(1, 400) + 1
+            var aa = 0.0; var ar = 0.0; var ag = 0.0; var ab = 0.0
+            for (k in 0 until n) {
+                // Abtastung in der Mitte gleich langer Teilstücke (passt besser zu Photoshop als mit Endpunkten)
+                val t = ((k + 0.5) / n * 2 - 1) * span
+                val sx: Double; val sy: Double
+                if (zoom) { sx = cx + vx * (1 + t); sy = cy + vy * (1 + t) }
+                else { val ca = kotlin.math.cos(t); val sa = kotlin.math.sin(t); sx = cx + vx * ca - vy * sa; sy = cy + vx * sa + vy * ca }
+                val c = src.bilinear(sx, sy, docW, docH)
+                val al = Colors.a(c) / 255.0
                 aa += al; ar += Colors.r(c) * al; ag += Colors.g(c) * al; ab += Colors.b(c) * al
             }
-            if (aa <= 0f) 0 else Colors.argb((aa / samples * 255).roundToInt(), (ar / aa).roundToInt(), (ag / aa).roundToInt(), (ab / aa).roundToInt())
+            if (aa <= 0.0) 0 else Colors.argb((aa / n * 255).roundToInt(), (ar / aa).roundToInt(), (ag / aa).roundToInt(), (ab / aa).roundToInt())
         }
     }
 }
 
-/** Matter machen: kantenerhaltender Weichzeichner (Radius, Schwellenwert in Tonwertstufen). */
+/**
+ * Matter machen wie Photoshop (pixelgenau nachgemessen): je Farbkanal gewichteter Mittelwert im
+ * quadratischen Fenster (Radius), Gewicht = max(0, 1 − |Nachbar − Pixel| / (2,5 · Schwellenwert)).
+ * Gleitendes Histogramm je Zeile – Aufwand wächst nur linear mit dem Radius.
+ */
 class SurfaceBlur(private val radius: Int, private val threshold: Int) : ImageFilter {
     override val label = tr("Matter machen")
     override val margin get() = radius + 1
     override fun process(px: IntArray, w: Int, h: Int): IntArray {
-        // Höchstens 7×7 Stichproben pro Pixel – bei großen Radien gleichmäßig verteilt
-        val step = max(1, (radius + 2) / 3)
-        val t = max(1, threshold).toFloat()
-        return IntArray(px.size) { i ->
-            val x = i % w; val y = i / w
-            val c = px[i]
-            var sr = 0f; var sg = 0f; var sb = 0f; var ws = 0f
-            var dy = -radius
-            while (dy <= radius) {
-                val yy = (y + dy).coerceIn(0, h - 1)
-                var dx = -radius
-                while (dx <= radius) {
-                    val n = px[yy * w + (x + dx).coerceIn(0, w - 1)]
-                    val d = (abs(Colors.r(n) - Colors.r(c)) + abs(Colors.g(n) - Colors.g(c)) + abs(Colors.b(n) - Colors.b(c))) / 3f
-                    val wgt = max(0f, 1f - d / (2.5f * t))
-                    sr += Colors.r(n) * wgt; sg += Colors.g(n) * wgt; sb += Colors.b(n) * wgt; ws += wgt
-                    dx += step
+        val r = max(1, radius)
+        val t = 2.5 * max(1, threshold)
+        val span = kotlin.math.floor(t).toInt().coerceAtMost(255)
+        // Gewichte je Abstand 0..255
+        val wt = DoubleArray(256) { d -> max(0.0, 1 - d / t) }
+        val out = IntArray(px.size) { px[it] and (0xFF shl 24) }
+        val hist = IntArray(256)
+        for (shift in intArrayOf(16, 8, 0)) {
+            val ch = IntArray(px.size) { (px[it] shr shift) and 0xFF }
+            for (y in 0 until h) {
+                java.util.Arrays.fill(hist, 0)
+                fun col(x: Int, d: Int) {
+                    val xx = x.coerceIn(0, w - 1)
+                    for (dy in -r..r) hist[ch[(y + dy).coerceIn(0, h - 1) * w + xx]] += d
                 }
-                dy += step
+                for (dx in -r..r) col(dx, 1)
+                for (x in 0 until w) {
+                    if (x > 0) { col(x - r - 1, -1); col(x + r, 1) }
+                    val p = ch[y * w + x]
+                    var num = 0.0; var den = 0.0
+                    for (v in max(0, p - span)..min(255, p + span)) {
+                        val n = hist[v]; if (n == 0) continue
+                        val g = wt[kotlin.math.abs(v - p)] * n
+                        num += g * v; den += g
+                    }
+                    val o = if (den > 0) (num / den).roundToInt() else p
+                    out[y * w + x] = out[y * w + x] or (o shl shift)
+                }
             }
-            if (ws <= 0f) c else Colors.argb(Colors.a(c), (sr / ws).roundToInt(), (sg / ws).roundToInt(), (sb / ws).roundToInt())
         }
+        return out
     }
 }
 
@@ -183,13 +218,20 @@ class DustAndScratches(private val radius: Int, private val threshold: Int) : Im
 }
 
 /** Rauschen hinzufügen: Stärke in %, gaußverteilt oder gleichmäßig, optional einfarbig. */
-class AddNoise(private val amount: Float, private val gaussian: Boolean, private val monochrome: Boolean) : ImageFilter {
+class AddNoise(private val amount: Float, private val gaussian: Boolean, private val monochrome: Boolean) : GeometryFilter {
     override val label = tr("Rauschen hinzufügen")
-    override fun process(px: IntArray, w: Int, h: Int): IntArray {
+    /** Rauschen hängt an der Dokumentposition – gleiches Muster, egal in welchen Streifen gerechnet wird. */
+    override fun process(px: IntArray, w: Int, h: Int, offX: Int, offY: Int, docW: Int, docH: Int): IntArray {
         val k = amount / 100f * 255f
-        fun n(i: Int, salt: Int): Float = if (gaussian) (hashNoise(i, salt) + hashNoise(i, salt + 7) + hashNoise(i, salt + 13)) / 1.7f else hashNoise(i, salt)
-        return IntArray(px.size) { i ->
-            val c = px[i]
+        // Wie Photoshop (nachgemessen): gaußsch mit Streuung = Stärke·2,55 (Summe aus vier gleichverteilten
+        // Werten, Ausläufer bis ≈3,4σ), gleichmäßig im Bereich ±Stärke·2,55
+        fun n(i: Int, salt: Int): Float = if (gaussian)
+            (hashNoise(i, salt) + hashNoise(i, salt + 7) + hashNoise(i, salt + 13) + hashNoise(i, salt + 19)) * 0.8660254f
+        else hashNoise(i, salt)
+        val stride = max(docW, w)
+        return IntArray(px.size) { j ->
+            val c = px[j]
+            val i = (offY + j / w) * stride + offX + j % w
             val nr = n(i, 1) * k
             val ng = if (monochrome) nr else n(i, 2) * k
             val nb = if (monochrome) nr else n(i, 3) * k
@@ -205,7 +247,7 @@ class HighPass(private val radius: Float) : ImageFilter {
     override val label = tr("Hochpass")
     override val margin get() = (radius * 3).toInt() + 1
     override fun process(px: IntArray, w: Int, h: Int): IntArray {
-        val bl = Blur.gaussArgb(px, w, h, radius)
+        val bl = de.photographics.core.image.PsGauss.blurArgb(px, w, h, radius)
         return IntArray(px.size) { i ->
             val o = px[i]; val b = bl[i]
             Colors.argb(Colors.a(o), 128 + Colors.r(o) - Colors.r(b), 128 + Colors.g(o) - Colors.g(b), 128 + Colors.b(o) - Colors.b(b))
@@ -216,17 +258,18 @@ class HighPass(private val radius: Float) : ImageFilter {
 /** Relief: Prägung aus der Helligkeit in Lichtrichtung. */
 class Emboss(private val angle: Float, private val height: Int, private val amount: Float) : ImageFilter {
     override val label = tr("Relief")
-    override val margin get() = height + 1
+    override val margin get() = height + 2
+    /** Wie Photoshop (nachgemessen): je Farbkanal 128 + Stärke/100 · (Wert ½ Höhe in Lichtrichtung − ½ Höhe dagegen), bilinear. */
     override fun process(px: IntArray, w: Int, h: Int): IntArray {
         val rad = Math.toRadians(angle.toDouble())
-        val dx = (cos(rad) * height).roundToInt(); val dy = (-sin(rad) * height).roundToInt()
-        val k = amount / 100f
+        val ox = cos(rad) * height / 2; val oy = -sin(rad) * height / 2
+        val k = amount / 100.0
+        val src = PixelSource { x, y -> px[y.coerceIn(0, h - 1) * w + x.coerceIn(0, w - 1)] }
         return IntArray(px.size) { i ->
             val x = i % w; val y = i / w
-            val a = lumOf(px[(y - dy).coerceIn(0, h - 1) * w + (x - dx).coerceIn(0, w - 1)])
-            val b = lumOf(px[(y + dy).coerceIn(0, h - 1) * w + (x + dx).coerceIn(0, w - 1)])
-            val v = (128 + (b - a) * k).roundToInt()
-            Colors.argb(Colors.a(px[i]), v, v, v)
+            val p = src.bilinear(x + ox, y + oy, w, h); val m = src.bilinear(x - ox, y - oy, w, h)
+            fun ch(sh: Int) = (128 + k * (((p shr sh) and 0xFF) - ((m shr sh) and 0xFF))).roundToInt().coerceIn(0, 255)
+            Colors.argb(Colors.a(px[i]), ch(16), ch(8), ch(0))
         }
     }
 }
@@ -241,7 +284,8 @@ class FindEdges : ImageFilter {
         fun ch(s: Int): Int {
             val gx = -p(x - 1, y - 1, s) - 2 * p(x - 1, y, s) - p(x - 1, y + 1, s) + p(x + 1, y - 1, s) + 2 * p(x + 1, y, s) + p(x + 1, y + 1, s)
             val gy = -p(x - 1, y - 1, s) - 2 * p(x, y - 1, s) - p(x + 1, y - 1, s) + p(x - 1, y + 1, s) + 2 * p(x, y + 1, s) + p(x + 1, y + 1, s)
-            return 255 - min(255, (hypot(gx.toFloat(), gy.toFloat()) / 2).toInt())
+            // Wie Photoshop (nachgemessen): Sobel-Betrag ohne Skalierung
+            return 255 - min(255, hypot(gx.toFloat(), gy.toFloat()).roundToInt())
         }
         Colors.argb(Colors.a(px[i]), ch(16), ch(8), ch(0))
     }
@@ -300,22 +344,28 @@ class OilPaint(private val radius: Int) : ImageFilter {
 }
 
 /** Strudel: Drehung, die zur Mitte hin zunimmt. */
+/**
+ * Strudel wie Photoshop (in Photoshop 2026 nachgemessen): Wirkbereich = Ellipse über das ganze Bild
+ * (Halbachsen = halbe Breite/Höhe), Drehung in diesen normierten Koordinaten um −Winkel·(1−ρ)²;
+ * positive Winkel drehen im Uhrzeigersinn.
+ */
 class Twirl(private val angle: Float) : RandomAccessFilter {
     override val label = tr("Strudel")
     override fun processBand(src: PixelSource, band: IntRect, docW: Int, docH: Int): IntArray {
-        val cx = docW / 2f; val cy = docH / 2f
-        val rMax = min(docW, docH) / 2f
-        val rad = Math.toRadians(angle.toDouble()).toFloat()
+        // Mittelpunkt auf Pixelindex Breite/2, Höhe/2; Halbachsen ein halbes Pixel größer (auf 0,1 px gemessen)
+        val cx = docW / 2.0; val cy = docH / 2.0
+        val hw = cx + 0.5; val hh = cy + 0.5
+        val rad = Math.toRadians(angle.toDouble())
         val w = band.width
         return IntArray(w * band.height) { i ->
             val px = band.left + i % w; val py = band.top + i / w
-            val x = px + 0.5f; val y = py + 0.5f
-            val vx = x - cx; val vy = y - cy
-            val d = hypot(vx, vy)
-            if (d >= rMax) src.get(px, py) else {
-                val a = rad * (1f - d / rMax) * (1f - d / rMax)
-                val ca = cos(a); val sa = sin(a)
-                src.bilinear((cx + vx * ca - vy * sa - 0.5f).toDouble(), (cy + vx * sa + vy * ca - 0.5f).toDouble(), docW, docH)
+            val u = (px - cx) / hw; val v = (py - cy) / hh
+            val rho = kotlin.math.sqrt(u * u + v * v)
+            if (rho >= 1.0) src.get(px, py) else {
+                val a = -rad * (1 - rho) * (1 - rho)
+                val ca = kotlin.math.cos(a); val sa = kotlin.math.sin(a)
+                val su = u * ca - v * sa; val sv = u * sa + v * ca
+                src.bilinear(cx + su * hw, cy + sv * hh, docW, docH)
             }
         }
     }

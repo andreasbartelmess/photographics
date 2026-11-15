@@ -50,7 +50,10 @@ class AdvancedPsdTest {
             BrightnessContrastAdj(40, -20), LevelsAdj(10, 240, 1.3f, 5, 250), CurvesAdj(listOf(0 to 0, 90 to 120, 255 to 255)),
             ExposureAdj(0.5f, 0.01f, 1.1f), VibranceAdj(30, -10), HueSaturationAdj(25, 30, -10),
             ColorBalanceAdj(listOf(10, 0, -5), listOf(20, -10, 5), listOf(0, 0, 15)), BlackWhiteAdj(red = 50, tint = true),
-            InvertAdj, PosterizeAdj(6), ThresholdAdj(100),
+            InvertAdj, PosterizeAdj(6), ThresholdAdj(100), HueSaturationAdj(120, 40, 10, colorize = true),
+            de.photographics.core.adjust.ChannelMixerAdj(listOf(listOf(80, 20, 0, 10), listOf(0, 100, 0, -20), listOf(-30, 0, 130, 5))),
+            de.photographics.core.adjust.ChannelMixerAdj(listOf(listOf(40, 40, 20, 0), listOf(0, 100, 0, 0), listOf(0, 0, 100, 0)), monochrome = true),
+            de.photographics.core.adjust.SelectiveColorAdj(List(9) { r -> listOf(r * 3 - 10, 5, -r, if (r == 7) 20 else 0) }, absolute = true),
         )
         for (adj in samples) {
             val doc = Document.blank(64, 48, background = 0xFF4080C0.toInt())

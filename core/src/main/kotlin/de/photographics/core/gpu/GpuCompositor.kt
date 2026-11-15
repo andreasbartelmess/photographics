@@ -83,13 +83,13 @@ class GpuCompositor(private val gl: Gles, preferHalfFloat: Boolean = false, allo
         fetchProg = if (allowFetch && "GL_EXT_shader_framebuffer_fetch" in ext)
             runCatching { Program(gl, Shaders.vertex, Shaders.blendSource(fetch = true)) }.getOrNull()?.also { fp ->
                 gl.useProgram(fp.id)
-                gl.uniform1i(fp.u("uLut"), 3); gl.uniform1i(fp.u("uLut3"), 4)
+                gl.uniform1i(fp.u("uLut"), 3); gl.uniform1i(fp.u("uLut3"), 4); gl.uniform1i(fp.u("uVib"), 7)
                 gl.uniform1i(fp.u("uTile"), 0); gl.uniform1i(fp.u("uSrc"), 5); gl.uniform1i(fp.u("uDst"), 6); gl.uniform1i(fp.u("uMask"), 2)
             }
         else null
         // Feste Einheiten für die Tabellen: Sampler verschiedener Typen dürfen sich keine Einheit teilen
         gl.useProgram(blendProg.id)
-        gl.uniform1i(blendProg.u("uLut"), 3); gl.uniform1i(blendProg.u("uLut3"), 4)
+        gl.uniform1i(blendProg.u("uLut"), 3); gl.uniform1i(blendProg.u("uLut3"), 4); gl.uniform1i(blendProg.u("uVib"), 7)
         gl.pixelStorei(C.UNPACK_ALIGNMENT, 1)
         gl.pixelStorei(C.PACK_ALIGNMENT, 1)
     }
@@ -338,6 +338,7 @@ class GpuCompositor(private val gl: Gles, preferHalfFloat: Boolean = false, allo
         }
         when {
             fn != null -> {
+                if (fn.first == 1) bindTex(7, vibTex)
                 gl.uniform1i(p.u("uLutMode"), 3)
                 gl.uniform1i(p.u("uAdjType"), fn.first)
                 for ((i, v) in fn.second.withIndex()) gl.uniform1f(p.u("uP[$i]"), v)
@@ -373,22 +374,17 @@ class GpuCompositor(private val gl: Gles, preferHalfFloat: Boolean = false, allo
      * kostet dann nichts. null: kanalweise Tabelle oder (LUT-Dateien) vollständige 3D-Tabelle.
      */
     private fun shaderParams(a: de.photographics.core.adjust.Adjustment): Pair<Int, FloatArray>? = when (a) {
-        is de.photographics.core.adjust.VibranceAdj -> 1 to floatArrayOf(a.vibrance / 100f, a.saturation / 100f)
+        // Dynamik: Photoshop-Verfahren, Messtabellen als kleine Textur (uVib, Einheit 7)
+        is de.photographics.core.adjust.VibranceAdj -> 1 to vibTable(a).gpuParams()
         is de.photographics.core.adjust.HueSaturationAdj -> 2 to floatArrayOf(
             if (a.colorize) ((a.hue + 360) % 360).toFloat() else a.hue.toFloat(), a.saturation / 100f, a.lightness / 100f, if (a.colorize) 1f else 0f)
-        is de.photographics.core.adjust.ColorBalanceAdj -> 3 to floatArrayOf(
-            a.shadows[0].toFloat(), a.shadows[1].toFloat(), a.shadows[2].toFloat(),
-            a.midtones[0].toFloat(), a.midtones[1].toFloat(), a.midtones[2].toFloat(),
-            a.highlights[0].toFloat(), a.highlights[1].toFloat(), a.highlights[2].toFloat(), if (a.preserveLuminosity) 1f else 0f)
+        // Farbbalance ist eine Kanal-Tabelle (ChannelLuts) → allgemeiner Tabellenpfad
         is de.photographics.core.adjust.BlackWhiteAdj -> {
             val t = FloatArray(3).also { de.photographics.core.image.Colors.hslToRgb(a.tintHue.toFloat(), a.tintSaturation / 100f, 0.5f, it) }
             4 to floatArrayOf(a.red / 100f, a.yellow / 100f, a.green / 100f, a.cyan / 100f, a.blue / 100f, a.magenta / 100f,
                 if (a.tint) 1f else 0f, t[0], t[1], t[2])
         }
-        is de.photographics.core.adjust.PhotoFilterAdj -> {
-            val fc = a.color
-            5 to floatArrayOf(((fc shr 16) and 0xFF) / 255f, ((fc shr 8) and 0xFF) / 255f, (fc and 0xFF) / 255f, a.density / 100f, if (a.preserveLuminosity) 1f else 0f)
-        }
+        is de.photographics.core.adjust.PhotoFilterAdj -> 5 to (a.matrix() + floatArrayOf(if (a.preserveLuminosity) 1f else 0f))
         is de.photographics.core.adjust.ThresholdAdj -> 6 to floatArrayOf(a.level.toFloat())
         else -> null
     }
@@ -440,6 +436,25 @@ class GpuCompositor(private val gl: Gles, preferHalfFloat: Boolean = false, allo
     }
 
     private val luts = java.util.IdentityHashMap<de.photographics.core.adjust.RgbMap, Lut>()
+
+    /** Dynamik-Tabelle (33×33 RGBA32F) der zuletzt gezeichneten Einstellung; neu geladen, wenn sich die Werte ändern. */
+    private var vibTex = 0
+    private var vibFor: de.photographics.core.adjust.VibranceAdj? = null
+    private var vibCalc: de.photographics.core.adjust.PsVibrance? = null
+
+    private fun vibTable(a: de.photographics.core.adjust.VibranceAdj): de.photographics.core.adjust.PsVibrance {
+        vibCalc?.let { if (vibFor == a) return it }
+        val v = de.photographics.core.adjust.PsVibrance(a.vibrance, a.saturation)
+        val data = v.gpuTable()
+        val b = ByteBuffer.allocateDirect(data.size * 4).order(ByteOrder.nativeOrder())
+        for (f in data) b.putFloat(f)
+        b.flip()
+        if (vibTex == 0) vibTex = gl.genTexture()
+        bindTex(7, vibTex); nearest()
+        gl.texImage2D(C.TEXTURE_2D, 0, C.RGBA32F, 33, 33, C.RGBA, C.FLOAT, b)
+        vibFor = a; vibCalc = v
+        return v
+    }
     private var slab: ByteBuffer? = null
     /** Gemeinsamer Puffer für eine Scheibe einer 3D-Tabelle ([SLICE] Rot-Ebenen, 4 MB). */
     private fun slab(): ByteBuffer = slab ?: ByteBuffer.allocateDirect(SLICE * 256 * 256 * 4).order(ByteOrder.nativeOrder()).also { slab = it }
@@ -555,6 +570,7 @@ class GpuCompositor(private val gl: Gles, preferHalfFloat: Boolean = false, allo
         textures.clear()
         for (l in luts.values) gl.deleteTexture(l.texture)
         luts.clear()
+        if (vibTex != 0) { gl.deleteTexture(vibTex); vibTex = 0; vibFor = null; vibCalc = null }
         for (b in free) { gl.deleteFramebuffer(b.fbo); gl.deleteTexture(b.texture) }
         free.clear()
         gl.deleteProgram(sampleProg.id); gl.deleteProgram(blendProg.id); gl.deleteProgram(outputProg.id)

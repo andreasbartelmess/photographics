@@ -165,6 +165,20 @@ class GpuVsCpuTest {
         assertTrue(errors.toString(), errors.isEmpty())
     }
 
+    /** Dynamik (Shader mit Messtabelle) in beiden Richtungen, mit Sättigung, gleich der CPU. */
+    @Test fun vibranceMatches() {
+        assumeTrue(gpu != null)
+        val errors = StringBuilder()
+        for ((v, s) in listOf(-100 to 0, -45 to 30, 25 to 0, 100 to -20, 70 to 60)) {
+            val doc = Document(w, h)
+            doc.root.add(PixelLayer("Hintergrund", backdrop()))
+            doc.root.add(PixelLayer("Basis", layer()))
+            doc.root.add(AdjustmentLayer("Dynamik", de.photographics.core.adjust.VibranceAdj(v, s)))
+            errors.append(compare(doc, "Dynamik $v/$s", steps = intArrayOf(1, 2)))
+        }
+        assertTrue(errors.toString(), errors.isEmpty())
+    }
+
     /** Testdokument für Sichttests der Anzeige: PG_GPU_PSD=datei.psd. */
     @Test fun writeFixture() {
         val out = System.getenv("PG_GPU_PSD")?.takeIf { it.isNotBlank() } ?: return

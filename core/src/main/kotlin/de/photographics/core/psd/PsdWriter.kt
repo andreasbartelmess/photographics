@@ -159,7 +159,11 @@ object PsdWriter {
     private val smartLinks = ThreadLocal<java.util.IdentityHashMap<SmartLayer, String>?>()
 
     /** Ohne Smartfilter (Photoshop kennt unsere nicht und würde sie beim Neuberechnen verlieren). */
-    private fun linkable(l: SmartLayer) = photoshopSmartObjects && !l.smartFilters.active && l.source.width > 1
+    /** Als Photoshop-Smartobjekt speicherbar: ohne wirkende Smartfilter oder mit Filtern, die Photoshop kennt. */
+    private fun linkable(l: SmartLayer) = photoshopSmartObjects && l.source.width > 1 &&
+        (!l.smartFilters.active || PsdPsSmartFilters.representable(l.smartFilters) &&
+            // Filtermaske („FEid“) bisher nur für 8 Bit in Photoshop geprüft
+            !(l.smartFilters.mask != null && deepWrite.get() == true))
 
     private fun layerInfoInner(doc: Document, tmpDir: File?, compositeHasAlpha: Boolean): LayerInfo? {
         tmpDir?.mkdirs()
@@ -254,15 +258,34 @@ object PsdWriter {
         val linkData = java.io.ByteArrayOutputStream()
         for (b in doc.preservedGlobalBlocks) if (b.key == "lnk2") linkData.write(b.data)
         for ((l, uuid) in links) linkData.write(PsdLinked.writeEntry(uuid, l.name + ".psd", "8BPS", write(l.contentsDocument(doc.dpi, doc.colorProfile))))
+        // Smartfilter-Zwischenspeicher „FEid“: Einträge weiter gerasterter Photoshop-Smartobjekte bleiben,
+        // eigene Smartobjekte mit Filtermaske bekommen einen neuen (Photoshop braucht Bild + Maske)
+        val keepFx = doc.allLayers().filter { it !is SmartLayer }.flatMap { l -> l.preservedBlocks.filter { it.key == "SoLd" } }
+            .mapNotNull { PsdLinked.readPlaced(it.data)?.placedId }.toSet()
+        val fxEntries = ArrayList<ByteArray>()
+        for (b in doc.preservedGlobalBlocks) if (b.key == "FEid")
+            PsdLinked.readFilterEffects(b.data, doc.width, doc.height).filter { it.id in keepFx }.forEach { fxEntries += it.raw }
+        for ((l, uuid) in links) {
+            val m = l.smartFilters.mask ?: continue
+            if (PsdPsSmartFilters.representable(l.smartFilters)) fxEntries += PsdLinked.writeFilterEffect(uuid, l.baseRaster(), m.grid, doc.width, doc.height)
+        }
         for (b in doc.preservedGlobalBlocks) {
             if (deep && (b.key == "Lr16" || b.key == "Mt16")) continue
-            if (b.key == "lnk2") continue
+            if (b.key == "lnk2" || b.key == "FEid" || (b.key == "FMsk" && fxEntries.isEmpty())) continue
             tail2.ascii(b.signature); tail2.ascii(b.key); tail2.i32(b.data.size); tail2.bytes(b.data)
             var n = b.data.size; while (n % 4 != 0) { tail2.u8(0); n++ }
         }
         if (linkData.size() > 0) {
             tail2.ascii("8BIM"); tail2.ascii("lnk2"); tail2.i32(linkData.size()); tail2.bytes(linkData.toByteArray())
             var n = linkData.size(); while (n % 4 != 0) { tail2.u8(0); n++ }
+        }
+        if (fxEntries.isNotEmpty()) {
+            if (doc.preservedGlobalBlocks.none { it.key == "FMsk" }) {
+                tail2.ascii("8BIM"); tail2.ascii("FMsk"); tail2.i32(12); tail2.bytes(PsdLinked.DEFAULT_FILTER_MASK_SETTINGS)
+            }
+            val fe = PsdLinked.filterEffectsBlock(fxEntries)
+            tail2.ascii("8BIM"); tail2.ascii("FEid"); tail2.i32(fe.size); tail2.bytes(fe)
+            var n = fe.size; while (n % 4 != 0) { tail2.u8(0); n++ }
         }
         val tailBytes = tail.toByteArray(); val tail2Bytes = tail2.toByteArray()
         // 16 Bit: Ebenen im Zusatzblock „Lr16“ nach der globalen Maskeninfo, der Ebenenabschnitt bleibt leer
@@ -489,16 +512,20 @@ object PsdWriter {
             }
             is SmartLayer -> {
                 skip += setOf("SoLd", "PlLd", "SoLE")
-                own[PsdTextSmart.SMART_KEY] = PsdTextSmart.writeSmart(layer.source, layer.transform, layer.warp)
-                // Als Photoshop-Smartobjekt: Lage in „SoLd“, der Inhalt steht in „lnk2“ (global)
+                // Als Photoshop-Smartobjekt: Lage in „SoLd“, Inhalt in „lnk2“ (global), Smartfilter als „filterFX“.
+                // Photoshops Daten sind dann maßgeblich (in Photoshop geänderte Lage/Filter bleiben beim Öffnen
+                // erhalten); eigene Kopien nur für das, was Photoshop nicht abbilden kann.
                 val link = smartLinks.get()?.get(layer)
+                val fx = if (link != null) PsdPsSmartFilters.write(layer.smartFilters) else null
                 if (link != null) {
                     block(w, "PlLd") { it.bytes(PsdLinked.writePlacedLegacy(link, layer.corners(), layer.source.width, layer.source.height)) }
-                    block(w, "SoLd") { it.bytes(PsdLinked.writePlaced(link, layer.corners(), layer.source.width, layer.source.height, doc.dpi.toDouble())) }
+                    block(w, "SoLd") { it.bytes(PsdLinked.writePlaced(link, layer.corners(), layer.source.width, layer.source.height, doc.dpi.toDouble(), fx)) }
+                } else {
+                    own[PsdTextSmart.SMART_KEY] = PsdTextSmart.writeSmart(layer.source, layer.transform, layer.warp)
+                    // Eingebetteter Inhalt mit Ebenen als eigene PSD
+                    layer.contents?.let { c -> own[PsdTextSmart.CONTENTS_KEY] = write(c) }
                 }
-                // Sonst eingebetteter Inhalt mit Ebenen als eigene PSD
-                if (link == null) layer.contents?.let { c -> own[PsdTextSmart.CONTENTS_KEY] = write(c) }
-                if (layer.smartFilters.filters.isNotEmpty()) own[PsdSmartFilters.KEY] = PsdSmartFilters.write(layer.smartFilters)
+                if (layer.smartFilters.filters.isNotEmpty() && fx == null) own[PsdSmartFilters.KEY] = PsdSmartFilters.write(layer.smartFilters)
             }
             else -> {}
         }

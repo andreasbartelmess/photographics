@@ -4,6 +4,7 @@ import de.photographics.core.image.Blur
 import de.photographics.core.image.Colors
 import de.photographics.core.tr
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.max
@@ -40,13 +41,29 @@ class GallerySpec internal constructor(
     val id: String, val label: String, val category: GalleryCategory, val params: List<GalleryParam>,
     /** Nutzt Vorder-/Hintergrundfarbe. */
     val usesColors: Boolean = false,
+    /** Ältere Reglerlisten: Anzahl Werte → neue Stelle je alter Stelle (Regler kamen dazu). */
+    internal val legacy: Map<Int, IntArray> = emptyMap(),
     internal val make: (V) -> Effect,
 ) {
     fun defaults() = FloatArray(params.size) { params[it].default }
+
+    /** Gespeicherte Werte (auch aus älteren Versionen mit weniger Reglern) auf die aktuelle Reglerliste bringen. */
+    fun restore(values: FloatArray): FloatArray {
+        if (values.size == params.size) return values
+        val out = defaults()
+        val map = legacy[values.size]
+        for (i in values.indices) { val j = map?.getOrNull(i) ?: i; if (j in out.indices) out[j] = values[i] }
+        return out
+    }
 }
 
 /** Ein Effekt im Stapel. */
-data class GalleryEffect(val spec: GallerySpec, val values: FloatArray, val visible: Boolean = true) {
+class GalleryEffect(val spec: GallerySpec, values: FloatArray, val visible: Boolean = true) {
+    /** Immer so viele Werte wie Regler (ältere/kürzere Listen werden ergänzt, siehe [GallerySpec.restore]). */
+    val values: FloatArray = spec.restore(values)
+
+    fun copy(spec: GallerySpec = this.spec, values: FloatArray = this.values, visible: Boolean = this.visible) = GalleryEffect(spec, values, visible)
+    override fun toString() = "GalleryEffect(${spec.id}, ${values.contentToString()}, visible=$visible)"
     override fun equals(other: Any?) = other is GalleryEffect && other.spec === spec && other.values.contentEquals(values) && other.visible == visible
     override fun hashCode() = spec.id.hashCode() * 31 + values.contentHashCode() + if (visible) 1 else 0
 }
@@ -63,7 +80,7 @@ class V internal constructor(private val v: FloatArray, val ctx: GalleryContext)
 internal class Effect(val margin: Int, val run: (Img) -> IntArray)
 
 /** Ausschnitt: ARGB-Pixel, Größe, Lage im Dokument. */
-internal class Img(val px: IntArray, val w: Int, val h: Int, val ox: Int, val oy: Int) {
+internal class Img(val px: IntArray, val w: Int, val h: Int, val ox: Int, val oy: Int, val docW: Int = w, val docH: Int = h) {
     val n get() = w * h
     fun lum(): FloatArray = FloatArray(n) { G.lum(px[it]) }
     fun channel(shift: Int) = FloatArray(n) { ((px[it] shr shift) and 0xFF).toFloat() }
@@ -80,7 +97,7 @@ class GalleryChain(effects: List<GalleryEffect>, ctx: GalleryContext = GalleryCo
 
     override fun process(px: IntArray, w: Int, h: Int, offX: Int, offY: Int, docW: Int, docH: Int): IntArray {
         var cur = px
-        for (s in steps) cur = s.run(Img(cur, w, h, offX, offY))
+        for (s in steps) cur = s.run(Img(cur, w, h, offX, offY, docW, docH))
         return cur
     }
 }
@@ -277,13 +294,14 @@ internal object G {
     val GLOW_NAMES = listOf(tr("Blau"), tr("Cyan"), tr("Grün"), tr("Gelb"), tr("Orange"), tr("Rot"), tr("Magenta"), tr("Weiß"))
     val GLOWS = intArrayOf(0x2A6CFF, 0x30E0FF, 0x40FF60, 0xFFF040, 0xFF9020, 0xFF3030, 0xFF40E0, 0xFFFFFF)
     val TEXTURES = listOf(tr("Leinwand"), tr("Sackleinen"), tr("Ziegel"), tr("Sandstein"))
+    val INVERT = listOf(tr("Aus"), tr("Ein"))
     val LIGHTS = listOf(tr("Oben"), tr("Oben rechts"), tr("Rechts"), tr("Unten rechts"), tr("Unten"), tr("Unten links"), tr("Links"), tr("Oben links"))
     fun lightAngle(i: Int) = 90f - i * 45f
 
     /** Struktur als Relief auf ein Bild legen (wie Photoshops „Mit Struktur versehen“). */
-    fun texturize(img: Img, src: IntArray, kind: Int, scale: Float, relief: Float, light: Int, ctxScale: Float): IntArray {
+    fun texturize(img: Img, src: IntArray, kind: Int, scale: Float, relief: Float, light: Int, ctxScale: Float, invert: Boolean = false): IntArray {
         val w = img.w; val h = img.h
-        val hf = FloatArray(img.n) { i -> texture(kind, (img.ox + i % w) / ctxScale, (img.oy + i / w) / ctxScale, scale / 100f) * 255f }
+        val hf = FloatArray(img.n) { i -> texture(kind, (img.ox + i % w) / ctxScale, (img.oy + i / w) / ctxScale, scale / 100f).let { if (invert) 1f - it else it } * 255f }
         val sh = relief(hf, w, h, lightAngle(light), relief / 25f)
         return IntArray(img.n) { i -> (img.px[i] and 0xFF000000.toInt()) or (src[i].let { c -> rgb(r(c) + sh[i], g(c) + sh[i], b(c) + sh[i]) }) }
     }
@@ -293,6 +311,10 @@ internal object G {
 
 private fun p(label: String, min: Float, max: Float, def: Float, pixels: Boolean = false) = GalleryParam(label, min, max, def, pixels = pixels)
 private fun choice(label: String, options: List<String>, def: Int = 0) = GalleryParam(label, 0f, (options.size - 1).toFloat(), def.toFloat(), options)
+
+/** Photoshops Stempel: Grauwert, ab dem ein Pixel (nach 2 px Abtragen) hell bleibt, je Balance 0–50 (gemessen). */
+private val STAMP_THRESHOLD = floatArrayOf(0f, 4f, 7f, 12f, 17f, 22f, 27f, 32f, 37f, 42f, 47f, 52f, 54f, 56f, 58f, 60f, 62f, 64f, 66f, 68f, 70f, 72f,
+    74f, 76f, 78f, 80f, 82f, 84f, 86f, 88f, 90f, 92f, 94f, 96f, 98f, 100f, 102f, 104f, 106f, 108f, 110f, 112f, 114f, 116f, 118f, 120f, 122f, 127f, 152f, 202f, 256f)
 
 object Gallery {
     private val C = GalleryCategory.entries
@@ -389,13 +411,26 @@ object Gallery {
                 }
             }
         },
-        GallerySpec("paint-daubs", tr("Ölfarbe getupft"), GalleryCategory.ARTISTIC, listOf(p(tr("Pinselgröße"), 1f, 50f, 8f, pixels = true), p(tr("Schärfe"), 0f, 40f, 7f))) { v ->
-            val r = max(1, (v.px(0) / 3f).roundToInt())
+        GallerySpec("paint-daubs", tr("Ölfarbe getupft"), GalleryCategory.ARTISTIC, listOf(p(tr("Pinselgröße"), 1f, 50f, 8f, pixels = true), p(tr("Schärfe"), 0f, 40f, 7f),
+                choice(tr("Pinseltyp"), listOf(tr("Einfach"), tr("Hell, rau"), tr("Dunkel, rau"), tr("Breit, scharf"), tr("Breit, weich"), tr("Funkeln"))))) { v ->
+            val type = v.int(2)
+            // Breite Pinsel: größerer Radius; „weich“ zeichnet nach, „scharf“/„Funkeln“ schärfen stärker
+            val r = max(1, (v.px(0) / 3f * (if (type == 3 || type == 4) 1.6f else 1f)).roundToInt())
+            val sharp = v[1] * 0.08f * when (type) { 3 -> 1.8f; 4 -> 0.3f; 5 -> 2.4f; else -> 1f }
             Effect(r + 4) { img ->
                 val k = G.kuwahara(img, r)
                 val l = FloatArray(img.n) { G.lum(k[it]) }
-                val bl = G.blurred(l, img.w, img.h, 1.2f)
-                IntArray(img.n) { i -> (img.px[i] and 0xFF000000.toInt()) or G.scale(k[i], 1f + (l[i] - bl[i]) / max(1f, l[i]) * v[1] * 0.08f) }
+                val bl = G.blurred(l, img.w, img.h, if (type == 4) 2.5f else 1.2f)
+                IntArray(img.n) { i ->
+                    var f = 1f + (l[i] - bl[i]) / max(1f, l[i]) * sharp
+                    val grain = G.hash(img.ox + i % img.w, img.oy + i / img.w, 77) - 0.5f
+                    when (type) {
+                        1 -> f += max(0f, grain) * 0.35f                       // helle, raue Tupfer
+                        2 -> f -= max(0f, -grain) * 0.35f                      // dunkle, raue Tupfer
+                        5 -> if (l[i] - bl[i] > 6f) f += 0.25f                 // Funkeln an hellen Kanten
+                    }
+                    (img.px[i] and 0xFF000000.toInt()) or G.scale(k[i], f)
+                }
             }
         },
         GallerySpec("palette-knife", tr("Spachtel"), GalleryCategory.ARTISTIC, listOf(p(tr("Strichgröße"), 1f, 50f, 25f, pixels = true), p(tr("Strichdetail"), 1f, 3f, 3f), p(tr("Weichheit"), 0f, 10f, 0f))) { v ->
@@ -426,16 +461,20 @@ object Gallery {
             Effect(3) { img ->
                 val l = img.lum()
                 val e = G.edges(G.blurred(l, img.w, img.h, 0.8f), img.w, img.h)
-                val levels = v.int(2) + 3
+                // Tontrennung wie Photoshop (gemessen): Stufenabstand 128 / 2^Tontrennung, gerundet
+                val step = 128f / (1 shl v.int(2).coerceIn(0, 6))
+                fun post(x: Float) = (kotlin.math.floor((x + step / 2f) / step) * step).coerceAtMost(255f)
                 val th = 260f - v[0] * 20f
                 img.map { i, _, _ ->
                     val c = img.px[i]
                     val ink = G.smooth(th, th + 60f, e[i]) * (0.3f + v[1] * 0.07f)
-                    G.scale(G.rgb(G.posterize(G.r(c), levels), G.posterize(G.g(c), levels), G.posterize(G.b(c), levels)), 1f - ink.coerceAtMost(1f))
+                    G.scale(G.rgb(post(G.r(c)), post(G.g(c)), post(G.b(c))), 1f - ink.coerceAtMost(1f))
                 }
             }
         },
-        GallerySpec("rough-pastels", tr("Grobes Pastell"), GalleryCategory.ARTISTIC, listOf(p(tr("Strichlänge"), 0f, 40f, 6f, pixels = true), p(tr("Strichdetail"), 1f, 20f, 4f), choice(tr("Struktur"), G.TEXTURES), p(tr("Relief"), 0f, 50f, 20f))) { v ->
+        GallerySpec("rough-pastels", tr("Grobes Pastell"), GalleryCategory.ARTISTIC, listOf(p(tr("Strichlänge"), 0f, 40f, 6f, pixels = true), p(tr("Strichdetail"), 1f, 20f, 4f),
+                choice(tr("Struktur"), G.TEXTURES), p(tr("Skalierung"), 50f, 200f, 100f), p(tr("Relief"), 0f, 50f, 20f), choice(tr("Licht"), G.LIGHTS), choice(tr("Umkehren"), G.INVERT)),
+                legacy = mapOf(4 to intArrayOf(0, 1, 2, 4))) { v ->
             val len = v.px(0)
             Effect(len.roundToInt() + 4) { img ->
                 val (r, g, b) = G.streakArgb(img, 45f, len)
@@ -443,7 +482,7 @@ object Gallery {
                     val k = 1f + (G.hash(img.ox + i % img.w, img.oy + i / img.w, 51) - 0.5f) * (21 - v[1]) * 0.012f
                     G.rgb(r[i] * k, g[i] * k, b[i] * k)
                 }
-                G.texturize(img, stroked, v.int(2), 100f, v[3], 1, v.ctx.scale)
+                G.texturize(img, stroked, v.int(2), v[3], v[4], v.int(5), v.ctx.scale, v.int(6) == 1)
             }
         },
         GallerySpec("smudge-stick", tr("Diagonal verwischen"), GalleryCategory.ARTISTIC, listOf(p(tr("Strichlänge"), 0f, 10f, 2f), p(tr("Lichterbereich"), 0f, 20f, 0f), p(tr("Intensität"), 0f, 10f, 10f))) { v ->
@@ -470,13 +509,15 @@ object Gallery {
                 }
             }
         },
-        GallerySpec("underpainting", tr("Malgrund"), GalleryCategory.ARTISTIC, listOf(p(tr("Pinselgröße"), 0f, 40f, 6f), p(tr("Strukturdeckung"), 0f, 40f, 16f), choice(tr("Struktur"), G.TEXTURES), p(tr("Relief"), 0f, 50f, 4f))) { v ->
+        GallerySpec("underpainting", tr("Malgrund"), GalleryCategory.ARTISTIC, listOf(p(tr("Pinselgröße"), 0f, 40f, 6f), p(tr("Strukturdeckung"), 0f, 40f, 16f),
+                choice(tr("Struktur"), G.TEXTURES), p(tr("Skalierung"), 50f, 200f, 100f), p(tr("Relief"), 0f, 50f, 4f), choice(tr("Licht"), G.LIGHTS), choice(tr("Umkehren"), G.INVERT)),
+                legacy = mapOf(4 to intArrayOf(0, 1, 2, 4))) { v ->
             val r = max(1, v.px(v[0] * 0.4f + 1f).roundToInt())
             Effect(r + 4) { img ->
                 val k = G.kuwahara(img, r)
                 val cov = v[1] / 40f
                 val faded = IntArray(img.n) { i -> G.mix(k[i], G.scale(k[i], 1.08f), cov * 0.5f) }
-                G.texturize(img, faded, v.int(2), 100f, v[3] + v[1] * 0.6f, 1, v.ctx.scale)
+                G.texturize(img, faded, v.int(2), v[3], v[4] + v[1] * 0.6f, v.int(5), v.ctx.scale, v.int(6) == 1)
             }
         },
         GallerySpec("colored-pencil", tr("Farbstift"), GalleryCategory.ARTISTIC, listOf(p(tr("Strichbreite"), 1f, 24f, 4f, pixels = true), p(tr("Strichdruck"), 0f, 15f, 8f), p(tr("Papierhelligkeit"), 0f, 50f, 25f)), usesColors = true) { v ->
@@ -485,7 +526,8 @@ object Gallery {
                 // Schraffur: diagonales Rauschen verwischen, dort Farbe auftragen, wo das Bild dunkel genug ist
                 val hatch = FloatArray(img.n) { i -> G.hash((img.ox + i % img.w) / max(1, v.px(1f).roundToInt()), img.oy + i / img.w, 71) }
                 val strokes = G.streak(hatch, img.w, img.h, 45f, len)
-                val paper = G.mix(G.scale(v.ctx.bg, 0.5f), v.ctx.bg, v[2] / 50f)
+                // Papier wie Photoshop (gemessen): Papierhelligkeit 0 = Vordergrund, 50 = Hintergrundfarbe
+                val paper = G.mix(v.ctx.fg, v.ctx.bg, v[2] / 50f)
                 val l = img.lum()
                 img.map { i, _, _ ->
                     val dark = 1f - l[i] / 255f
@@ -571,7 +613,7 @@ object Gallery {
                     val dx = ((G.noise(ax, ay, 97) - 0.5f) * 2f * r).roundToInt(); val dy = ((G.noise(ax, ay, 99) - 0.5f) * 2f * r).roundToInt()
                     img.px[(y + dy).coerceIn(0, img.h - 1) * img.w + (x + dx).coerceIn(0, img.w - 1)]
                 }
-                val (sr, sg, sb) = G.streakArgb(Img(sprayed, img.w, img.h, img.ox, img.oy), angle, len)
+                val (sr, sg, sb) = G.streakArgb(Img(sprayed, img.w, img.h, img.ox, img.oy, img.docW, img.docH), angle, len)
                 img.map { i, _, _ -> G.rgb(sr[i], sg[i], sb[i]) }
             }
         },
@@ -614,7 +656,7 @@ object Gallery {
                 }
             }
         },
-        GallerySpec("glass", tr("Glas"), GalleryCategory.DISTORT, listOf(p(tr("Verzerrung"), 0f, 20f, 5f), p(tr("Glättung"), 1f, 15f, 3f), choice(tr("Struktur"), listOf(tr("Milchglas"), tr("Blöcke"), tr("Leinwand"), tr("Kleine Linsen"))), p(tr("Skalierung"), 50f, 200f, 100f))) { v ->
+        GallerySpec("glass", tr("Glas"), GalleryCategory.DISTORT, listOf(p(tr("Verzerrung"), 0f, 20f, 5f), p(tr("Glättung"), 1f, 15f, 3f), choice(tr("Struktur"), listOf(tr("Milchglas"), tr("Blöcke"), tr("Leinwand"), tr("Kleine Linsen"))), p(tr("Skalierung"), 50f, 200f, 100f), choice(tr("Umkehren"), G.INVERT))) { v ->
             val amount = v.px(v[0] * 1.5f); val sc = v.px(v[3] / 100f)
             Effect(amount.roundToInt() + 2) { img ->
                 img.map { _, x, y ->
@@ -626,7 +668,8 @@ object Gallery {
                         2 -> G.texture(0, px, py, sc)
                         else -> { val s = 12f * sc; val fx = ((px / s) % 1f + 1f) % 1f - 0.5f; val fy = ((py / s) % 1f + 1f) % 1f - 0.5f; 1f - (fx * fx + fy * fy) * 4f }
                     }
-                    val dx = (height(ax + 1, ay) - height(ax - 1, ay)) * amount * 2f; val dy = (height(ax, ay + 1) - height(ax, ay - 1)) * amount * 2f
+                    val inv = if (v.int(4) == 1) -1f else 1f
+                    val dx = (height(ax + 1, ay) - height(ax - 1, ay)) * amount * 2f * inv; val dy = (height(ax, ay + 1) - height(ax, ay - 1)) * amount * 2f * inv
                     img.px[(y + dy.roundToInt()).coerceIn(0, img.h - 1) * img.w + (x + dx.roundToInt()).coerceIn(0, img.w - 1)]
                 }
             }
@@ -685,7 +728,7 @@ object Gallery {
             }
         },
         GallerySpec("conte-crayon", tr("Conté-Stifte"), GalleryCategory.SKETCH, listOf(p(tr("Vordergrundstufe"), 1f, 15f, 11f), p(tr("Hintergrundstufe"), 1f, 15f, 7f),
-                choice(tr("Struktur"), G.TEXTURES), p(tr("Skalierung"), 50f, 200f, 100f), p(tr("Relief"), 0f, 50f, 4f)), usesColors = true) { v ->
+                choice(tr("Struktur"), G.TEXTURES), p(tr("Skalierung"), 50f, 200f, 100f), p(tr("Relief"), 0f, 50f, 4f), choice(tr("Licht"), G.LIGHTS), choice(tr("Umkehren"), G.INVERT)), usesColors = true) { v ->
             val len = v.px(6f)
             Effect(len.roundToInt() + 4) { img ->
                 // Dunkle Töne in Vordergrund-, helle in Hintergrundfarbe, als kurze Kreidestriche auf Papierstruktur
@@ -698,7 +741,7 @@ object Gallery {
                     val light = G.smooth(0.45f, 0.85f, t) * (v[1] / 15f)
                     G.mix(G.mix(mid, v.ctx.fg, dark), v.ctx.bg, light)
                 }
-                G.texturize(img, drawn, v.int(2), v[3], v[4], 1, v.ctx.scale)
+                G.texturize(img, drawn, v.int(2), v[3], v[4], v.int(5), v.ctx.scale, v.int(6) == 1)
             }
         },
         GallerySpec("graphic-pen", tr("Grafikstift"), GalleryCategory.SKETCH, listOf(p(tr("Strichlänge"), 1f, 15f, 15f, pixels = true), p(tr("Hell/Dunkel-Balance"), 0f, 100f, 50f), choice(tr("Strichrichtung"), listOf(tr("Rechts diagonal"), tr("Horizontal"), tr("Links diagonal"), tr("Vertikal")))), usesColors = true) { v ->
@@ -714,38 +757,59 @@ object Gallery {
             }
         },
         GallerySpec("halftone", tr("Rasterungseffekt"), GalleryCategory.SKETCH, listOf(p(tr("Größe"), 1f, 12f, 1f, pixels = true), p(tr("Kontrast"), 0f, 50f, 5f), choice(tr("Musterart"), listOf(tr("Kreis"), tr("Punkt"), tr("Linie")), 1)), usesColors = true) { v ->
-            val cell = v.px(v[0] * 3f + 3f)
+            // Nach Photoshop 2026 vermessen (~/vm-tools/parity/re): Periode 4·Größe + 2 px; Punkt = cos·cos
+            // mit Gitterursprung (4, 4), Linie = cos über y, Kreis = Ringe um die Bildmitte. Ergebnis
+            // 128 + K·(0,93·(Helligkeit − 128) + 98,5·Muster), K wächst mit dem Kontrast (50 ≈ zweifarbig).
+            val period = v.px(4f * v[0] + 2f)
+            val c = v[1]
+            val k = kotlin.math.exp(0.035f * c + 0.0008f * c * c)
+            val tau = 2f * Math.PI.toFloat()
             Effect(1) { img ->
+                val cx = img.docW / 2f; val cy = img.docH / 2f
                 img.map { i, x, y ->
-                    val c = G.lum(img.px[i]) / 255f
                     val ax = img.ox + x.toFloat(); val ay = img.oy + y.toFloat()
                     val screen = when (v.int(2)) {
-                        0 -> { val r = sqrt(ax * ax + ay * ay) / cell; 0.5f + 0.5f * sin(r * 2f * Math.PI.toFloat()) }
-                        1 -> { val fx = ((ax / cell) % 1f + 1f) % 1f - 0.5f; val fy = ((ay / cell) % 1f + 1f) % 1f - 0.5f; sqrt(fx * fx + fy * fy) * 1.41f }
-                        else -> 0.5f + 0.5f * sin(ay / cell * 2f * Math.PI.toFloat())
+                        0 -> { val dx = ax - cx; val dy = ay - cy; kotlin.math.cos(sqrt(dx * dx + dy * dy) / period * tau) }
+                        1 -> -kotlin.math.cos((ax - v.px(4f)) / period * tau) * kotlin.math.cos((ay - v.px(4f)) / period * tau)
+                        else -> kotlin.math.cos((ay - v.px(4f)) / period * tau)
                     }
-                    val k = 0.5f + v[1] / 50f * 6f
-                    G.mix(v.ctx.fg, v.ctx.bg, ((c - (if (v.int(2) == 1) 1f - screen else screen)) * k + 0.5f).coerceIn(0f, 1f))
+                    val px = img.px[i]
+                    val l = (((px shr 16) and 0xFF) + ((px shr 8) and 0xFF) + (px and 0xFF)) / 3f
+                    G.mix(v.ctx.fg, v.ctx.bg, (128f + k * (0.93f * (l - 128f) + 98.5f * screen)) / 255f)
                 }
             }
         },
         GallerySpec("note-paper", tr("Prägepapier"), GalleryCategory.SKETCH, listOf(p(tr("Bildbalance"), 0f, 50f, 25f), p(tr("Körnung"), 0f, 20f, 10f), p(tr("Relief"), 0f, 25f, 11f)), usesColors = true) { v ->
+            // Nach Photoshop 2026 vermessen (~/vm-tools/parity/re): Schwelle (R+G+B)/3 ≥ 5,08·Balance − 1;
+            // dunkle Seite = Hintergrund mit 30 % Vordergrund (bei Schwarz/Weiß 179), helle = Hintergrund;
+            // Papierkörnung ±1,1·Körnung, vom Relief verstärkt (1 + (Relief/5,5)²), Kanten geprägt.
+            val thr = 5.08f * v[0] - 1f
+            val amp = 1.1f * v[1] * (1f + (v[2] / 5.5f).let { it * it })
+            val paper = G.mix(v.ctx.bg, v.ctx.fg, 0.3f)
             Effect(4) { img ->
-                val l = G.blurred(img.lum(), img.w, img.h, 1f)
-                val mask = FloatArray(img.n) { i -> G.smooth(0.45f, 0.55f, l[i] / 255f + (v[0] - 25f) / 50f) * 255f }
-                val sh = G.relief(mask, img.w, img.h, 135f, v[2] / 10f)
+                val mask = FloatArray(img.n) { i -> val c = img.px[i]
+                    G.smooth(thr - 1f, thr + 1f, (((c shr 16) and 0xFF) + ((c shr 8) and 0xFF) + (c and 0xFF)) / 3f) * 255f }
+                val sh = G.relief(G.blurred(mask, img.w, img.h, 0.7f), img.w, img.h, 135f, v[2] / 25f)
                 img.map { i, x, y ->
-                    val grain = (G.hash(img.ox + x, img.oy + y, 161) - 0.5f) * v[1] * 2f
-                    G.scale(G.mix(v.ctx.fg, v.ctx.bg, mask[i] / 255f), 1f + (sh[i] + grain) / 255f)
+                    val grain = (G.hash(img.ox + x, img.oy + y, 161) - 0.5f) * 2f * amp
+                    val c = G.mix(paper, v.ctx.bg, mask[i] / 255f); val d = sh[i] + grain
+                    G.rgb(G.r(c) + d, G.g(c) + d, G.b(c) + d)
                 }
             }
         },
         GallerySpec("photocopy", tr("Fotokopie"), GalleryCategory.SKETCH, listOf(p(tr("Detail"), 1f, 24f, 7f, pixels = true), p(tr("Verdunkelung"), 1f, 50f, 8f)), usesColors = true) { v ->
-            val sigma = v.px(0) * 0.5f + 0.5f
-            Effect(G.gaussMargin(sigma)) { img ->
-                val l = img.lum()
-                val bl = G.blurred(l, img.w, img.h, sigma)
-                img.map { i, _, _ -> G.mix(v.ctx.fg, v.ctx.bg, G.smooth(-4f - v[1] * 0.6f, 2f, l[i] - bl[i])) }
+            // Nach Photoshop 2026 vermessen (~/vm-tools/parity/re/pc_*.py): nur was dunkler ist als seine
+            // Umgebung wird dunkel. Umgebung = Gauß σ ≈ 0,82·Detail + 0,3, Pixel leicht geglättet (σ 1,04),
+            // Ergebnis = 255 − k·(Umgebung − Pixel), k ≈ 1,05·Verdunkelung (darüber steiler).
+            val sigma = v.px(0.82f * v[0] + 0.3f)
+            val pre = v.px(1.04f)
+            val dk = v[1]
+            val k = if (dk <= 20f) 1.05f * dk else if (dk <= 30f) 21f + (dk - 20f) * 3.1f else if (dk <= 40f) 52f + (dk - 30f) * 4.2f else 94f + (dk - 40f) * 0.6f
+            Effect(G.gaussMargin(sigma) + G.gaussMargin(pre)) { img ->
+                val l = FloatArray(img.n) { i -> val c = img.px[i]; (((c shr 16) and 0xFF) + ((c shr 8) and 0xFF) + (c and 0xFF)) / 3f }
+                val mean = G.blurred(l, img.w, img.h, sigma)
+                val px = G.blurred(l, img.w, img.h, pre)
+                img.map { i, _, _ -> G.mix(v.ctx.fg, v.ctx.bg, 1f - k * max(0f, mean[i] - px[i]) / 255f) }
             }
         },
         GallerySpec("plaster", tr("Gipsabdruck"), GalleryCategory.SKETCH, listOf(p(tr("Bildbalance"), 0f, 50f, 20f), p(tr("Glättung"), 1f, 15f, 2f), choice(tr("Licht"), G.LIGHTS))) { v ->
@@ -766,28 +830,67 @@ object Gallery {
             }
         },
         GallerySpec("stamp", tr("Stempel"), GalleryCategory.SKETCH, listOf(p(tr("Hell/Dunkel-Balance"), 0f, 50f, 25f), p(tr("Glättung"), 1f, 50f, 5f)), usesColors = true) { v ->
-            // Wie Photoshop: Helligkeit weichzeichnen (Glättung), dann scharf an der Schwelle trennen
-            // (höhere Balance = mehr Vordergrundfarbe). An sauberen Bildern runden sich Ecken und kleine
-            // Sprenkel verschwinden; vorher hinzugefügtes Rauschen wird dabei zu Klumpen, die Kanten
-            // ausfransen und Grautöne zu Sprenkeln zerfallen lassen (Fotokopie-Look). Nur zwei Farben,
-            // Kanten mit genau einem Pixel Kantenglättung.
-            val sigma = v.px(0.3f + (v[1] - 1f) * 0.1f)
-            val thr = v[0] / 50f * 257f - 1f
-            Effect(G.gaussMargin(sigma) + 4) { img ->
+            // Nach Photoshop 2026 vermessen (~/vm-tools/parity/re, stamp_*.py): Helligkeit = (R+G+B)/3, an
+            // Kanten abgedunkelt (Gradient, Gauß 3,5 px, stärker je dunkler – Kopierer-Look), an der
+            // Schwelle der Balance getrennt; dann die Form glätten: helle Fläche um 2 px abtragen,
+            // Gauß σ = 0,431·Glättung, neu trennen bei 0,316 (kleine Formen verschwinden, Rauschen wird zu
+            // Klumpen), bei gerader Glättung 1 px nach rechts unten versetzt. Testbild: 7 % Pixel anders
+            // (vorher 43 %), Helligkeit gleich.
+            val b = v.int(0).coerceIn(0, 50)
+            val thr = when (b) { 0 -> Float.NEGATIVE_INFINITY; 50 -> Float.POSITIVE_INFINITY; else -> STAMP_THRESHOLD[b] - 2f }
+            val smooth = v.int(1).coerceIn(1, 50)
+            val sigma = v.px((0.4307f * smooth - 0.0333f).coerceAtLeast(0.05f))
+            val erode = v.px(2f)
+            val slope = 319.27f / (0.4307f * smooth - 0.0333f).coerceAtLeast(0.05f)
+            val shift = if (smooth % 2 == 0) v.px(1f).roundToInt() else 0
+            val reach = ceil(erode).toInt() + 1
+            val edgeSigma = v.px(3.5f)
+            Effect(G.gaussMargin(sigma) + reach + shift + G.gaussMargin(edgeSigma) + 4) { img ->
                 val w = img.w; val h = img.h
-                val out = G.crisp(G.blurred(img.lum(), w, h, sigma), w, h, thr, invert = true)
-                img.map { i, _, _ -> G.mix(v.ctx.bg, v.ctx.fg, out[i] / 255f) }
+                val lum = FloatArray(img.n) { i -> val c = img.px[i]; (((c shr 16) and 0xFF) + ((c shr 8) and 0xFF) + (c and 0xFF)) / 3f }
+                // Kantenstärke: Sobel / 8 (Grauwert je Pixel, auf volle Auflösung umgerechnet), weichgezeichnet
+                val grad = FloatArray(img.n)
+                for (y in 0 until h) for (x in 0 until w) {
+                    fun l(dx: Int, dy: Int) = lum[(y + dy).coerceIn(0, h - 1) * w + (x + dx).coerceIn(0, w - 1)]
+                    val gx = (l(1, -1) + 2 * l(1, 0) + l(1, 1)) - (l(-1, -1) + 2 * l(-1, 0) + l(-1, 1))
+                    val gy = (l(-1, 1) + 2 * l(0, 1) + l(1, 1)) - (l(-1, -1) + 2 * l(0, -1) + l(1, -1))
+                    grad[y * w + x] = sqrt(gx * gx + gy * gy) / 8f * v.ctx.scale
+                }
+                val edge = G.blurred(grad, w, h, edgeSigma)
+                val white = BooleanArray(img.n) { i -> val d = 1f - lum[i] / 255f; lum[i] - 24f * edge[i] * d * d >= thr }
+                // Abstand jedes hellen Pixels zum nächsten dunklen (bis reach) → Bedeckung nach dem Abtragen
+                val cover = FloatArray(img.n)
+                for (y in 0 until h) for (x in 0 until w) {
+                    val i = y * w + x
+                    if (!white[i]) continue
+                    var best = (reach + 1).toFloat()
+                    for (dy in -reach..reach) {
+                        val yy = y + dy; if (yy < 0 || yy >= h) continue
+                        for (dx in -reach..reach) {
+                            val xx = x + dx; if (xx < 0 || xx >= w || white[yy * w + xx]) continue
+                            val d = sqrt((dx * dx + dy * dy).toFloat()); if (d < best) best = d
+                        }
+                    }
+                    cover[i] = (best - erode).coerceIn(0f, 1f)
+                }
+                val bl = G.blurred(cover, w, h, sigma)
+                img.map { i, x, y ->
+                    val j = (y - shift).coerceIn(0, h - 1) * w + (x - shift).coerceIn(0, w - 1)
+                    G.mix(v.ctx.fg, v.ctx.bg, (bl[j] - 0.316f) * slope + 0.5f)
+                }
             }
         },
         GallerySpec("torn-edges", tr("Gerissene Kanten"), GalleryCategory.SKETCH, listOf(p(tr("Bildbalance"), 0f, 50f, 25f), p(tr("Glättung"), 1f, 15f, 11f), p(tr("Kontrast"), 1f, 25f, 17f)), usesColors = true) { v ->
-            val sigma = v.px(v[1] * 0.25f)
+            val sigma = v.px(v[1] * 0.12f)
             Effect(G.gaussMargin(sigma)) { img ->
-                val l = G.blurred(img.lum(), img.w, img.h, sigma)
+                // Helligkeit (R+G+B)/3 wie Photoshop; Kontrast = Kantenhärte (gemessen: Kontrast 1 ≈ ±60, 5 ≈ ±3, ab 10 ≈ ±1 Stufe)
+                val l = G.blurred(FloatArray(img.n) { i -> val c = img.px[i]; (((c shr 16) and 0xFF) + ((c shr 8) and 0xFF) + (c and 0xFF)) / 3f }, img.w, img.h, sigma)
                 val cell = v.px(3f)
+                val k = (1f + 59f * kotlin.math.exp(-(v[2] - 1f) / 1.2f)) / 255f
                 img.map { i, x, y ->
-                    val n = (G.fbm((img.ox + x) / cell, (img.oy + y) / cell, 3, 181) - 0.5f) * 0.25f
-                    val k = 0.02f + (26f - v[2]) * 0.006f
-                    G.mix(v.ctx.fg, v.ctx.bg, G.smooth(0.5f - k, 0.5f + k, l[i] / 255f + n + (v[0] - 25f) / 50f))
+                    val n = (G.fbm((img.ox + x) / cell, (img.oy + y) / cell, 3, 181) - 0.5f) * 0.035f
+                    // Schwelle wie Photoshop (gemessen): 5,08·Bildbalance − 1, höhere Balance = mehr Vordergrund
+                    G.mix(v.ctx.fg, v.ctx.bg, G.smooth(-k, k, l[i] / 255f + n - (5.08f * v[0] - 1f) / 255f))
                 }
             }
         },
@@ -834,7 +937,8 @@ object Gallery {
             }
         },
         GallerySpec("grain", tr("Körnung"), GalleryCategory.TEXTURE, listOf(p(tr("Intensität"), 0f, 100f, 40f), p(tr("Kontrast"), 0f, 100f, 50f),
-            choice(tr("Körnungsart"), listOf(tr("Normal"), tr("Weich"), tr("Gesprenkelt"), tr("Klumpen"), tr("Horizontal"), tr("Vertikal"))),
+            choice(tr("Körnungsart"), listOf(tr("Normal"), tr("Weich"), tr("Gesprenkelt"), tr("Klumpen"), tr("Horizontal"), tr("Vertikal"),
+                tr("Kontrastreich"), tr("Vergrößert"), tr("Punktiert"), tr("Sprenkel"))),
             // Korngröße in Pixeln: Körnung wirkt pro Pixel – an großen Bildern sind 1-Pixel-Körner
             // kaum zu sehen (und Stempel macht daraus keine ausgefransten Kanten)
             p(tr("Größe"), 1f, 20f, 1f, pixels = true))) { v ->
@@ -852,7 +956,15 @@ object Gallery {
                         2 -> if ((if (cells) G.hash(kotlin.math.floor(gx).toInt(), kotlin.math.floor(gy).toInt(), 215) else G.hash(ax, ay, 215)) > 0.97f) -0.5f else 0f
                         3 -> G.fbm(ax / (v.px(4f) * v[3]), ay / (v.px(4f) * v[3]), 2, 217) - 0.5f
                         4 -> G.hash(0, if (cells) kotlin.math.floor(gy).toInt() else ay, 219) - 0.5f
-                        else -> G.hash(if (cells) kotlin.math.floor(gx).toInt() else ax, 0, 221) - 0.5f
+                        5 -> G.hash(if (cells) kotlin.math.floor(gx).toInt() else ax, 0, 221) - 0.5f
+                        // Kontrastreich: starkes Rauschen je Korn, fast nur hell oder dunkel
+                        6 -> ((if (cells) G.hash(kotlin.math.floor(gx).toInt(), kotlin.math.floor(gy).toInt(), 223) else G.hash(ax, ay, 223)) - 0.5f).let { if (it >= 0f) 0.5f else -0.5f } * 0.8f
+                        // Vergrößert: weiches Wertrauschen mit 3 px großen Körnern
+                        7 -> ((G.noise(ax / (v.px(3f) * v[3]), ay / (v.px(3f) * v[3]), 225) - 0.5f) * 1.8f).coerceIn(-0.5f, 0.5f)
+                        // Punktiert: Punkte in Vordergrund-/Bildfarbe, dichter in dunklen Bereichen
+                        8 -> if ((if (cells) G.hash(kotlin.math.floor(gx).toInt(), kotlin.math.floor(gy).toInt(), 227) else G.hash(ax, ay, 227)) * 255f > G.lum(img.px[i])) -0.5f else 0.15f
+                        // Sprenkel: helle und dunkle Sprenkel
+                        else -> (if (cells) G.hash(kotlin.math.floor(gx).toInt(), kotlin.math.floor(gy).toInt(), 229) else G.hash(ax, ay, 229)).let { if (it > 0.96f) 0.5f else if (it < 0.04f) -0.5f else 0f }
                     }
                     val c = img.px[i]
                     val k = 1f + (v[1] - 50f) / 100f
@@ -910,8 +1022,8 @@ object Gallery {
                 }
             }
         },
-        GallerySpec("texturizer", tr("Mit Struktur versehen"), GalleryCategory.TEXTURE, listOf(choice(tr("Struktur"), G.TEXTURES), p(tr("Skalierung"), 50f, 200f, 100f), p(tr("Relief"), 0f, 50f, 4f), choice(tr("Licht"), G.LIGHTS))) { v ->
-            Effect(3) { img -> G.texturize(img, img.px, v.int(0), v[1], v[2] * 2f, v.int(3), v.ctx.scale) }
+        GallerySpec("texturizer", tr("Mit Struktur versehen"), GalleryCategory.TEXTURE, listOf(choice(tr("Struktur"), G.TEXTURES), p(tr("Skalierung"), 50f, 200f, 100f), p(tr("Relief"), 0f, 50f, 4f), choice(tr("Licht"), G.LIGHTS), choice(tr("Umkehren"), G.INVERT))) { v ->
+            Effect(3) { img -> G.texturize(img, img.px, v.int(0), v[1], v[2] * 2f, v.int(3), v.ctx.scale, v.int(4) == 1) }
         },
     )
 }

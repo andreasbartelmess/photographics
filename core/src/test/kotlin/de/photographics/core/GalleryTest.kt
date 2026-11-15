@@ -165,4 +165,25 @@ class GalleryTest {
         g.dispose()
         javax.imageio.ImageIO.write(sheet, "png", java.io.File(outPath))
     }
+
+    @Test fun olderValueListsAreRestoredToNewParameters() {
+        // Grobes Pastell hatte 4 Regler (Länge, Detail, Struktur, Relief); jetzt wie Photoshop 7
+        val spec = de.photographics.core.filters.Gallery.byId("rough-pastels")!!
+        val e = de.photographics.core.filters.GalleryEffect(spec, floatArrayOf(6f, 4f, 2f, 33f))
+        org.junit.Assert.assertArrayEquals(floatArrayOf(6f, 4f, 2f, 100f, 33f, 0f, 0f), e.values, 0f)
+        // Glas: Umkehren angehängt
+        val g = de.photographics.core.filters.GalleryEffect(de.photographics.core.filters.Gallery.byId("glass")!!, floatArrayOf(5f, 3f, 1f, 120f))
+        org.junit.Assert.assertArrayEquals(floatArrayOf(5f, 3f, 1f, 120f, 0f), g.values, 0f)
+    }
+
+    @Test fun addNoiseDependsOnDocumentPositionNotBand() {
+        // Rauschen hinzufügen: gleiches Muster, ob ganzes Bild oder zwei Streifen
+        val w = 64; val h = 40
+        val px = IntArray(w * h) { 0xFF808080.toInt() }
+        val f = de.photographics.core.filters.AddNoise(20f, true, false)
+        val whole = f.process(px.copyOf(), w, h, 0, 0, w, h)
+        val top = f.process(px.copyOfRange(0, w * 15), w, 15, 0, 0, w, h)
+        val bottom = f.process(px.copyOfRange(w * 15, w * h), w, h - 15, 0, 15, w, h)
+        org.junit.Assert.assertArrayEquals(whole, top + bottom)
+    }
 }

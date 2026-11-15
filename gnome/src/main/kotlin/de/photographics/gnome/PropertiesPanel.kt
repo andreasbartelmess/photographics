@@ -98,15 +98,27 @@ class PropertiesPanel(private val onClosed: () -> Unit) {
     /** Regler je Parameter; [changed] erhält alle Werte nach jeder Änderung. */
     private fun params(params: List<FilterParam>, changed: (FloatArray) -> Unit) {
         val values = FloatArray(params.size) { params[it].default }
+        // Gruppen (Ausgabekanal, Farben, Tiefen/Mitteltöne/Lichter): Auswahl wie in Photoshop, nur deren Regler sichtbar
+        val groups = params.mapNotNull { it.group }.distinct()
+        val boxes = groups.associateWith { g -> Box(Orientation.VERTICAL, 10).apply { visible = g == groups.first() } }
+        var chooserShown = false
         for ((i, p) in params.withIndex()) {
+            val target = p.group?.let { boxes[it] } ?: content
+            if (p.group != null && !chooserShown) {
+                chooserShown = true
+                if (groups.size > 1) content.append(DropDown.fromStrings(groups.toTypedArray()).apply {
+                    onNotify("selected") { _ -> for ((g, b) in boxes) b.visible = g == groups[selected] }
+                })
+                for (g in groups) content.append(boxes.getValue(g))
+            }
             when (p.kind) {
-                ParamKind.SWITCH -> content.append(CheckButton.withLabel(p.label).apply {
+                ParamKind.SWITCH -> target.append(CheckButton.withLabel(p.label).apply {
                     active = p.default >= 0.5f
                     onToggled { values[i] = if (active) 1f else 0f; changed(values.copyOf()) }
                 })
                 ParamKind.CHOICE -> {
-                    content.append(Label(p.label).apply { xalign = 0f; addCssClass("dim-label") })
-                    content.append(DropDown.fromStrings(p.choices.toTypedArray()).apply {
+                    target.append(Label(p.label).apply { xalign = 0f; addCssClass("dim-label") })
+                    target.append(DropDown.fromStrings(p.choices.toTypedArray()).apply {
                         selected = p.default.toInt()
                         onNotify("selected") { _ -> values[i] = selected.toFloat(); changed(values.copyOf()) }
                     })
@@ -116,8 +128,8 @@ class PropertiesPanel(private val onClosed: () -> Unit) {
                     val row = Box(Orientation.HORIZONTAL, 6)
                     row.append(Label(p.label).apply { xalign = 0f; hexpand = true; addCssClass("dim-label") })
                     row.append(SpinButton(adj, 1.0, p.decimals.toUInt().toInt()).apply { widthChars = 5; valign = Align.CENTER })
-                    content.append(row)
-                    content.append(Scale(Orientation.HORIZONTAL, adj).apply { drawValue = false; hexpand = true })
+                    target.append(row)
+                    target.append(Scale(Orientation.HORIZONTAL, adj).apply { drawValue = false; hexpand = true })
                     adj.onValueChanged { values[i] = adj.value.toFloat(); changed(values.copyOf()) }
                 }
             }
@@ -127,7 +139,7 @@ class PropertiesPanel(private val onClosed: () -> Unit) {
     private fun stepOf(p: FilterParam) = when (p.decimals) { 0 -> 1.0; 1 -> 0.1; else -> 0.01 }
 
     private fun AdjParam.toFilterParam() = FilterParam(label, min, max, value, decimals,
-        when (kind) { AdjParam.Kind.SWITCH -> ParamKind.SWITCH; AdjParam.Kind.HUE -> ParamKind.HUE; else -> ParamKind.SLIDER })
+        when (kind) { AdjParam.Kind.SWITCH -> ParamKind.SWITCH; AdjParam.Kind.HUE -> ParamKind.HUE; else -> ParamKind.SLIDER }, group = group)
 
     /** Filter mit Live-Vorschau. */
     fun showFilter(spec: FilterSpec, c: Controller) {

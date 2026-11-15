@@ -13,7 +13,8 @@ object PsdLinked {
     class Entry(val kind: String, val uuid: String, val name: String, val fileType: String, val data: ByteArray?, val raw: ByteArray)
 
     /** Lage eines platzierten Inhalts: Kennung, Ecken im Dokument (oben links, oben rechts, unten rechts, unten links), Größe. */
-    class Placed(val uuid: String, val corners: DoubleArray, val width: Double, val height: Double, val warped: Boolean, val filtered: Boolean)
+    class Placed(val uuid: String, val corners: DoubleArray, val width: Double, val height: Double, val warped: Boolean, val filtered: Boolean,
+        /** „placed“-Kennung (Schlüssel der Filtermaske in „FEid“). */ val placedId: String = uuid, val filterFX: PsdDescriptor? = null)
 
     // ------------------------------------------------------------ lnk2
 
@@ -88,14 +89,14 @@ object PsdLinked {
         // Verkrümmt (Photoshop-Verkrümmen oder Gitter) können wir nicht nachbilden
         val warped = (style != null && style != "warpNone") || warp?.get("customEnvelopeWarp") != null ||
             (nonAffine != null && nonAffine.size == 8 && nonAffine.indices.any { kotlin.math.abs(nonAffine[it] - corners[it]) > 1e-6 })
-        Placed(uuid, corners, w, h, warped, d["filterFX"] != null)
+        Placed(uuid, corners, w, h, warped, d["filterFX"] != null, d.string("placed") ?: uuid, d.descriptor("filterFX"))
     }.getOrNull()
 
     /**
      * „SoLd“ für einen eingebetteten Inhalt [uuid] der Größe [w]×[h], dessen Ecken im Dokument bei
      * [corners] liegen (Photoshops Werte für ein frisch umgewandeltes Smartobjekt).
      */
-    fun writePlaced(uuid: String, corners: DoubleArray, w: Int, h: Int, dpi: Double): ByteArray {
+    fun writePlaced(uuid: String, corners: DoubleArray, w: Int, h: Int, dpi: Double, filterFX: PsdDescriptor? = null): ByteArray {
         fun obj(cls: String, vararg kv: Pair<String, Any?>) = PsdDescriptor(cls).also { d -> for ((k, v) in kv) d[k] = v }
         fun px(v: Double) = PsdDescriptor.UnitFloat("#Pxl", v)
         val d = obj("null",
@@ -116,6 +117,11 @@ object PsdLinked {
             "comp" to -1,
             "compInfo" to obj("null", "compID" to -1, "originalCompID" to -1),
         )
+        if (filterFX != null) {
+            // Wie Photoshop: Smartfilter nach der Auflösung, vor „comp“
+            val items = LinkedHashMap(d.items); d.items.clear()
+            for ((k, v) in items) { if (k == "comp") d.items["filterFX"] = filterFX; d.items[k] = v }
+        }
         val out = BinaryWriter()
         out.ascii("soLD"); out.i32(4); out.i32(16)
         PsdDescriptor.write(out, d)
@@ -164,4 +170,128 @@ object PsdLinked {
         if (kotlin.math.abs((x1 - x0) - (x2 - x3)) > tol || kotlin.math.abs((y1 - y0) - (y2 - y3)) > tol) return null
         return de.photographics.core.image.Affine((x1 - x0) / w, (y1 - y0) / w, (x3 - x0) / h, (y3 - y0) / h, x0, y0)
     }
+
+    // ------------------------------------------------------------ FEid (Smartfilter-Zwischenspeicher)
+
+    /** Ein Eintrag aus „FEid“: Kennung („placed“), Rohdaten und – falls bemalt – die Filtermaske (sonst null). */
+    class FilterEffectEntry(val id: String, val raw: ByteArray, val mask: de.photographics.core.image.TileGrid?)
+
+    /**
+     * Einträge aus „FEid“ (Photoshop: Bild vor den Smartfiltern als Zwischenspeicher plus Filtermaske).
+     * Photoshop schreibt die Maske immer, auch unbemalt – [FilterEffectEntry.mask] ist dann null.
+     */
+    fun readFilterEffects(data: ByteArray, docW: Int, docH: Int): List<FilterEffectEntry> = runCatching {
+        val r = BinaryReader(data)
+        r.i32()   // Version
+        val out = ArrayList<FilterEffectEntry>()
+        while (r.remaining >= 8) {
+            val len = r.i64().toInt(); val start = r.pos; val end = start + len
+            val raw = data.copyOfRange(start, end.coerceAtMost(data.size))
+            val e = BinaryReader(raw)
+            val n = e.u8(); val id = e.ascii(n)
+            e.i32()                                          // Version
+            val bodyLen = e.i64(); e.skip(bodyLen)           // Zwischenspeicher-Kanäle
+            var mask: de.photographics.core.image.TileGrid? = null
+            if (e.remaining >= 1 && e.u8() != 0) {
+                val top = e.i32(); val left = e.i32(); val bottom = e.i32(); val right = e.i32()
+                val mlen = e.i64().toInt(); val comp = e.u16()
+                val body = e.bytes(mlen - 2)
+                val w = right - left; val h = bottom - top
+                val px = decodePlane(body, comp, w, h)
+                if (px != null && px.any { it != 0xFF.toByte() }) {
+                    mask = de.photographics.core.image.TileGrid(docW, docH, 255).also { g ->
+                        val rect = de.photographics.core.image.IntRect(left, top, right, bottom).intersect(de.photographics.core.image.IntRect(0, 0, docW, docH))
+                        if (!rect.isEmpty) {
+                            val vals = IntArray(rect.width * rect.height) { i ->
+                                val x = rect.left + i % rect.width - left; val y = rect.top + i / rect.width - top
+                                px[y * w + x].toInt() and 0xFF
+                            }
+                            g.writeRect(rect, vals)
+                        }
+                    }
+                }
+            }
+            out += FilterEffectEntry(id, raw, mask)
+            r.seek((end + (4 - len % 4) % 4).coerceAtMost(data.size))
+        }
+        out
+    }.getOrDefault(emptyList())
+
+    /** Kanal (0 = roh, 1 = RLE mit 4-Byte-Zeilenlängen) entpacken. */
+    private fun decodePlane(body: ByteArray, comp: Int, w: Int, h: Int): ByteArray? {
+        if (w <= 0 || h <= 0) return ByteArray(0)
+        val out = ByteArray(w * h)
+        when (comp) {
+            0 -> { if (body.size < w * h) return null; System.arraycopy(body, 0, out, 0, w * h) }
+            1 -> {
+                var p = 4 * h
+                for (y in 0 until h) {
+                    val n = BinaryReader(body.copyOfRange(4 * y, 4 * y + 4)).i32()
+                    PackBits.decode(body, p, n, out, y * w, w)
+                    p += n
+                }
+            }
+            else -> return null
+        }
+        return out
+    }
+
+    /** Zeilenweise RLE mit 4-Byte-Zeilenlängen (wie Photoshop in „FEid“). */
+    private fun encodePlane(w: Int, h: Int, row: (Int, ByteArray) -> Unit): ByteArray {
+        val counts = BinaryWriter(); val data = java.io.ByteArrayOutputStream()
+        val buf = ByteArray(w)
+        for (y in 0 until h) {
+            row(y, buf)
+            val before = data.size()
+            PackBits.encode(buf, 0, w, data)
+            counts.i32(data.size() - before)
+        }
+        return counts.toByteArray() + data.toByteArray()
+    }
+
+    /**
+     * „FEid“-Eintrag für ein Smartobjekt mit Filtermaske: Photoshop braucht dazu das Bild vor den Filtern
+     * (RGB + Transparenz in Dokumentkoordinaten) – nur die Maske allein lässt Photoshop 2026 abstürzen.
+     */
+    fun writeFilterEffect(placedId: String, unfiltered: de.photographics.core.image.TileGrid, mask: de.photographics.core.image.TileGrid, docW: Int, docH: Int): ByteArray {
+        val rect = de.photographics.core.image.IntRect(0, 0, docW, docH)
+        val line = IntArray(docW)
+        fun plane(shift: Int?) = encodePlane(docW, docH) { y, buf ->
+            unfiltered.readRect(de.photographics.core.image.IntRect(0, y, docW, y + 1), line)
+            for (x in 0 until docW) {
+                val c = line[x]; val a = c ushr 24
+                buf[x] = (if (shift == null) a else if (a == 0) 255 else (c shr shift) and 0xFF).toByte()
+            }
+        }
+        val body = BinaryWriter()
+        body.i32(rect.top); body.i32(rect.left); body.i32(rect.bottom); body.i32(rect.right)
+        body.i32(8); body.i32(24)
+        for (ch in 0 until 26) {
+            val d = when (ch) { 0 -> plane(16); 1 -> plane(8); 2 -> plane(0); 25 -> plane(null); else -> null }
+            if (d == null) { body.i32(0); continue }
+            body.i32(1); body.i32(0); body.i32(d.size + 2); body.u16(1); body.bytes(d)
+        }
+        val maskData = encodePlane(docW, docH) { y, buf ->
+            mask.readRect(de.photographics.core.image.IntRect(0, y, docW, y + 1), line)
+            for (x in 0 until docW) buf[x] = line[x].coerceIn(0, 255).toByte()
+        }
+        val e = BinaryWriter()
+        val id = placedId.toByteArray(Charsets.US_ASCII)
+        e.u8(id.size); e.bytes(id)
+        e.i32(1)
+        val b = body.toByteArray(); e.i32(0); e.i32(b.size); e.bytes(b)
+        e.u8(1); e.i32(rect.top); e.i32(rect.left); e.i32(rect.bottom); e.i32(rect.right)
+        e.i32(0); e.i32(maskData.size + 2); e.u16(1); e.bytes(maskData)
+        return e.toByteArray()
+    }
+
+    /** „FEid“-Block aus Einträgen (je mit 8-Byte-Länge, auf 4 Byte aufgefüllt). */
+    fun filterEffectsBlock(entries: List<ByteArray>): ByteArray {
+        val w = BinaryWriter(); w.i32(3)
+        for (raw in entries) { w.i32(0); w.i32(raw.size); w.bytes(raw); var n = raw.size; while (n % 4 != 0) { w.u8(0); n++ } }
+        return w.toByteArray()
+    }
+
+    /** „FMsk“ wie Photoshop: Überlagerungsfarbe Rot, 50 %. */
+    val DEFAULT_FILTER_MASK_SETTINGS: ByteArray = byteArrayOf(0, 0, 0xFF.toByte(), 0xFF.toByte(), 0, 0, 0, 0, 0, 0, 0, 50)
 }

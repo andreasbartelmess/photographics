@@ -435,7 +435,8 @@ class CanvasView : Widget {
         if (W > 0 && H > 0) {
             val s = step * zoom
             val l = snapX(ox + X0 * s); val t = snapY(oy + Y0 * s)
-            val dest = Rect().init(l, t, (W * s).toFloat(), (H * s).toFloat())
+            // Auch rechts/unten auf Gerätepixel: sonst bleibt am Bildrand ein halbtransparenter Streifen
+            val dest = Rect().init(l, t, snapX(ox + (X0 + W) * s) - l, snapY(oy + (Y0 + H) * s) - t)
             if (missing.isEmpty()) {
                 // Alle sichtbaren Kacheln aktuell: dieses Bild zeigen und als letzten vollständigen Stand merken
                 val ck = CompositeKey(level, tx0, ty0, tx1, ty1, tilesVersion, false)
@@ -471,16 +472,10 @@ class CanvasView : Widget {
                     val ss = sh.step * zoom
                     val sl = snapX(ox + sh.x0 * ss); val st = snapY(oy + sh.y0 * ss)
                     val sr = snapX(ox + (sh.x0 + sh.w) * ss); val sb = snapY(oy + (sh.y0 + sh.h) * ss)
-                    if (tex != null) {
-                        val vw = width.toFloat(); val vh = height.toFloat()
-                        for (c in listOf(
-                            Rect().init(0f, 0f, vw, st), Rect().init(0f, sb, vw, vh - sb),
-                            Rect().init(0f, st, sl, sb - st), Rect().init(sr, st, vw - sr, sb - st),
-                        )) {
-                            if (c.width <= 0f || c.height <= 0f) continue
-                            snapshot.pushClip(c); snapshot.appendScaledTexture(tex, filter, dest); snapshot.pop()
-                        }
-                    }
+                    // Neue Teilansicht vollständig darunter (nicht nur in Streifen daneben): der weich skalierte
+                    // Rand des alten Bildes ist halbtransparent – ohne etwas darunter schien dort beim Zoomen
+                    // ein Pixel breit das Transparenz-Schachbrett durch
+                    if (tex != null) { snapshot.pushClip(docRect); snapshot.appendScaledTexture(tex, filter, dest); snapshot.pop() }
                     val sf2 = when {
                         sh.step == step -> filter
                         ss < 1.0 -> ScalingFilter.TRILINEAR

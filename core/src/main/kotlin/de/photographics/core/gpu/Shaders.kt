@@ -101,6 +101,7 @@ internal object Shaders {
         uniform sampler2D uMask;
         uniform sampler2D uLut;
         uniform highp sampler3D uLut3;
+        uniform sampler2D uVib;
         uniform int uLutMode;
         uniform int uAdjType;
         uniform float uP[12];
@@ -170,7 +171,6 @@ internal object Shaders {
 
         // ---- Kanalübergreifende Einstellungen (wie adjust/Adjustment.kt) ----
         vec3 pack(vec3 c) { return clamp(floor(c * 255.0 + 0.5), 0.0, 255.0) / 255.0; }
-        float alum(vec3 c) { return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b; }
         float fmodT(float a, float b) { return a - b * trunc(a / b); }
         vec3 rgbToHsl(vec3 c) {
             float mx = max(c.r, max(c.g, c.b)); float mn = min(c.r, min(c.g, c.b));
@@ -200,36 +200,63 @@ internal object Shaders {
             return vec3(hue2rgb(p, q, hk + 1.0 / 3.0), hue2rgb(p, q, hk), hue2rgb(p, q, hk - 1.0 / 3.0));
         }
 
-        /** [uAdjType]: 1 Dynamik, 2 Farbton/Sättigung, 3 Farbbalance, 4 Schwarzweiß, 5 Fotofilter, 6 Schwellenwert. */
+        /** Dynamik-Tabelle (33×33, R normal, G Hautton) bilinear über (Max, Min) in 8-Bit-Werten – wie PsVibrance.lerp. */
+        vec2 vibGain(int mxg, int mng) {
+            float x = float(mxg) / 8.0; float y = float(mng) / 8.0;
+            int x0 = min(int(x), 31); int y0 = min(int(y), 31);
+            float fx = x - float(x0); float fy = y - float(y0);
+            vec2 a = texelFetch(uVib, ivec2(x0, y0), 0).rg; vec2 b = texelFetch(uVib, ivec2(x0 + 1, y0), 0).rg;
+            vec2 c = texelFetch(uVib, ivec2(x0, y0 + 1), 0).rg; vec2 d = texelFetch(uVib, ivec2(x0 + 1, y0 + 1), 0).rg;
+            return (a * (1.0 - fx) + b * fx) * (1.0 - fy) + (c * (1.0 - fx) + d * fx) * fy;
+        }
+
+        /** Dynamik wie PsVibrance (Photoshop): uP = (Dynamik t, Sättigung, t^1,6). */
+        vec3 vibrance(ivec3 ci) {
+            vec3 c = vec3(ci) / 255.0;
+            vec3 l = mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+            float t = uP[0];
+            float mx = max(l.r, max(l.g, l.b)); float mn = min(l.r, min(l.g, l.b));
+            if (t != 0.0 && mx > 0.0 && mx > mn) {
+                int mxg = max(ci.r, max(ci.g, ci.b)); int mng = min(ci.r, min(ci.g, ci.b));
+                float ratio = mn / mx;
+                float dark = min(1.0, float(mxg) / 62.0);
+                float skin = 0.0;
+                if (t > 0.0) {
+                    float d = mx - mn;
+                    float h = mx == l.r ? (l.g - l.b) / d * 60.0 : (mx == l.g ? (l.b - l.r) / d * 60.0 + 120.0 : (l.r - l.g) / d * 60.0 + 240.0);
+                    if (h < 0.0) h += 360.0;
+                    skin = h <= 30.0 ? 1.0 : (h < 45.0 ? (45.0 - h) / 15.0 : (h < 300.0 ? 0.0 : (h - 300.0) / 60.0));
+                }
+                vec2 g = vibGain(mxg, mng);
+                float k = clamp(1.0 + g.x * (1.0 - skin) + g.y * skin, 0.0, 1.0 / (1.0 - ratio));
+                float tb = t > 0.0 ? (t * (1.0 - skin) + uP[2] * skin) * (4.0 / 9.0) : t * (16.0 / 9.0);
+                float sc = 1.0 + tb * (1.0 - mx) * ratio * (1.0 - ratio) * dark;
+                l = (mx - (mx - l) * k) * sc;
+            }
+            if (uP[1] != 0.0) { float gray = 0.288 * l.r + 0.712 * l.g; l = gray + (l - gray) * (1.0 + uP[1]); }
+            l = clamp(l, 0.0, 1.0);
+            return pack(mix(l * 12.92, 1.055 * pow(l, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), l)));
+        }
+
+        /** [uAdjType]: 1 Dynamik, 2 Farbton/Sättigung, 4 Schwarzweiß, 5 Fotofilter, 6 Schwellenwert. */
         vec3 adjustFn(ivec3 ci) {
             vec3 c = vec3(ci) / 255.0;
-            if (uAdjType == 1) {
-                float l = alum(c);
-                float cur = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
-                float vib = uP[0];
-                float k = 1.0 + uP[1] + vib * (1.0 - cur) * (vib > 0.0 ? 1.5 : 1.0);
-                return pack(l + (c - l) * k);
-            }
+            if (uAdjType == 1) return vibrance(ci);
             if (uAdjType == 2) {
-                vec3 hsl = rgbToHsl(c);
+                // wie HueSaturationAdj: Helligkeit kanalweise, dann Farbton (HSL), dann Photoshop-Sättigung
                 float s = uP[1]; float l = uP[2];
-                if (uP[3] > 0.5) { hsl.x = uP[0]; hsl.y = clamp((s + 1.0) * 0.25, 0.0, 1.0); }
-                else {
-                    hsl.x += uP[0];
-                    hsl.y = clamp(s >= 0.0 ? hsl.y + (1.0 - hsl.y) * s * max(hsl.y, 0.15) : hsl.y * (1.0 + s), 0.0, 1.0);
+                c = l >= 0.0 ? c + (1.0 - c) * l : c * (1.0 + l);
+                float mx = max(c.r, max(c.g, c.b)); float mn = min(c.r, min(c.g, c.b));
+                if (uP[3] > 0.5) return pack(hslToRgb(uP[0], clamp(s, 0.0, 1.0), (mx + mn) / 2.0));
+                if (uP[0] != 0.0) { vec3 hsl = rgbToHsl(c); c = hslToRgb(hsl.x + uP[0], hsl.y, hsl.z); mx = max(c.r, max(c.g, c.b)); mn = min(c.r, min(c.g, c.b)); }
+                float delta = mx - mn; float value = mx + mn;
+                if (s != 0.0 && delta > 0.0) {
+                    float light = value / 2.0;
+                    float sat = light < 0.5 ? delta / value : delta / (2.0 - value);
+                    float k = s >= 0.0 ? 1.0 / (s + sat >= 1.0 ? sat : 1.0 - s) - 1.0 : s;
+                    c += (c - light) * k;
                 }
-                hsl.z = l >= 0.0 ? hsl.z + (1.0 - hsl.z) * l : hsl.z * (1.0 + l);
-                return pack(hslToRgb(hsl.x, hsl.y, hsl.z));
-            }
-            if (uAdjType == 3) {
-                float l0 = alum(c);
-                float ws = clamp(1.0 - l0 * 2.0, 0.0, 1.0); ws *= ws;
-                float wh = clamp(l0 * 2.0 - 1.0, 0.0, 1.0); wh *= wh;
-                float wm = max(1.0 - ws - wh, 0.0);
-                vec3 sh = vec3(uP[0], uP[1], uP[2]); vec3 mi = vec3(uP[3], uP[4], uP[5]); vec3 hi = vec3(uP[6], uP[7], uP[8]);
-                vec3 r = c + (sh * ws + mi * wm + hi * wh) / 100.0 * 0.35;
-                if (uP[9] > 0.5) r += l0 - alum(r);
-                return pack(r);
+                return pack(c);
             }
             if (uAdjType == 4) {
                 float mn = min(c.r, min(c.g, c.b));
@@ -245,14 +272,22 @@ internal object Shaders {
                 return pack(ov);
             }
             if (uAdjType == 5) {
-                vec3 f = vec3(uP[0], uP[1], uP[2]); float d = uP[3];
-                vec3 n = c + (c * f - c) * d * 1.6;
-                if (uP[4] > 0.5) n += alum(c) - alum(n);
-                return pack(n);
+                // wie PhotoFilterAdj: 3×3-Matrix im linearen sRGB, dann ggf. Luminanz (SetLum 0,3/0,59/0,11)
+                vec3 lc = mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+                vec3 n = max(vec3(dot(vec3(uP[0], uP[1], uP[2]), lc), dot(vec3(uP[3], uP[4], uP[5]), lc), dot(vec3(uP[6], uP[7], uP[8]), lc)), vec3(0.0));
+                vec3 e = mix(n * 12.92, 1.055 * pow(n, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), n));
+                if (uP[9] > 0.5) {
+                    vec3 w = vec3(0.3, 0.59, 0.11);
+                    e += dot(c, w) - dot(e, w);
+                    float lum = dot(e, w); float mn = min(e.r, min(e.g, e.b)); float mx = max(e.r, max(e.g, e.b));
+                    if (mn < 0.0) e = lum + (e - lum) * (lum / (lum - mn));
+                    if (mx > 1.0) e = lum + (e - lum) * ((1.0 - lum) / (mx - lum));
+                }
+                return pack(e);
             }
-            // Schwellenwert auf den 8-Bit-Werten
-            float l = 0.299 * float(ci.r) + 0.587 * float(ci.g) + 0.114 * float(ci.b);
-            return l >= uP[0] ? vec3(1.0) : vec3(0.0);
+            // Schwellenwert auf den 8-Bit-Werten (Photoshops 15-Bit-Luminanz, wie die CPU)
+            int l = (9829 * ci.r + 19335 * ci.g + 3604 * ci.b + 16384) >> 15;
+            return float(l) >= uP[0] ? vec3(1.0) : vec3(0.0);
         }
 
         /** Einstellungsebene: Ziel (vormultipliziert, Deckung > 0) auf 8 Bit runden und nachschlagen, wie die CPU. */

@@ -81,7 +81,7 @@ object PsdSmartFilters {
                 val effects = (0 until gn).mapNotNull {
                     val sid = str(r); val vis = r.u8() != 0
                     val vals = FloatArray(r.i32()) { r.f64().toFloat() }
-                    Gallery.byId(sid)?.let { spec -> GalleryEffect(spec, vals, vis) }
+                    Gallery.byId(sid)?.let { spec -> GalleryEffect(spec, spec.restore(vals), vis) }
                 }
                 SmartFilter(id, values, effects, fg, bg, enabled, mode, opacity)
             }

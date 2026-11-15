@@ -81,6 +81,8 @@ val AdjustmentType.icon: ImageVector
         AdjustmentType.POSTERIZE -> Icons.Filled.Tonality
         AdjustmentType.THRESHOLD -> Icons.Filled.Contrast
         AdjustmentType.COLOR_LOOKUP -> Icons.Filled.Gradient
+        AdjustmentType.CHANNEL_MIXER -> Icons.Filled.Tune
+        AdjustmentType.SELECTIVE_COLOR -> Icons.Filled.Palette
     }
 
 private val filterIcons: Map<String, ImageVector> = mapOf(

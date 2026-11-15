@@ -1,5 +1,7 @@
 package de.photographics.core.psd
 
+import de.photographics.core.doc.SmartFilters
+
 import de.photographics.core.tr
 import de.photographics.core.doc.AdjustmentLayer
 import de.photographics.core.doc.Document
@@ -341,9 +343,12 @@ object PsdReader {
         // Eingebettete Dateien der Photoshop-Smartobjekte (Kennung → Datei)
         val linked = globalBlocks.filter { it.key in PsdLinked.GLOBAL_KEYS }
             .flatMap { runCatching { PsdLinked.readEntries(it.data) }.getOrDefault(emptyList()) }.associateBy { it.uuid }
+        // Smartfilter-Masken (bemalt = nicht rein weiß) je „placed“-Kennung
+        val filterEffects = globalBlocks.filter { it.key == "FEid" || it.key == "FXid" }.flatMap { PsdLinked.readFilterEffects(it.data, h.width, h.height) }
+        val filterMasks = filterEffects.associate { it.id to it.mask }
 
         if (records.isNotEmpty() && layers) {
-            buildLayers(doc, records, h, colorData, targetLayerIndex, linked)
+            buildLayers(doc, records, h, colorData, targetLayerIndex, linked, filterMasks)
             // Eingebettete Dateien nur für Ebenen behalten, die weiter als Photoshop-Smartobjekt gespeichert werden
             if (linked.isNotEmpty()) {
                 val used = doc.allLayers().filter { it !is SmartLayer }.flatMap { l -> l.preservedBlocks.filter { it.key == "SoLd" || it.key == "SoLE" } }
@@ -590,9 +595,17 @@ object PsdReader {
         if (data.size >= 4 && String(data, 0, 4, Charsets.ISO_8859_1) == "8BPS") read(data) else null
     }.getOrNull()
 
-    private fun photoshopSmart(name: String, sold: ByteArray, linked: Map<String, PsdLinked.Entry>, h: Header, shown: TileGrid): SmartLayer? = runCatching {
+    private fun photoshopSmart(name: String, sold: ByteArray, linked: Map<String, PsdLinked.Entry>, h: Header, shown: TileGrid,
+                               filterMasks: Map<String, TileGrid?>, ownFilters: SmartFilters?): SmartLayer? = runCatching {
         val placed = PsdLinked.readPlaced(sold) ?: return@runCatching null
-        if (placed.warped || placed.filtered) return@runCatching null
+        if (placed.warped) return@runCatching null
+        // Photoshop-Smartfilter (nur wenn alle ein Gegenstück haben), Filtermaske aus „FEid“
+        val psFilters = placed.filterFX?.let { fx ->
+            val sf = PsdPsSmartFilters.read(fx) ?: return@runCatching null
+            filterMasks[placed.placedId]?.let { m ->
+                sf.copy(mask = de.photographics.core.doc.LayerMask(m, enabled = fx.bool("filterMaskEnable") != false, linked = fx.bool("filterMaskLinked") == true))
+            } ?: sf
+        }
         val data = linked[placed.uuid]?.data ?: return@runCatching null
         val psd = data.size >= 4 && data[0] == '8'.code.toByte() && data[1] == 'B'.code.toByte() && data[2] == 'P'.code.toByte() && data[3] == 'S'.code.toByte()
         val contents = if (psd) read(data) else null
@@ -602,11 +615,14 @@ object PsdReader {
         val l = SmartLayer(name, source, de.photographics.core.image.Affine(), h.width, h.height, contents)
         val affine = PsdLinked.affineFor(placed.corners, placed.width, placed.height)
         if (affine != null) l.transform = toSz.then(affine) else l.warp = placed.corners
+        // Vor dem gespeicherten Raster setzen: es zeigt die Filter schon angewendet
+        (psFilters ?: ownFilters)?.let { l.smartFilters = it }
         l.setCachedRaster(shown)
         l
     }.getOrNull()
 
-    private fun buildLayers(doc: Document, records: List<LayerRecord>, h: Header, colorData: ByteArray, targetIndex: Int, linked: Map<String, PsdLinked.Entry> = emptyMap()) {
+    private fun buildLayers(doc: Document, records: List<LayerRecord>, h: Header, colorData: ByteArray, targetIndex: Int, linked: Map<String, PsdLinked.Entry> = emptyMap(),
+                            filterMasks: Map<String, TileGrid?> = emptyMap()) {
         // Datensätze liegen von unten nach oben vor; Gruppen werden durch Trenner (lsct=3) unten
         // und den Gruppen-Datensatz (lsct=1/2) oben geklammert.
         val stack = ArrayDeque<GroupLayer>()
@@ -674,7 +690,8 @@ object PsdReader {
                 val smart = blockMap[PsdTextSmart.SMART_KEY]?.let { PsdTextSmart.readSmart(it.data) }
                 // Photoshop-Smartobjekt mit eingebettetem Inhalt (ohne Verkrümmung und Photoshop-Smartfilter)
                 val psSmart = if (smart == null && ourText == null && psText == null && linked.isNotEmpty())
-                    blockMap["SoLd"]?.let { photoshopSmart(rec.name, it.data, linked, h, grid) } else null
+                    blockMap["SoLd"]?.let { photoshopSmart(rec.name, it.data, linked, h, grid, filterMasks,
+                        blockMap[PsdSmartFilters.KEY]?.let { b -> PsdSmartFilters.read(b.data) }) } else null
                 val adjustment = if (rec.blocks.any { it.key in PsdAdjustments.KEYS }) PsdAdjustments.read(blockMap) else null
                 // Formebene: Volltonfüllung mit Vektormaske (und Kontur)
                 val shapePath = if (blockMap["SoCo"] != null) (blockMap["vmsk"] ?: blockMap["vsms"])?.let { PsdPaths.readVectorMask(it.data, h.width, h.height) }?.takeIf { !it.isEmpty } else null

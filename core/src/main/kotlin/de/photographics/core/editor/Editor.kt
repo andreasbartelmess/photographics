@@ -1485,7 +1485,7 @@ class Editor(doc: Document) {
             else layer.pixels
         var region = de.photographics.core.selection.MagicWand.select(src, x, y, tolerance, contiguous, outlines = false)
         if (region.isEmpty) return null
-        if (antiAlias) region = region.feathered(0.7f)
+        if (antiAlias) region = de.photographics.core.selection.MagicWand.antiAliased(src, region, x, y, tolerance)
         return region
     }
 

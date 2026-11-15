@@ -413,6 +413,9 @@ Druckerei. Der Proof betrifft nur die Anzeige – Export und gespeicherte Dateie
 
 Ohne feste Termine, die Reihenfolge kann sich ändern. Vorschläge sind willkommen.
 
+- **Erledigt in 0.5.1:** Kanalmixer und Selektive Farbkorrektur; Galerie-Smartfilter als echte
+  Photoshop-Smartfilter; Filter und Korrekturen an Photoshop 2026 nachgemessen (Kurven, Schwellenwert,
+  Tontrennung, Dynamik, Farbbalance, Weichzeichner, Unscharf maskieren, Galerieeffekte); Füllen wie in Photoshop
 - **Erledigt in 0.5:** Zusammensetzen der Ebenen auf der Grafikkarte (Android und Linux, abschaltbar);
   bearbeitbare Smartfilter mit Filtermaske; Smartobjekte platzieren, Inhalt ersetzen, Transformation
   zurücksetzen, mehrere Ebenen in ein Smartobjekt; Photoshop-Smartobjekte lesen und schreiben, mit

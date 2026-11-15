@@ -147,6 +147,9 @@ report (`report.html`, `report.csv`) with side-by-side previews of every file th
 
 No fixed dates, and the order may change. Suggestions are welcome.
 
+- **Done in 0.5.1:** Channel Mixer and Selective Color; filter gallery smart filters as real Photoshop
+  smart filters; filters and adjustments measured against Photoshop 2026 (Curves, Threshold, Posterize,
+  Vibrance, Color Balance, blurs, Unsharp Mask, gallery effects); paint bucket fills like Photoshop
 - **Done in 0.5:** layer compositing on the GPU (Android and Linux, can be switched off); editable
   smart filters with filter mask; place smart objects, replace contents, reset transform, several layers
   into one smart object; read and write Photoshop smart objects, verified with Photoshop 2026 (opens

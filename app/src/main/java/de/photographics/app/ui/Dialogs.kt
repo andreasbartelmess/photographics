@@ -143,7 +143,18 @@ fun PanelActions(onReset: (() -> Unit)?, onCancel: (() -> Unit)?, onApply: () ->
 /** Regler, Schalter, Farbtonleisten und Auswahlfelder für eine Parameterliste. */
 @Composable
 fun ParamControls(params: List<FilterParam>, values: MutableList<Float>, onChange: () -> Unit) {
+    // Gruppen (Ausgabekanal, Farben, Tiefen/Mitteltöne/Lichter): Auswahl wie in Photoshop, nur deren Regler sichtbar
+    val groups = remember(params) { params.mapNotNull { it.group }.distinct() }
+    var group by remember(params) { mutableStateOf(groups.firstOrNull()) }
+    var chooserShown = false
     for ((i, p) in params.withIndex()) {
+        if (p.group != null && !chooserShown) {
+            chooserShown = true
+            if (groups.size > 1) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (g in groups) FilterChip(g == group, { group = g }, label = { Text(g, maxLines = 1) })
+            }
+        }
+        if (p.group != null && p.group != group) continue
         when (p.kind) {
             ParamKind.SWITCH -> Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(p.label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))

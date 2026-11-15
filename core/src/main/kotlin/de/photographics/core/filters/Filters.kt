@@ -161,7 +161,7 @@ class Vibrance(private val amount: Float) : PixelAdjustment() {
 class GaussianBlurFilter(private val radius: Float) : ImageFilter {
     override val label = tr("Gaußscher Weichzeichner")
     override val margin get() = (radius * 3).toInt() + 1
-    override fun process(px: IntArray, w: Int, h: Int) = Blur.gaussArgb(px, w, h, radius)
+    override fun process(px: IntArray, w: Int, h: Int) = de.photographics.core.image.PsGauss.blurArgb(px, w, h, radius)
 }
 
 /** Unscharf maskieren: Stärke in % (0..500), Radius, Schwellenwert 0..255. */
@@ -169,14 +169,17 @@ class UnsharpMask(private val amount: Float, private val radius: Float, private 
     override val label = tr("Unscharf maskieren")
     override val margin get() = (radius * 3).toInt() + 1
     override fun process(px: IntArray, w: Int, h: Int): IntArray {
-        val bl = Blur.gaussArgb(px, w, h, radius)
+        val bl = de.photographics.core.image.PsGauss.blurArgb(px, w, h, radius)
         val k = amount / 100f
         return IntArray(px.size) { i ->
             val o = px[i]; val b = bl[i]
             fun ch(s: Int): Int {
                 val ov = (o shr s) and 0xFF; val bv = (b shr s) and 0xFF
+                // Wie Photoshop (pixelgenau nachgemessen): Schwellenwert wird nach der Stärke abgezogen,
+                // Änderung = Vorzeichen · max(0, Stärke·|Unterschied| − Schwellenwert)
                 val d = ov - bv
-                return if (abs(d) < threshold) ov else (ov + d * k).roundToInt()
+                val m = abs(d) * k - threshold
+                return if (m <= 0f) ov else (ov + (if (d < 0) -m else m)).roundToInt()
             }
             Colors.argb(Colors.a(o), ch(16), ch(8), ch(0))
         }
