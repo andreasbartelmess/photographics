@@ -39,6 +39,11 @@ dann *Entwickleroptionen → USB-Debugging* aktivieren und das Tablet per USB an
 Kabellos geht es mit *Debugging über WLAN* und `~/Android/Sdk/platform-tools/adb pair <IP:Port>`.
 Alternativ das APK auf das Tablet kopieren und dort öffnen („Unbekannte Quellen“ erlauben).
 
+Oder über das eigene **F-Droid-Repository** mit automatischen Updates (dieselben signierten APKs wie am Release):
+`https://photographics.andreasbartelmess.de/fdroid/repo`, Fingerabdruck `7f150453f72957529498a86e881bb48cf0703c9a6c2ad7200e71b5c90d4a9e5d`.
+Der Website-Workflow baut es bei jedem Release aus den APKs der letzten beiden Versionen
+(`tools/fdroid/build-repo.sh`, Repo-Schlüssel als Secrets `FDROID_KEYSTORE_BASE64` / `FDROID_STORE_PASSWORD`).
+
 **Linux (GNOME):** Modul `:gnome` (Kotlin + GTK 4/libadwaita über java-gi, braucht zur Laufzeit Java 25).
 
 ```bash

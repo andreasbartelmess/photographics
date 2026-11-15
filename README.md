@@ -98,6 +98,11 @@ with the debug key.
 
 **Use release builds for testing performance** – debug builds are several times slower on Android.
 
+Android users can also add the project's own **F-Droid repository** for automatic updates (the same signed APKs
+as on the releases): `https://photographics.andreasbartelmess.de/fdroid/repo`, fingerprint `7f150453f72957529498a86e881bb48cf0703c9a6c2ad7200e71b5c90d4a9e5d`.
+The website workflow rebuilds it on every release from the APKs of the last two versions
+(`tools/fdroid/build-repo.sh`, repo key in the secrets `FDROID_KEYSTORE_BASE64` / `FDROID_STORE_PASSWORD`).
+
 **Linux (GNOME):** module `:gnome` (Kotlin + GTK 4/libadwaita via java-gi, needs Java 25 at runtime).
 
 ```bash

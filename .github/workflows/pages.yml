@@ -2,7 +2,9 @@ name: Website
 
 # Veröffentlicht den Ordner website/ auf GitHub Pages (photographics.andreasbartelmess.de), dazu das
 # Flatpak-Repository unter /flatpak/repo/ aus dem Anhang photographics-flatpak-repo.tar des neuesten
-# Releases (hochgeladen von gnome/flatpak/publish.sh, das diesen Workflow auch anstößt).
+# Releases (hochgeladen von gnome/flatpak/publish.sh, das diesen Workflow auch anstößt) und das
+# F-Droid-Repository unter /fdroid/repo/ aus den APKs der neuesten Releases (tools/fdroid/build-repo.sh,
+# signiert mit den Secrets FDROID_KEYSTORE_BASE64 / FDROID_STORE_PASSWORD).
 on:
   push:
     branches: [main]
@@ -47,6 +49,18 @@ jobs:
           else
             echo "::warning::Kein Release mit Flatpak-Repository gefunden"
           fi
+      - name: F-Droid repository from the newest releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FDROID_KEYSTORE_BASE64: ${{ secrets.FDROID_KEYSTORE_BASE64 }}
+          FDROID_STORE_PASSWORD: ${{ secrets.FDROID_STORE_PASSWORD }}
+        run: |
+          if [ -z "$FDROID_KEYSTORE_BASE64" ]; then echo "::warning::Secret FDROID_KEYSTORE_BASE64 fehlt – Website ohne F-Droid-Repository"; exit 0; fi
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fdroidserver >/dev/null
+          echo "$FDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/fdroid.keystore"
+          FDROID_KEYSTORE="$RUNNER_TEMP/fdroid.keystore" tools/fdroid/build-repo.sh website/fdroid
+          rm -f "$RUNNER_TEMP/fdroid.keystore"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

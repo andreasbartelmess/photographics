@@ -355,9 +355,11 @@ footer a:hover { color: var(--ink); }
   <div class="wrap">
     <h2>photographics herunterladen</h2>
     <p>Beide Fassungen gibt es auf GitHub. Für Android ist die arm64-APK für fast alle aktuellen Tablets und Smartphones die richtige. Für Linux gibt es ein eigenes Flatpak-Repository: Ein Klick auf „Flatpak für Linux“ öffnet die Installation in GNOME Software oder Discover, Updates kommen danach automatisch. Im Terminal: <code>flatpak install --user https://photographics.andreasbartelmess.de/flatpak/photographics.flatpakref</code></p>
+    <p>Für Android gibt es außerdem ein F-Droid-Repository mit denselben signierten APKs: „F-Droid-Repo“ auf dem Tablet antippen, dann bekommt F-Droid (oder Neo Store, Droid-ify) jede neue Version automatisch. Von Hand hinzufügen: <code>https://photographics.andreasbartelmess.de/fdroid/repo</code>, Fingerabdruck <code style="word-break: break-all">7f150453f72957529498a86e881bb48cf0703c9a6c2ad7200e71b5c90d4a9e5d</code></p>
     <div class="actions">
       <a class="btn primary" data-repo="/releases/latest" href="#download">APK für Android</a>
       <a class="btn primary" href="flatpak/photographics.flatpakref">Flatpak für Linux</a>
+      <a class="btn outline" href="fdroidrepos://photographics.andreasbartelmess.de/fdroid/repo?fingerprint=7f150453f72957529498a86e881bb48cf0703c9a6c2ad7200e71b5c90d4a9e5d">F-Droid-Repo</a>
       <a class="btn outline" data-repo="" href="#download">Quellcode</a>
     </div>
     <p class="req">Android 8.1 oder neuer, ein Tablet mit Stift wird empfohlen. Linux mit Flatpak, x86_64.</p>

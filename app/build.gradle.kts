@@ -6,8 +6,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// F-Droid baut eine APK je Architektur: -Pphotographics.abi=arm64-v8a (bzw. armeabi-v7a, x86_64).
-// Dann eigener versionCode je Architektur (10 × Basis + 1/2/3) und unsigniert (F-Droid signiert selbst).
+// F-Droid baut eine APK je Architektur: -Pphotographics.abi=arm64-v8a (bzw. armeabi-v7a, x86_64), unsigniert
+// (F-Droid signiert selbst). versionCode je Architektur 10 × Basis + 1/2/3, universell 10 × Basis – gleich in
+// den eigenen Release-APKs (siehe androidComponents unten), damit F-Droid-Clients die passende wählen.
 val singleAbi: String? = providers.gradleProperty("photographics.abi").orNull
 val abis = listOf("armeabi-v7a", "arm64-v8a", "x86_64")
 val baseVersionCode = 7
@@ -21,7 +22,7 @@ android {
         applicationId = "de.photographics.app"
         minSdk = 27 // SharedMemory für den nativen Kachelspeicher
         targetSdk = 36
-        versionCode = if (singleAbi == null) baseVersionCode else baseVersionCode * 10 + abis.indexOf(singleAbi) + 1
+        versionCode = baseVersionCode * 10 + (if (singleAbi == null) 0 else abis.indexOf(singleAbi) + 1)
         versionName = "0.5.1"
         // Adresse des Quellcodes (in gradle.properties: photographics.sourceUrl=https://github.com/…)
         buildConfigField("String", "SOURCE_URL", "\"${providers.gradleProperty("photographics.sourceUrl").getOrElse("")}\"")
@@ -68,6 +69,16 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+}
+
+// Eigene Release-APKs (Aufteilung nach Architektur): versionCode wie bei F-Droid, sonst hätten alle APKs denselben
+androidComponents {
+    onVariants { variant ->
+        for (output in variant.outputs) {
+            val abi = output.filters.find { it.filterType == com.android.build.api.variant.FilterConfiguration.FilterType.ABI }?.identifier
+            if (abi != null) output.versionCode.set(baseVersionCode * 10 + abis.indexOf(abi) + 1)
+        }
     }
 }
 
