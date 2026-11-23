@@ -43,7 +43,6 @@ import org.gnome.gtk.MenuButton
 import org.gnome.gtk.Orientation
 import org.gnome.gtk.PackType
 import org.gnome.gtk.PropagationPhase
-import org.gnome.gtk.Spinner
 import org.gnome.gtk.Stack
 import org.gnome.gtk.ToggleButton
 import java.io.File
@@ -73,7 +72,8 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
     private val stack = Stack()
     private val toasts = ToastOverlay()
     private val zoomLabel = Button.withLabel("100 %")
-    private val spinner = Spinner()
+    // Adw.Spinner: Gtk.Spinner ist seit GTK 4.20 veraltet und zeichnet in der Kopfleiste nichts mehr (0 × 0)
+    private val spinner = org.gnome.adw.Spinner().apply { setSizeRequest(16, 16); valign = org.gnome.gtk.Align.CENTER; marginStart = 6 }
     private val actions = HashMap<String, SimpleAction>()
     private val rulerTop = Ruler(false, canvas)
     private val rulerLeft = Ruler(true, canvas)
@@ -979,7 +979,6 @@ class MainWindow(private val app: PhotographicsApp) : Controller.Ui {
 
     override fun busy(on: Boolean) {
         busyCount = maxOf(0, busyCount + if (on) 1 else -1)
-        spinner.spinning = busyCount > 0
         spinner.visible = busyCount > 0
     }
 

@@ -11,7 +11,7 @@ plugins {
 // den eigenen Release-APKs (siehe androidComponents unten), damit F-Droid-Clients die passende wählen.
 val singleAbi: String? = providers.gradleProperty("photographics.abi").orNull
 val abis = listOf("armeabi-v7a", "arm64-v8a", "x86_64")
-val baseVersionCode = 7
+val baseVersionCode = 8
 require(singleAbi == null || singleAbi in abis) { "photographics.abi muss eine von $abis sein" }
 
 android {
@@ -23,7 +23,7 @@ android {
         minSdk = 27 // SharedMemory für den nativen Kachelspeicher
         targetSdk = 36
         versionCode = baseVersionCode * 10 + (if (singleAbi == null) 0 else abis.indexOf(singleAbi) + 1)
-        versionName = "0.5.1"
+        versionName = "0.5.2"
         // Adresse des Quellcodes (in gradle.properties: photographics.sourceUrl=https://github.com/…)
         buildConfigField("String", "SOURCE_URL", "\"${providers.gradleProperty("photographics.sourceUrl").getOrElse("")}\"")
 

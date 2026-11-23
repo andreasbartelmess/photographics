@@ -12,40 +12,9 @@ import java.util.zip.ZipInputStream
 
 // Wie in der Android-App (app/…/ai/AiModels.kt); hier ohne Coroutines, Fortschritt im GTK-Hauptthread.
 
-enum class AiPurpose(val label: String) { INPAINT(tr("Objekte entfernen")), UPSCALE(tr("Hochskalieren")) }
-
-/** Frei lizenzierte Modelle, die bei Bedarf heruntergeladen werden (nicht im Programm enthalten). */
-enum class AiModel(
-    val id: String,
-    val title: String,
-    val purpose: AiPurpose,
-    val url: String,
-    val sizeMb: Float,
-    val license: String,
-    val zipped: Boolean,
-    val description: String,
-) {
-    MIGAN(
-        "migan", "MI-GAN", AiPurpose.INPAINT,
-        "https://huggingface.co/andraniksargsyan/migan/resolve/main/migan_pipeline_v2.onnx",
-        28f, tr("MIT (Picsart AI Research)"), false, tr("Schnell, gut für kleine bis mittlere Objekte."),
-    ),
-    LAMA(
-        "lama", "LaMa", AiPurpose.INPAINT,
-        "https://huggingface.co/opencv/inpainting_lama/resolve/main/inpainting_lama_2025jan.onnx",
-        93f, tr("Apache 2.0 (Samsung AI, OpenCV)"), false, tr("Hohe Qualität, auch für große Flächen und Strukturen."),
-    ),
-    ESRGAN_GENERAL(
-        "esrgan-general", tr("Real-ESRGAN General"), AiPurpose.UPSCALE,
-        "https://qaihub-public-assets.s3.us-west-2.amazonaws.com/qai-hub-models/models/real_esrgan_general_x4v3/releases/v0.65.0/real_esrgan_general_x4v3-onnx-float.zip",
-        4.5f, tr("BSD 3-Clause (Tencent ARC)"), true, tr("Schnelle 4×-Vergrößerung für Fotos."),
-    ),
-    ESRGAN_PLUS(
-        "esrgan-x4plus", tr("Real-ESRGAN x4plus"), AiPurpose.UPSCALE,
-        "https://qaihub-public-assets.s3.us-west-2.amazonaws.com/qai-hub-models/models/real_esrgan_x4plus/releases/v0.65.0/real_esrgan_x4plus-onnx-float.zip",
-        62f, tr("BSD 3-Clause (Tencent ARC)"), true, tr("Beste Detailtreue, deutlich langsamer."),
-    ),
-}
+// Katalog gemeinsam mit Linux/Android im Kern (de.photographics.core.ai)
+typealias AiPurpose = de.photographics.core.ai.AiPurpose
+typealias AiModel = de.photographics.core.ai.AiModel
 
 sealed class ModelStatus {
     data object Missing : ModelStatus()
@@ -75,8 +44,21 @@ object AiModelManager {
 
     fun isReady(m: AiModel) = modelFile(m) != null
 
-    fun firstReady(p: AiPurpose, preferred: AiModel? = null): AiModel? =
+    /** Gewähltes Modell eines Zwecks, sonst das erste installierte (Reihenfolge des Katalogs). */
+    fun firstReady(p: AiPurpose, preferred: AiModel? = selected(p)): AiModel? =
         preferred?.takeIf { it.purpose == p && isReady(it) } ?: AiModel.entries.firstOrNull { it.purpose == p && isReady(it) }
+
+    /** Vom Benutzer gewähltes Modell (gespeichert), auch wenn es noch nicht geladen ist. */
+    fun selected(p: AiPurpose): AiModel? = AiModel.byId(prefs.getString("model_${p.name}"))?.takeIf { it.purpose == p }
+
+    /** [m] für seinen Zweck wählen; Sitzungen anderer Modelle desselben Zwecks schließen (Speicher). */
+    fun select(m: AiModel) {
+        prefs.edit().putString("model_${m.purpose.name}", m.id).apply()
+        synchronized(sessions) {
+            for (o in sessions.keys.filter { it.purpose == m.purpose && it != m }) sessions.remove(o)?.close()
+        }
+        onMain { for (l in listeners.toList()) l() }
+    }
 
     private fun setStatus(m: AiModel, s: ModelStatus) = onMain { status[m] = s; for (l in listeners.toList()) l() }
 
@@ -136,7 +118,11 @@ object AiModelManager {
         sessions.getOrPut(m) {
             val f = modelFile(m) ?: throw IOException(tr("Modell {0} ist nicht installiert", m.title))
             val opts = OrtSession.SessionOptions().apply {
-                setIntraOpNumThreads(Runtime.getRuntime().availableProcessors().coerceIn(1, 8))
+                // Einen Kern für die Oberfläche frei lassen und nicht aktiv warten (Spinning) – sonst steht
+                // die Oberfläche still, solange ein großes Modell rechnet
+                setIntraOpNumThreads((Runtime.getRuntime().availableProcessors() - 1).coerceIn(1, 8))
+                addConfigEntry("session.intra_op.allow_spinning", "0")
+                addConfigEntry("session.inter_op.allow_spinning", "0")
                 setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
             }
             env.createSession(f.absolutePath, opts)
@@ -150,10 +136,12 @@ object AiModelManager {
         private val p = Properties().apply { runCatching { file.inputStream().use { load(it) } } }
         fun contains(k: String) = synchronized(p) { p.containsKey(k) }
         fun getBoolean(k: String, def: Boolean) = synchronized(p) { p.getProperty(k)?.toBoolean() ?: def }
+        fun getString(k: String): String? = synchronized(p) { p.getProperty(k) }
         fun edit() = Editor()
         inner class Editor {
             private val changes = HashMap<String, String>()
             fun putBoolean(k: String, v: Boolean) = apply { changes[k] = v.toString() }
+            fun putString(k: String, v: String) = apply { changes[k] = v }
             fun apply() = synchronized(p) {
                 for ((k, v) in changes) p.setProperty(k, v)
                 runCatching { file.outputStream().use { p.store(it, "photographics") } }

@@ -35,7 +35,7 @@ available in **English and German**; more translations are one of the easiest wa
   against GIMP 3). Saved XCFs use perceptual blending, so GIMP shows them exactly like photographics.
 - **Retouching:** spot healing (PatchMatch), healing brush and patch (Poisson blending), clone stamp,
   red eye, dodge/burn/sponge, smudge, liquify, content-aware fill (texture-aware PatchMatch with seamless
-  colour matching at the edge) and optional **on-device AI** object removal (MI-GAN, LaMa) and upscaling
+  colour matching at the edge) and optional **on-device AI** object removal (MI-GAN, LaMa, LaMa HD) and upscaling
   (Real-ESRGAN). Nothing leaves the device.
 - **Selections and gradients:** rectangle, ellipse, lasso, **magic wand** and **object selection**
   (drag a box around the subject); gradient tool (linear, radial, reflected) on layers or masks;
@@ -152,6 +152,10 @@ report (`report.html`, `report.csv`) with side-by-side previews of every file th
 
 No fixed dates, and the order may change. Suggestions are welcome.
 
+- **Done in 0.5.2:** LaMa HD for AI object removal (full resolution up to 1024 px, sharper on large
+  areas); choice of AI model in the tool options (Linux) and remembered on Android; AI fill no longer
+  distorts the image section; the interface stays responsive while an AI model runs; undo history counts
+  16-bit data, filter masks and alpha channels
 - **Done in 0.5.1:** Channel Mixer and Selective Color; filter gallery smart filters as real Photoshop
   smart filters; filters and adjustments measured against Photoshop 2026 (Curves, Threshold, Posterize,
   Vibrance, Color Balance, blurs, Unsharp Mask, gallery effects); paint bucket fills like Photoshop
@@ -171,8 +175,7 @@ No fixed dates, and the order may change. Suggestions are welcome.
 - **Done in 0.3:** GPU preview for moving, transforming and opacity; rendering layer effects; English
   user interface; liquify; gradient tool, magic wand, object selection and auto-select; per-channel
   curves with histogram; better content-aware fill
-- **Next:** save smart filters as Photoshop smart filters; select subject and sky with an on-device model,
-  refine edge for hair; custom fonts (TTF/OTF); history panel with snapshots
+- **Next:** select subject and sky with an on-device model, refine edge for hair; custom fonts (TTF/OTF); history panel with snapshots
 - **After that:** frequency separation helper; batch export (several sizes and formats at once);
   patterns and pattern overlay
 - **Later:** CMYK documents and export; display colour management; iPad

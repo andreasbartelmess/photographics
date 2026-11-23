@@ -1,0 +1,1 @@
+New in 0.5.2: LaMa HD for AI object removal – works at full resolution and stays sharp on large areas. The chosen AI model is now remembered. AI fill no longer distorts the image section, and the app stays responsive while a model runs. The undo history accounts for 16-bit data, filter masks and alpha channels.

@@ -8,6 +8,7 @@ import org.gnome.adw.PreferencesPage
 import org.gnome.gtk.Align
 import org.gnome.gtk.Box
 import org.gnome.gtk.Button
+import org.gnome.gtk.CheckButton
 import org.gnome.gtk.Orientation
 import org.gnome.gtk.ProgressBar
 import org.gnome.gtk.Widget
@@ -22,15 +23,24 @@ object AiDialog {
         for (p in AiPurpose.entries) {
             val g = PreferencesGroup()
             g.title = p.label
-            if (p == AiPurpose.INPAINT) g.description = tr("Die Modelle laufen auf diesem Rechner; Bilder werden nicht hochgeladen.")
+            g.description = if (p == AiPurpose.INPAINT) tr("Die Modelle laufen auf diesem Rechner; Bilder werden nicht hochgeladen. Der Punkt wählt das Modell, das verwendet wird.")
+                else tr("Der Punkt wählt das Modell, das verwendet wird.")
+            var group: CheckButton? = null
             for (m in AiModel.entries.filter { it.purpose == p }) {
                 val row = ActionRow()
+                val radio = CheckButton().apply { valign = Align.CENTER; tooltipText = tr("Dieses Modell verwenden") }
+                group?.let { radio.setGroup(it) } ?: run { group = radio }
+                radio.active = AiModelManager.firstReady(p) == m || (AiModelManager.firstReady(p) == null && AiModelManager.selected(p) == m)
+                radio.onToggled { if (radio.active && AiModelManager.selected(p) != m) AiModelManager.select(m) }
+                row.addPrefix(radio)
                 row.title = m.title
                 row.subtitle = "${m.description} · ${m.license} · ${"%.0f".format(m.sizeMb.coerceAtLeast(1f))} MB"
                 row.subtitleLines = 2
                 val suffix = Box(Orientation.HORIZONTAL, 6).apply { valign = Align.CENTER }
                 row.addSuffix(suffix)
                 fun refresh() {
+                    val chosen = AiModelManager.firstReady(p) ?: AiModelManager.selected(p)
+                    if ((chosen == m) != radio.active && chosen == m) radio.active = true
                     var c = suffix.firstChild
                     while (c != null) { val n = c.nextSibling; suffix.remove(c); c = n }
                     when (val st = AiModelManager.status[m]) {

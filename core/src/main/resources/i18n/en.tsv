@@ -1690,3 +1690,13 @@ Neutrale Farben	Neutrals
 Cyan ↔ Rot	Cyan ↔ red
 Magenta ↔ Grün	Magenta ↔ green
 Gelb ↔ Blau	Yellow ↔ blue
+Gute Qualität für große Flächen, rechnet intern mit 512 × 512 Pixeln.	Good quality for large areas, works internally at 512 × 512 pixels.
+Apache 2.0 (Samsung AI)	Apache 2.0 (Samsung AI)
+Beste Qualität: rechnet in voller Auflösung bis 1024 Pixel und erhält Strukturen und Schärfe. Langsamer.	Best quality: works at full resolution up to 1024 pixels and keeps structure and sharpness. Slower.
+Die Modelle laufen auf diesem Rechner; Bilder werden nicht hochgeladen. Der Punkt wählt das Modell, das verwendet wird.	The models run on this computer; images are not uploaded. The dot selects the model that is used.
+Der Punkt wählt das Modell, das verwendet wird.	The dot selects the model that is used.
+Dieses Modell verwenden	Use this model
+Modell	Model
+{0} (nicht geladen)	{0} (not downloaded)
+KI-Modell für Entfernen und Füllen	AI model for removing and filling
+KI-Modelle verwalten …	Manage AI models …

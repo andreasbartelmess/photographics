@@ -1,0 +1,1 @@
+Neu in 0.5.2: LaMa HD zum Entfernen von Objekten per KI – rechnet in voller Auflösung und bleibt auf großen Flächen scharf. Das KI-Modell wird jetzt gemerkt. KI-Füllen verzerrt den Bildausschnitt nicht mehr, und die App bleibt bedienbar, während ein Modell rechnet. Der Verlauf berücksichtigt 16-Bit-Daten, Filtermasken und Alphakanäle beim Speicherbedarf.

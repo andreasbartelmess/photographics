@@ -14,11 +14,11 @@ import java.io.File
 import java.nio.ByteBuffer
 
 const val APP_ID = "de.andreasbartelmess.Photographics"
-const val VERSION = "0.5.1"
+const val VERSION = "0.5.2"
 
 class PhotographicsApp {
     // Testläufe (Bildschirmfoto) als eigene Instanz, sonst übernimmt eine laufende App die Dateien
-    val adw = Application(APP_ID, if (System.getenv("PG_SCREENSHOT") != null) setOf(ApplicationFlags.HANDLES_OPEN, ApplicationFlags.NON_UNIQUE) else setOf(ApplicationFlags.HANDLES_OPEN))
+    val adw = Application(APP_ID, if (System.getenv("PG_SCREENSHOT") != null || System.getenv("PG_NON_UNIQUE") == "1") setOf(ApplicationFlags.HANDLES_OPEN, ApplicationFlags.NON_UNIQUE) else setOf(ApplicationFlags.HANDLES_OPEN))
     private val windows = ArrayList<MainWindow>()
 
     init {

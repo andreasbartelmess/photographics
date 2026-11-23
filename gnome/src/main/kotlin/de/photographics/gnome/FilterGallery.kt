@@ -45,7 +45,7 @@ class FilterGallery(
     private val stackList = org.gnome.gtk.ListBox().apply { addCssClass("boxed-list"); selectionMode = org.gnome.gtk.SelectionMode.SINGLE }
     private val thumbButtons = HashMap<String, ToggleButton>()
     private val thumbPictures = HashMap<String, Picture>()
-    private val spinner = org.gnome.gtk.Spinner()
+    private val spinner = org.gnome.adw.Spinner().apply { setSizeRequest(16, 16); valign = org.gnome.gtk.Align.CENTER; visible = false }
     private var fit: Source? = null
     private var crop: Source? = null
     private var full = false
@@ -244,7 +244,7 @@ class FilterGallery(
      * und ein Ausschnitt in 100 % in Größe der Fläche um die Ansichtsmitte – scharf statt hochskaliert.
      */
     private fun loadSource(boxW: Int, boxH: Int) {
-        spinner.spinning = true
+        spinner.visible = true
         Engine.call({
             val g = source ?: (session.doc.activeLayer as? PixelLayer)?.pixels ?: return@call null
             val d = session.doc
@@ -264,7 +264,7 @@ class FilterGallery(
             val cpx = IntArray(cw * ch).also { g.readRect(IntRect(cx, cy, cx + cw, cy + ch), it) }
             fitSrc to Source(cpx, cw, ch, cx, cy, 1f)
         }) { r ->
-            val (f, c) = r.getOrNull() ?: run { spinner.spinning = false; return@call }
+            val (f, c) = r.getOrNull() ?: run { spinner.visible = false; return@call }
             fit = f; crop = c
             render()
             renderThumbs(f)
@@ -277,7 +277,7 @@ class FilterGallery(
         val src = (if (full) crop else fit) ?: return
         if (running) { pending = true; return }
         running = true; pending = false
-        spinner.spinning = true
+        spinner.visible = true
         val list = effects.toList()
         val c = chain(src.scale, list)
         remembered[effects[selected].spec.id] = effects[selected].values
@@ -307,7 +307,7 @@ class FilterGallery(
             }.getOrNull()?.let { show(it); onMain { exactShownFor = src } }
             onMain {
                 running = false
-                spinner.spinning = pending
+                spinner.visible = pending
                 if (pending) render()
             }
         }.apply { isDaemon = true; name = "photographics-galerie" }.start()

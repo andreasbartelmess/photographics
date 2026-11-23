@@ -4,8 +4,7 @@ import ai.onnxruntime.OnnxJavaType
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtSession
 import ai.onnxruntime.TensorInfo
-import de.photographics.core.image.Resample
-import de.photographics.core.image.ResampleMethod
+import de.photographics.core.retouch.InpaintFrame
 import de.photographics.core.retouch.Inpainter
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -17,8 +16,11 @@ import kotlin.math.roundToInt
  * Inpainting über ein ONNX-Modell (MI-GAN, LaMa). Erkennt Datentyp und Form der Ein-/Ausgaben
  * selbst; die Maskenkonvention (Lücke = hell oder dunkel) wird beim ersten Einsatz kalibriert.
  */
-class OnnxInpainter(private val manager: AiModelManager, private val model: AiModel) : Inpainter {
+class OnnxInpainter(private val manager: AiModelManager, private val model: AiModel, private val maxSide: Int = model.maxSide) : Inpainter {
     private val session: OrtSession get() = manager.session(model)
+
+    /** Der Ausschnitt wird erst in [InpaintFrame] auf die Arbeitsgröße gebracht (ohne Verzerrung). */
+    override val maxPixels: Int get() = 64_000_000
 
     override fun inpaint(px: IntArray, w: Int, h: Int, hole: BooleanArray): IntArray {
         val holeHigh = holeConvention()
@@ -26,7 +28,10 @@ class OnnxInpainter(private val manager: AiModelManager, private val model: AiMo
         return IntArray(px.size) { if (hole[it]) result[it] else px[it] }
     }
 
-    /** Modell auf Arbeitsgröße (meist 512²) rechnen und zurückskalieren. */
+    /**
+     * Modell rechnen: feste Eingangsgröße (LaMa 512²) → spiegelnd zum Quadrat ergänzt und skaliert;
+     * freie Eingangsgröße (LaMa HD, MI-GAN) → in Originalgröße bis [maxSide], auf Vielfache von 8 ergänzt.
+     */
     private fun run(px: IntArray, w: Int, h: Int, hole: BooleanArray, holeHigh: Boolean): IntArray {
         val s = session
         val inputs = s.inputInfo.entries.toList()
@@ -34,16 +39,11 @@ class OnnxInpainter(private val manager: AiModelManager, private val model: AiMo
         val maskIn = inputs.firstOrNull { it.key.contains("mask", true) } ?: inputs[1]
         val info = imgIn.value.info as TensorInfo
         val shape = info.shape
-        val size = shape.lastOrNull()?.takeIf { it > 0 }?.toInt() ?: 512
-        val sizeH = shape.getOrNull(2)?.takeIf { it > 0 }?.toInt() ?: size
-
-        val img = Resample.resizeArgb(px, w, h, size, sizeH, ResampleMethod.BILINEAR)
-        // Maske hochskalieren und etwas erweitern, damit keine Ränder der Lücke übrig bleiben
-        val m = BooleanArray(size * sizeH) { i ->
-            val x = (i % size) * w / size; val y = (i / size) * h / sizeH
-            hole[y * w + x]
-        }
-        val mask = dilate(m, size, sizeH, 2)
+        val fixedW = shape.getOrNull(3)?.takeIf { it > 0 }?.toInt()
+        val frame = InpaintFrame.create(px, w, h, hole, fixed = fixedW, maxSide = if (maxSide > 0) maxSide else 1024)
+        val size = frame.tensorW; val sizeH = frame.tensorH
+        val img = frame.image
+        val mask = frame.mask
         val env = manager.environment
         val n = size * sizeH
         val floatInput = info.type == OnnxJavaType.FLOAT
@@ -99,7 +99,7 @@ class OnnxInpainter(private val manager: AiModelManager, private val model: AiMo
             }
         }
         // Alpha vom Original übernehmen
-        val back = Resample.resizeArgb(out, size, sizeH, w, h, ResampleMethod.BICUBIC)
+        val back = frame.back(out)
         return IntArray(w * h) { (px[it] and 0xFF000000.toInt()) or (back[it] and 0xFFFFFF) }
     }
 
@@ -123,14 +123,5 @@ class OnnxInpainter(private val manager: AiModelManager, private val model: AiMo
         val conv = red / max(1, cnt) < 90f
         p.edit().putBoolean(key, conv).apply()
         return conv
-    }
-
-    private fun dilate(m: BooleanArray, w: Int, h: Int, r: Int): BooleanArray {
-        val out = BooleanArray(m.size)
-        for (y in 0 until h) for (x in 0 until w) {
-            if (!m[y * w + x]) continue
-            for (yy in maxOf(0, y - r)..minOf(h - 1, y + r)) for (xx in maxOf(0, x - r)..minOf(w - 1, x + r)) out[yy * w + xx] = true
-        }
-        return out
     }
 }

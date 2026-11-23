@@ -47,4 +47,51 @@ class HistorySpillTest {
         while (ed.history.canUndo) ed.undo()
         assertArrayEquals(pa, pixels(a.pixels)); assertArrayEquals(pb, pixels(b.pixels)); assertArrayEquals(pc, pixels(c.pixels))
     }
+
+    /**
+     * Freistellen auf einem Dokument mit 16-Bit-Ebene, Alphakanal und Smartobjekt mit Filtermaske:
+     * alle Raster zählen im Verlauf, lassen sich auslagern und kommen exakt zurück.
+     */
+    @Test
+    fun documentChangeCountsAndSpillsAllGrids() {
+        val doc = Document(600, 400)
+        val a = layer("A", 7).also { it.low = TileGrid.fromPixels(600, 400, IntArray(600 * 400) { i -> (0xFF shl 24) or (i * 3 and 0xFFFFFF) }) }
+        val s = layer("S", 13)
+        doc.root.add(a); doc.root.add(s)
+        doc.channels = listOf(de.photographics.core.doc.AlphaChannel("Alpha 1", TileGrid.fromPixels(600, 400, IntArray(600 * 400) { it % 251 })))
+        doc.activeLayer = s
+        val ed = Editor(doc)
+        ed.history.scratch = ScratchDisk(Files.createTempDirectory("pg-spill-doc").toFile())
+        val smart = ed.convertToSmartObject(s)!!
+        doc.selection = de.photographics.core.selection.Selection.rect(600, 400, 100f, 50f, 400f, 300f)
+        ed.filterMaskFromSelection(smart)
+        doc.selection = null
+
+        val pa = pixels(a.pixels); val la = pixels(a.low!!); val ch = pixels(doc.channels[0].grid)
+        val fm = pixels(smart.smartFilters.mask!!.grid)
+        ed.crop(IntRect(50, 40, 350, 240))
+        assertEquals(300, doc.width)
+        val e = ed.history.lastEntry!!
+        // Pixel, untere Bits, Kanal und Filtermaske des alten Zustands zählen
+        val expected = 600L * 400 * 4
+        org.junit.Assert.assertTrue("byteSize ${e.byteSize}", e.byteSize >= 3 * expected)
+        val cropped = listOf(pixels(a.pixels), pixels(a.low!!), pixels(doc.channels[0].grid), pixels(smart.smartFilters.mask!!.grid))
+
+        ed.history.spillAll()
+        org.junit.Assert.assertEquals(0L, e.byteSize)
+        ed.undo()
+        assertEquals(600, doc.width)
+        assertArrayEquals(pa, pixels(a.pixels)); assertArrayEquals(la, pixels(a.low!!))
+        assertArrayEquals(ch, pixels(doc.channels[0].grid)); assertArrayEquals(fm, pixels(smart.smartFilters.mask!!.grid))
+
+        ed.history.spillAll()
+        ed.redo()
+        assertEquals(300, doc.width)
+        val now = listOf(pixels(a.pixels), pixels(a.low!!), pixels(doc.channels[0].grid), pixels(smart.smartFilters.mask!!.grid))
+        for (k in cropped.indices) assertArrayEquals("Raster $k", cropped[k], now[k])
+        ed.history.spillAll()
+        ed.undo()
+        assertArrayEquals(pa, pixels(a.pixels)); assertArrayEquals(la, pixels(a.low!!))
+        assertArrayEquals(ch, pixels(doc.channels[0].grid)); assertArrayEquals(fm, pixels(smart.smartFilters.mask!!.grid))
+    }
 }

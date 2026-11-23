@@ -38,4 +38,41 @@ class AiTest {
         assertTrue("Abweichung ${err / n}", err / n < 30)
         assertTrue(AiModelManager.status[m] is ModelStatus.Ready || AiModelManager.isReady(m))
     }
+
+    /**
+     * Alle installierten Retusche-Modelle über [de.photographics.core.editor.Editor.contentAwareFill] auf
+     * einem Foto: PG_AI_TEST=1, PG_AI_PHOTO=bild.jpg, PG_AI_RECT=x0,y0,x1,y1, PG_AI_OUT=ordner
+     * (schreibt je Modell ein PNG des Ausschnitts und die Rechenzeit).
+     */
+    @Test
+    fun inpaintModelsOnPhoto() {
+        assumeTrue(System.getenv("PG_AI_TEST") == "1")
+        val photo = System.getenv("PG_AI_PHOTO") ?: return
+        val r = System.getenv("PG_AI_RECT")!!.split(',').map { it.trim().toInt() }
+        val out = java.io.File(System.getenv("PG_AI_OUT") ?: "build/ai-out").apply { mkdirs() }
+        val img = javax.imageio.ImageIO.read(java.io.File(photo))
+        val w = img.width; val h = img.height
+        val px = img.getRGB(0, 0, w, h, null, 0, w)
+        val rect = de.photographics.core.image.IntRect(r[0], r[1], r[2], r[3])
+        val view = rect.inset(-200).intersect(de.photographics.core.image.IntRect(0, 0, w, h))
+        for (m in AiModel.entries.filter { it.purpose == de.photographics.gnome.ai.AiPurpose.INPAINT && AiModelManager.isReady(it) }) {
+            val doc = de.photographics.core.doc.Document(w, h)
+            val layer = de.photographics.core.doc.PixelLayer("Bild", de.photographics.core.image.TileGrid.fromPixels(w, h, px.copyOf()))
+            doc.root.add(layer); doc.activeLayer = layer
+            doc.selection = de.photographics.core.selection.Selection.rect(w, h, rect.left.toFloat(), rect.top.toFloat(), rect.right.toFloat(), rect.bottom.toFloat())
+            val ed = de.photographics.core.editor.Editor(doc)
+            val t = System.nanoTime()
+            ed.contentAwareFill(OnnxInpainter(AiModelManager, m))
+            println("${m.title}: ${(System.nanoTime() - t) / 1_000_000} ms")
+            val crop = IntArray(view.width * view.height); layer.pixels.readRect(view, crop)
+            val bi = java.awt.image.BufferedImage(view.width, view.height, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+            bi.setRGB(0, 0, view.width, view.height, crop, 0, view.width)
+            javax.imageio.ImageIO.write(bi, "png", java.io.File(out, "${m.id}.png"))
+            // Außerhalb der Auswahl unverändert
+            val all = IntArray(w * h); layer.pixels.readRect(de.photographics.core.image.IntRect(0, 0, w, h), all)
+            var changed = 0
+            for (y in 0 until h) for (x in 0 until w) if (!(x in rect.left - 2 until rect.right + 2 && y in rect.top - 2 until rect.bottom + 2) && all[y * w + x] != px[y * w + x]) changed++
+            assertTrue("${m.id}: $changed Pixel außerhalb verändert", changed == 0)
+        }
+    }
 }

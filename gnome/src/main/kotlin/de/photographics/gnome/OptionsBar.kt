@@ -53,10 +53,15 @@ class OptionsBar(
         updating = false
     }
 
+    /** Aufräumen beim Neuaufbau (z. B. Listener abmelden). */
+    private val onClear = ArrayList<() -> Unit>()
+
     private fun clear() {
         var c = widget.firstChild
         while (c != null) { val n = c.nextSibling; widget.remove(c); c = n }
         updaters.clear()
+        for (f in onClear) f()
+        onClear.clear()
     }
 
     private fun add(w: Widget) = widget.append(w)
@@ -108,6 +113,44 @@ class OptionsBar(
 
     private var currentOpts = ToolOptions()
 
+    /** Wahlschalter für das Retusche-Modell (gilt auch für „Mit KI füllen“); nicht geladene Modelle öffnen die Verwaltung. */
+    private fun aiModelChoice() {
+        val mgr = de.photographics.gnome.ai.AiModelManager
+        val purpose = de.photographics.gnome.ai.AiPurpose.INPAINT
+        val models = de.photographics.gnome.ai.AiModel.entries.filter { it.purpose == purpose }
+        label(tr("Modell"))
+        fun names() = models.map { if (mgr.isReady(it)) it.title else tr("{0} (nicht geladen)", it.title) }.toTypedArray()
+        val d = DropDown.fromStrings(names())
+        d.valign = Align.CENTER
+        d.tooltipText = tr("KI-Modell für Entfernen und Füllen")
+        var syncing = false
+        var shown = names().toList()
+        fun sync() {
+            syncing = true
+            val now = names().toList()
+            if (now != shown) { shown = now; d.model = org.gnome.gtk.StringList(now.toTypedArray()) }
+            val cur = mgr.firstReady(purpose) ?: mgr.selected(purpose)
+            val i = models.indexOf(cur)
+            if (i >= 0 && d.selected != i) d.selected = i
+            syncing = false
+        }
+        d.onNotify("selected") { _ ->
+            if (syncing) return@onNotify
+            val m = models.getOrNull(d.selected) ?: return@onNotify
+            mgr.select(m)
+            if (!mgr.isReady(m)) de.photographics.gnome.ai.AiDialog.show(widget)
+        }
+        sync()
+        val listener = { sync() }
+        mgr.listeners += listener
+        onClear += { mgr.listeners -= listener }
+        add(d)
+        add(Button.fromIconName("folder-download-symbolic").apply {
+            tooltipText = tr("KI-Modelle verwalten …"); addCssClass("flat"); valign = Align.CENTER; focusOnClick = false
+            onClicked { de.photographics.gnome.ai.AiDialog.show(widget) }
+        })
+    }
+
     private fun build(o: ToolOptions, hasMask: Boolean) {
         clear()
         builtFor = o.tool; builtMask = hasMask
@@ -134,6 +177,10 @@ class OptionsBar(
                 Tool.CLONE, Tool.HEAL, Tool.SPOT_HEAL -> {
                     check(tr("Alle Ebenen"), { it.sampleAll }) { o2, v -> o2.copy(sampleAll = v) }
                     if (t != Tool.SPOT_HEAL) label(tr("Strg+Klick: Quelle festlegen"))
+                }
+                Tool.AI_REMOVE -> {
+                    check(tr("Alle Ebenen"), { it.sampleAll }) { o2, v -> o2.copy(sampleAll = v) }
+                    aiModelChoice()
                 }
                 Tool.BG_ERASER -> {
                     spin(tr("Toleranz"), 0.0, 255.0, 1.0, get = { it.bgEraserTolerance.toDouble() }) { o2, v -> o2.copy(bgEraserTolerance = v.toInt()) }

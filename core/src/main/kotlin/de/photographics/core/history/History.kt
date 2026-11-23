@@ -42,6 +42,8 @@ class History(
     val undoLabel get() = undoStack.lastOrNull()?.label
     val redoLabel get() = redoStack.lastOrNull()?.label
     val entries: List<String> get() = undoStack.map { it.label }
+    /** Oberster Rückgängig-Schritt (für Tests und Speicheranzeigen). */
+    val lastEntry: HistoryEntry? get() = undoStack.lastOrNull()
 
     // ------------------------------------------------ Gespeicherter Stand
     /** Oberster Schritt beim letzten Speichern (null = Anfangszustand). */
@@ -358,7 +360,9 @@ class CompoundEntry(override val label: String, private val parts: List<HistoryE
 /**
  * Änderung des ganzen Dokuments (Bildgröße, Drehen, Freistellen, …). Hält nur den jeweils
  * inaktiven Zustand (vor der Änderung bzw. nach dem Rückgängigmachen) – Raster, die mit dem
- * aktuellen Dokument geteilt sind, werden nicht gehalten. Rückgängig/Wiederholen tauschen.
+ * aktuellen Dokument geteilt sind, werden weder gezählt noch ausgelagert. Gezählt und auslagerbar
+ * sind Pixel, Masken, die unteren 8 Bit von 16-Bit-Ebenen, Filtermasken und Alphakanäle.
+ * Rückgängig/Wiederholen tauschen.
  */
 class DocumentChangeEntry(
     override val label: String,
@@ -366,13 +370,22 @@ class DocumentChangeEntry(
     after: Document.Snapshot,
 ) : HistoryEntry {
     private var stash: Document.Snapshot = exclusive(before, after)
-    /** Ausgelagerte Raster: (Ebenen-ID, Maske?) → Datei. */
-    private val spilled = HashMap<Pair<Int, Boolean>, java.io.File>()
+    /** Raster in [stash], die das aktuelle Dokument mitbenutzt (Alphakanäle, Filtermasken). */
+    private var shared: Set<TileGrid> = sharedWith(stash, after)
+    /** Ausgelagerte Raster: Schlüssel (siehe [grids]) → Datei. */
+    private val spilled = HashMap<String, java.io.File>()
     private var disk: ScratchDisk? = null
 
-    private fun grids() = stash.layers.flatMap { (id, d) ->
-        listOfNotNull(d.pixels?.let { (id to false) to it }, d.mask?.let { (id to true) to it })
-    }
+    /** Eigene Raster mit Schlüssel: p/m/l/f + Ebenen-ID (Pixel, Maske, untere Bits, Filtermaske), c + Kanalindex. */
+    private fun grids(): List<Pair<String, TileGrid>> = buildList {
+        for ((id, d) in stash.layers) {
+            d.pixels?.let { add("p$id" to it) }
+            d.mask?.let { add("m$id" to it) }
+            d.low?.let { add("l$id" to it) }
+            d.smartFilters?.mask?.grid?.let { add("f$id" to it) }
+        }
+        stash.channels.forEachIndexed { i, c -> add("c$i" to c.grid) }
+    }.filter { (k, g) -> k !in spilled && g !in shared }
 
     override val byteSize: Long get() = grids().sumOf { it.second.byteSize }
 
@@ -380,31 +393,46 @@ class DocumentChangeEntry(
         val grids = grids().filter { it.second.byteSize > 0 }
         if (grids.isEmpty()) return false
         this.disk = disk
-        for ((key, g) in grids) spilled[key] = disk.writeGrid(g)
-        stash = mapStash { id, d ->
-            Document.LayerData(if ((id to false) in spilled) null else d.pixels, if ((id to true) in spilled) null else d.mask, d.transform, d.style, d.warp, d.low)
-        }
+        val written = grids.associate { (k, g) -> k to disk.writeGrid(g) }
+        spilled.putAll(written)
+        // Ausgelagerte Raster durch leere Platzhalter ersetzen (Ebenendaten: null)
+        stash = mapGrids { k, g -> if (k in written) TileGrid(g.width, g.height, g.defaultValue, g.memory) else g }
         return true
     }
 
-    private fun mapStash(f: (Int, Document.LayerData) -> Document.LayerData) =
-        Document.Snapshot(stash.width, stash.height, stash.layers.mapValues { (id, d) -> f(id, d) }, stash.selection, stash.guides, stash.paths, stash.workPath, stash.channels)
+    /**
+     * [stash] mit durch [f] ersetzten Rastern. Ausgelagerte Pixel und Masken werden null (Wiederherstellen
+     * lädt sie über den Schlüssel); untere Bits, Filtermasken und Kanäle bekommen den Platzhalter von [f],
+     * weil null dort „keine“ bedeuten würde.
+     */
+    private fun mapGrids(f: (String, TileGrid) -> TileGrid): Document.Snapshot {
+        fun nullable(k: String, g: TileGrid?): TileGrid? = g?.let { if (k in spilled) null else f(k, it) }
+        return Document.Snapshot(stash.width, stash.height, stash.layers.mapValues { (id, d) ->
+            Document.LayerData(
+                nullable("p$id", d.pixels), nullable("m$id", d.mask), d.transform, d.style, d.warp, d.low?.let { f("l$id", it) },
+                d.smartFilters?.let { sf -> sf.mask?.let { m -> sf.copy(mask = de.photographics.core.doc.LayerMask(f("f$id", m.grid), m.enabled, m.linked)) } ?: sf },
+            )
+        }, stash.selection, stash.guides, stash.paths, stash.workPath,
+            stash.channels.mapIndexed { i, c -> c.copy(grid = f("c$i", c.grid)) })
+    }
 
     private fun swap(doc: Document) {
         if (spilled.isNotEmpty()) {
             val d0 = disk!!
-            stash = mapStash { id, d ->
-                Document.LayerData(
-                    spilled[id to false]?.let(d0::readGrid) ?: d.pixels,
-                    spilled[id to true]?.let(d0::readGrid) ?: d.mask,
-                    d.transform, d.style, d.warp, d.low,
-                )
-            }
+            // Ebenendaten der ausgelagerten Pixel/Masken/Bits sind null → aus den Schlüsseln wiederherstellen
+            stash = Document.Snapshot(stash.width, stash.height, stash.layers.mapValues { (id, d) ->
+                fun load(k: String, g: TileGrid?) = spilled[k]?.let(d0::readGrid) ?: g
+                Document.LayerData(load("p$id", d.pixels), load("m$id", d.mask), d.transform, d.style, d.warp, load("l$id", d.low),
+                    d.smartFilters?.let { sf -> sf.mask?.let { m -> sf.copy(mask = de.photographics.core.doc.LayerMask(load("f$id", m.grid)!!, m.enabled, m.linked)) } ?: sf })
+            }, stash.selection, stash.guides, stash.paths, stash.workPath,
+                stash.channels.mapIndexed { i, c -> spilled["c$i"]?.let { c.copy(grid = d0.readGrid(it)) } ?: c })
             dispose()
         }
         val current = doc.snapshot()
         doc.restore(stash)
-        stash = exclusive(current, doc.snapshot())
+        val now = doc.snapshot()
+        stash = exclusive(current, now)
+        shared = sharedWith(stash, now)
     }
 
     override fun undo(doc: Document) = swap(doc)
@@ -412,13 +440,32 @@ class DocumentChangeEntry(
     override fun dispose() { spilled.values.forEach { it.delete() }; spilled.clear() }
 
     private companion object {
-        /** [s] ohne Raster, die (als dasselbe Objekt) auch in [other] vorkommen. */
+        fun identitySet(): MutableSet<TileGrid> = java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
+
+        fun allGrids(s: Document.Snapshot): Set<TileGrid> = identitySet().also { set ->
+            for (d in s.layers.values) {
+                d.pixels?.let(set::add); d.mask?.let(set::add); d.low?.let(set::add)
+                d.smartFilters?.mask?.grid?.let(set::add)
+            }
+            for (c in s.channels) set += c.grid
+        }
+
+        /**
+         * [s] ohne Pixel/Masken, die (als dasselbe Objekt) auch in [other] vorkommen (null = unverändert).
+         * Untere Bits, Filtermasken und Kanäle bleiben stehen – geteilte zählen über [sharedWith] nicht.
+         */
         fun exclusive(s: Document.Snapshot, other: Document.Snapshot): Document.Snapshot {
-            val live = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<TileGrid, Boolean>())
-            for (d in other.layers.values) { d.pixels?.let(live::add); d.mask?.let(live::add) }
+            val live = allGrids(other)
             return Document.Snapshot(s.width, s.height, s.layers.mapValues { (_, d) ->
-                Document.LayerData(d.pixels?.takeIf { it !in live }, d.mask?.takeIf { it !in live }, d.transform, d.style, d.warp, d.low)
+                Document.LayerData(d.pixels?.takeIf { it !in live }, d.mask?.takeIf { it !in live }, d.transform, d.style, d.warp,
+                    d.low, d.smartFilters)
             }, s.selection, s.guides, s.paths, s.workPath, s.channels)
+        }
+
+        /** Raster aus [s], die auch [other] benutzt (bleiben im Speicher, zählen nicht). */
+        fun sharedWith(s: Document.Snapshot, other: Document.Snapshot): Set<TileGrid> {
+            val live = allGrids(other)
+            return identitySet().also { out -> for (g in allGrids(s)) if (g in live) out += g }
         }
     }
 }
@@ -435,7 +482,7 @@ class LayerOperationEntry(
     private val involved: List<de.photographics.core.doc.Layer>,
     private val isAttached: (de.photographics.core.doc.Layer) -> Boolean,
 ) : HistoryEntry {
-    private class Stashed(val pixels: java.io.File?, val mask: java.io.File?)
+    private class Stashed(val pixels: java.io.File?, val low: java.io.File?)
     private val stashed = java.util.IdentityHashMap<de.photographics.core.doc.PixelLayer, Stashed>()
     private val stashedMasks = java.util.IdentityHashMap<de.photographics.core.doc.Layer, java.io.File>()
     private var disk: ScratchDisk? = null
@@ -452,7 +499,7 @@ class LayerOperationEntry(
 
     override val byteSize: Long get() = detached().sumOf { l ->
         val px = when (l) {
-            is de.photographics.core.doc.PixelLayer -> if (stashed.containsKey(l)) 0L else l.pixels.byteSize
+            is de.photographics.core.doc.PixelLayer -> if (stashed.containsKey(l)) 0L else l.pixels.byteSize + (l.low?.byteSize ?: 0L)
             is de.photographics.core.doc.SmartLayer -> l.source.byteSize + l.raster.byteSize
             is de.photographics.core.doc.RasterLayer -> l.raster.byteSize
             else -> 0L
@@ -470,6 +517,7 @@ class LayerOperationEntry(
             fun walk(x: de.photographics.core.doc.Layer) {
                 x.mask?.let { sharedMasks += it }
                 if (x is de.photographics.core.doc.RasterLayer) sharedGrids += x.raster
+                if (x is de.photographics.core.doc.PixelLayer) x.low?.let { sharedGrids += it }
                 if (x is de.photographics.core.doc.GroupLayer) x.children.forEach(::walk)
             }
             walk(l)
@@ -477,8 +525,10 @@ class LayerOperationEntry(
         for (l in detached()) {
             if (l is de.photographics.core.doc.PixelLayer && !stashed.containsKey(l) && l.pixels.byteSize > 0 && l.pixels !in sharedGrids) {
                 val g = l.pixels
-                stashed[l] = Stashed(disk.writeGrid(g), null)
+                val lo = l.low?.takeIf { it.byteSize > 0 && it !in sharedGrids }
+                stashed[l] = Stashed(disk.writeGrid(g), lo?.let(disk::writeGrid))
                 l.pixels = TileGrid(g.width, g.height, g.defaultValue, g.memory) // leerer Platzhalter
+                if (lo != null) l.low = TileGrid(lo.width, lo.height, lo.defaultValue, lo.memory)
                 any = true
             }
             val m = l.mask
@@ -494,7 +544,10 @@ class LayerOperationEntry(
 
     private fun reload() {
         val d = disk ?: return
-        for ((l, s) in stashed) s.pixels?.let { l.pixels = d.readGrid(it); it.delete() }
+        for ((l, s) in stashed) {
+            s.pixels?.let { l.pixels = d.readGrid(it); it.delete() }
+            s.low?.let { l.low = d.readGrid(it); it.delete() }
+        }
         for ((l, f) in stashedMasks) { l.mask?.grid = d.readGrid(f); f.delete() }
         stashed.clear(); stashedMasks.clear()
     }
@@ -502,7 +555,7 @@ class LayerOperationEntry(
     override fun undo(doc: Document) { reload(); onUndo(doc) }
     override fun redo(doc: Document) { reload(); onRedo(doc) }
     override fun dispose() {
-        stashed.values.forEach { it.pixels?.delete() }; stashedMasks.values.forEach { it.delete() }
+        stashed.values.forEach { it.pixels?.delete(); it.low?.delete() }; stashedMasks.values.forEach { it.delete() }
         stashed.clear(); stashedMasks.clear()
     }
 }

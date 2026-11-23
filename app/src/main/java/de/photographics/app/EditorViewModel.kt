@@ -452,6 +452,16 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     private var pendingLiveLayer: Layer? = null
 
     val ai = AiModelManager(app)
+
+    init {
+        // Gespeicherte Modellwahl übernehmen
+        _state.update { st ->
+            st.copy(
+                aiInpaintModel = ai.selected(AiPurpose.INPAINT) ?: st.aiInpaintModel,
+                aiUpscaleModel = ai.selected(AiPurpose.UPSCALE) ?: st.aiUpscaleModel,
+            )
+        }
+    }
     private val settingsStore = SettingsStore(app)
     val settings: StateFlow<AppSettings> = settingsStore.settings
     private val recentFiles = RecentFiles(app)
@@ -2238,7 +2248,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 _state.update { it.copy(requestAiModels = AiPurpose.INPAINT) }
                 message(tr("Für „KI-Entfernen“ zuerst ein KI-Modell laden."))
                 null
-            } else SpotHealTool(s.sampleAllLayers, OnnxInpainter(ai, m), tr("KI-Entfernen"))
+            } else SpotHealTool(s.sampleAllLayers, OnnxInpainter(ai, m, m.mobileMaxSide), tr("KI-Entfernen"))
         }
         Tool.BLUR -> BlurTool(sigma = 1f + s.brush.size * 0.04f, strength = s.toolStrength * 2f)
         Tool.SHARPEN -> SharpenTool(strength = s.toolStrength * 2f)
@@ -3423,7 +3433,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val m = ai.firstReady(AiPurpose.INPAINT, _state.value.aiInpaintModel)
             ?: run { _state.update { it.copy(requestAiModels = AiPurpose.INPAINT) }; return@withEditor }
         busy(true)
-        try { ed.contentAwareFill(OnnxInpainter(ai, m))?.let { renderNow(it) } } finally { busy(false) }
+        try { ed.contentAwareFill(OnnxInpainter(ai, m, m.mobileMaxSide))?.let { renderNow(it) } } finally { busy(false) }
         refreshLayers(ed.doc.activeLayer)
     }
 
@@ -3461,8 +3471,9 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun downloadModel(m: AiModel) { viewModelScope.launch { ai.download(m) } }
     fun deleteModel(m: AiModel) = ai.delete(m)
     fun clearAiRequest() = _state.update { it.copy(requestAiModels = null) }
-    fun setAiModel(m: AiModel) = _state.update {
-        if (m.purpose == AiPurpose.INPAINT) it.copy(aiInpaintModel = m) else it.copy(aiUpscaleModel = m)
+    fun setAiModel(m: AiModel) {
+        ai.select(m)
+        _state.update { if (m.purpose == AiPurpose.INPAINT) it.copy(aiInpaintModel = m) else it.copy(aiUpscaleModel = m) }
     }
 
     // ---------------------------------------------------------------- Einstellungsebenen

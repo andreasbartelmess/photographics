@@ -79,7 +79,7 @@ core/   reines Kotlin/JVM, ohne Android-Abhängigkeiten → auf dem PC testbar
   history/    Undo/Redo über Kachel-Patches (speichersparend)
   editor/     Editor: alle Befehle mit Undo, die API für die Oberfläche
 app/    Android-Oberfläche (Compose, Material 3)
-  ai/              ONNX Runtime: Modellverwaltung, KI-Inpainting (MI-GAN/LaMa), KI-Upscaling (Real-ESRGAN)
+  ai/              ONNX Runtime: Modellverwaltung, KI-Inpainting (MI-GAN/LaMa/LaMa HD), KI-Upscaling (Real-ESRGAN)
   AndroidTextRasterizer  Text direkt in der Zieltransformation rendern
   EditorViewModel  ein Engine-Thread für Dokument und Rendern, gebündeltes Neuzeichnen geänderter Bereiche
   ui/CanvasArea    Zoom/Pan mit zwei Fingern, Werkzeuge mit einem Finger/Stift (inkl. Druckstufen)
@@ -232,7 +232,7 @@ Bericht (`report.html` mit Vergleichsbildern, `report.csv`) liegt in `core/build
   Schwarzweiß 400 klassisch / weich, Infrarot, Selen getont, Kinokopie, Sofortbild, Abgelaufener Film –
   eigene Filmmodelle (Schichtgradation, Kennlinie, Farbübersprechen, Tonung), keine fremden LUTs.
 - **Lokale KI (optional, auf Wunsch geladen, läuft komplett auf dem Gerät):**
-  MI-GAN (28 MB, MIT) und LaMa (93 MB, Apache 2.0) zum Entfernen von Objekten,
+  MI-GAN (28 MB, MIT), LaMa (93 MB, Apache 2.0) und LaMa HD (104 MB, Apache 2.0, volle Auflösung) zum Entfernen von Objekten,
   Real-ESRGAN General (4,5 MB) und x4plus (62 MB, BSD-3) zum Hochskalieren. Downloads laufen in
   Teilstücken, setzen nach einem Abbruch fort und kommen auch in Netzen mit gestörtem IPv6 sofort in Gang.
 - **Sprache:** Oberfläche auf Englisch und Deutsch (folgt der Systemsprache, umschaltbar in den Einstellungen).
@@ -418,6 +418,10 @@ Druckerei. Der Proof betrifft nur die Anzeige – Export und gespeicherte Dateie
 
 Ohne feste Termine, die Reihenfolge kann sich ändern. Vorschläge sind willkommen.
 
+- **Erledigt in 0.5.2:** LaMa HD zum Entfernen von Objekten per KI (volle Auflösung bis 1024 px, schärfer
+  auf großen Flächen); KI-Modell in den Werkzeugoptionen wählbar (Linux) und auf Android gemerkt; KI-Füllen
+  verzerrt den Bildausschnitt nicht mehr; die Oberfläche bleibt bedienbar, während ein KI-Modell rechnet;
+  der Verlauf zählt 16-Bit-Daten, Filtermasken und Alphakanäle mit
 - **Erledigt in 0.5.1:** Kanalmixer und Selektive Farbkorrektur; Galerie-Smartfilter als echte
   Photoshop-Smartfilter; Filter und Korrekturen an Photoshop 2026 nachgemessen (Kurven, Schwellenwert,
   Tontrennung, Dynamik, Farbbalance, Weichzeichner, Unscharf maskieren, Galerieeffekte); Füllen wie in Photoshop
@@ -439,8 +443,8 @@ Ohne feste Termine, die Reihenfolge kann sich ändern. Vorschläge sind willkomm
 - **Erledigt in 0.3:** Verschieben, Transformieren und Deckkraft live über die GPU; Ebeneneffekte
   anzeigen; Oberfläche auf Englisch; Verflüssigen; Verlauf, Zauberstab, Objektauswahl und automatische
   Ebenenauswahl; Kurven je Kanal mit Histogramm; besseres inhaltsbasiertes Füllen
-- **Als Nächstes:** Smartfilter als Photoshop-Smartfilter speichern; Motiv und Himmel per KI auswählen
-  (Modell auf dem Gerät), Auswahlkante für Haare verbessern; eigene Schriften (TTF/OTF); Protokoll-Panel mit Schnappschüssen
+- **Als Nächstes:** Motiv und Himmel per KI auswählen (Modell auf dem Gerät), Auswahlkante für Haare
+  verbessern; eigene Schriften (TTF/OTF); Protokoll-Panel mit Schnappschüssen
 - **Danach:** Frequenztrennung als Retusche-Hilfe; Stapelexport (mehrere Größen/Formate auf einmal);
   Muster und Musterüberlagerung
 - **Später:** CMYK-Dokumente und -Export; Anzeige über das Farbprofil des Bildschirms; Version für iPad
